@@ -6,7 +6,9 @@ import { useTestSession } from "@/app/context/TestSessionContext";
 
 import { saveSession } from "@/app/services/session.api";
 
+
 export default function AutoSaveSession() {
+
   const {
     test,
     currentQuestion,
@@ -14,35 +16,66 @@ export default function AutoSaveSession() {
     timeLeft,
   } = useTestSession();
 
-  // ==========================
-  // Автозбереження кожні 30 секунд
-  // ==========================
+
 
   useEffect(() => {
-    if (!test) return;
 
-    const interval = setInterval(async () => {
-      try {
-        await saveSession({
-          testId: test.id,
+    if (!test) {
+      return;
+    }
 
-          currentQuestion,
 
-          savedAnswers,
+    if (test.id === undefined) {
+      return;
+    }
 
-          timeLeft,
 
-          finished: false,
-        });
-      } catch (error) {
-        console.error(
-          "Помилка автозбереження:",
-          error
-        );
-      }
-    }, 30000);
+    const testId = test.id;
 
-    return () => clearInterval(interval);
+
+
+    const interval = setInterval(
+      async () => {
+
+        try {
+
+          await saveSession({
+
+            testId,
+
+            currentQuestion,
+
+            savedAnswers,
+
+            timeLeft,
+
+            finished: false,
+
+          });
+
+
+        } catch (error) {
+
+          console.error(
+            "Помилка автозбереження сесії:",
+            error
+          );
+
+        }
+
+      },
+      30000
+    );
+
+
+
+    return () => {
+
+      clearInterval(interval);
+
+    };
+
+
   }, [
     test,
     currentQuestion,
@@ -50,30 +83,8 @@ export default function AutoSaveSession() {
     timeLeft,
   ]);
 
-  // ==========================
-  // Збереження після зміни відповіді
-  // ==========================
 
-  useEffect(() => {
-    if (!test) return;
-
-    saveSession({
-      testId: test.id,
-
-      currentQuestion,
-
-      savedAnswers,
-
-      timeLeft,
-
-      finished: false,
-    }).catch(console.error);
-
-  }, [
-    test,
-    currentQuestion,
-    savedAnswers,
-  ]);
 
   return null;
+
 }

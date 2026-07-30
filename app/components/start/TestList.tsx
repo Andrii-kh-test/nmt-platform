@@ -1,57 +1,80 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
+import TestCard from "@/app/components/start/TestCard";
 import { Test } from "@/app/types/test";
-import { getTests } from "@/app/services/test.api";
 
-import TestCard from "./TestCard";
 
-export default function TestList() {
-  const [tests, setTests] = useState<Test[]>([]);
-  const [loading, setLoading] = useState(true);
+type Props = {
+  tests: (Test & {
+    id: number;
+    questions: {
+      id: number;
+    }[];
+  })[];
+};
 
-  useEffect(() => {
-    loadTests();
-  }, []);
 
-  async function loadTests() {
-    try {
-      const data = await getTests();
-      setTests(data);
-    } finally {
-      setLoading(false);
-    }
-  }
+export default function TestList({
+  tests,
+}: Props) {
 
-  if (loading) {
-    return (
-      <p className="text-center">
-        Завантаження...
-      </p>
-    );
-  }
 
   if (tests.length === 0) {
+
     return (
-      <p className="text-center">
-        Тести поки що відсутні.
-      </p>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+
+        <h2 className="text-2xl font-semibold text-gray-700">
+          Доступних тестів поки що немає
+        </h2>
+
+        <p className="mt-4 text-gray-500">
+          Створіть тест в адміністративній панелі.
+        </p>
+
+      </div>
+
     );
+
   }
 
+
   return (
-    <div className="grid gap-6">
+
+    <div className="
+      grid
+      grid-cols-1
+      md:grid-cols-2
+      xl:grid-cols-3
+      gap-8
+    ">
+
       {tests.map((test) => (
+
         <TestCard
+
           key={test.id}
+
           id={test.id}
+
           title={test.title}
+
           subject={test.subject}
+
           duration={test.duration}
-          questions={test.questions.length}
+
+          questions={
+            test.questions.length
+          }
+
         />
+
       ))}
+
+
     </div>
+
   );
+
 }

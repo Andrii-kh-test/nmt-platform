@@ -1,7 +1,7 @@
-import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
-import type { Test } from "@/app/types/test";
-import type { UserAnswers } from "@/app/context/TestSessionContext";
+import { Test } from "@/app/types/test";
+import { UserAnswers } from "@/app/context/TestSessionContext";
 
 import { calculateResult } from "./result.service";
 import { saveResult } from "./result.api";
@@ -16,86 +16,117 @@ export type FinishReason =
 
 
 export async function finishTest(
+
   reason: FinishReason,
+
   test: Test,
+
   answers: UserAnswers,
+
   timeLeft: number,
+
   router: AppRouterInstance
+
 ) {
 
 
+  if (test.id === undefined) {
+
+    throw new Error(
+      "Неможливо завершити тест без id"
+    );
+
+  }
+
+
+
+  const testId = test.id;
+
+
+
   // ==========================
-  // Завершення сесії тестування
+  // Позначаємо сесію завершеною
   // ==========================
 
   await finishSession(
-    test.id,
+
+    testId,
+
     0,
+
     answers,
+
     timeLeft
+
   );
 
 
 
   // ==========================
-  // Розрахунок результату
+  // Обчислюємо результат
   // ==========================
 
-  const result = calculateResult(
-    test,
-    answers
-  );
+  const result =
+    calculateResult(
 
+      test,
 
+      answers
 
-  // ==========================
-  // Збереження результату
-  // ==========================
-
-  const saved = await saveResult({
-
-    testId: test.id,
-
-
-    earnedPoints:
-      result.earnedPoints,
-
-
-    maxPoints:
-      result.maxPoints,
-
-
-    percent:
-      result.percent,
-
-
-    correct:
-      result.correct,
-
-
-    incorrect:
-      result.incorrect,
-
-
-    skipped:
-      result.skipped,
-
-
-    timeSpent:
-      test.duration * 60 - timeLeft,
-
-
-    answers,
-
-
-    finishReason: reason,
-
-  });
+    );
 
 
 
   // ==========================
-  // Перехід на сторінку результатів
+  // Зберігаємо результат
+  // ==========================
+
+  const saved =
+    await saveResult({
+
+      testId,
+
+
+      earnedPoints:
+        result.earnedPoints,
+
+
+      maxPoints:
+        result.maxPoints,
+
+
+      percent:
+        result.percent,
+
+
+      correct:
+        result.correct,
+
+
+      incorrect:
+        result.incorrect,
+
+
+      skipped:
+        result.skipped,
+
+
+      timeSpent:
+        test.duration * 60 - timeLeft,
+
+
+      answers,
+
+
+      finishReason:
+        reason,
+
+    });
+
+
+
+  // ==========================
+  // Перехід до результату
   // ==========================
 
   router.push(

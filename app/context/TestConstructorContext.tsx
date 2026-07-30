@@ -7,13 +7,13 @@ import {
   ReactNode,
 } from "react";
 
-import type { Test } from "@/app/types/test";
-import type { Question } from "@/app/types/question";
-
+import { Test } from "@/app/types/test";
+import { Question } from "@/app/types/question";
 import { createQuestion } from "@/app/utils/createQuestion";
 
 
 type TestConstructorContextType = {
+
   test: Test;
 
   updateTest: <K extends keyof Test>(
@@ -44,12 +44,12 @@ type TestConstructorContextType = {
   ) => void;
 
   clearTest: () => void;
+
 };
 
 
-
-const createInitialTest = (): Test => ({
-  id: 0,
+// Новий тест НЕ має id
+const initialTest: Test = {
 
   title: "",
 
@@ -66,7 +66,8 @@ const createInitialTest = (): Test => ({
   questions: [
     createQuestion(1),
   ],
-});
+
+};
 
 
 
@@ -84,10 +85,12 @@ export function TestConstructorProvider({
 }) {
 
 
-  const [test, setTestState] =
-    useState<Test>(
-      createInitialTest()
-    );
+  const [
+    test,
+    setTestState,
+  ] = useState<Test>(
+    initialTest
+  );
 
 
 
@@ -106,10 +109,12 @@ export function TestConstructorProvider({
     value: Test[K]
   ) {
 
-    setTestState((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setTestState(
+      (prev) => ({
+        ...prev,
+        [field]: value,
+      })
+    );
 
   }
 
@@ -117,22 +122,25 @@ export function TestConstructorProvider({
 
   function addQuestion() {
 
-    setTestState((prev) => ({
+    setTestState(
+      (prev) => ({
 
-      ...prev,
+        ...prev,
 
-      questions: [
-        ...prev.questions,
+        questions: [
 
-        createQuestion(
-          Date.now()
-        ),
-      ],
+          ...prev.questions,
 
-    }));
+          createQuestion(
+            Date.now()
+          ),
+
+        ],
+
+      })
+    );
 
   }
-
 
 
 
@@ -140,23 +148,23 @@ export function TestConstructorProvider({
     question: Question
   ) {
 
-    setTestState((prev) => ({
+    setTestState(
+      (prev) => ({
 
-      ...prev,
+        ...prev,
 
-      questions:
-        prev.questions.map(
-          (q) =>
-            q.id === question.id
-              ? question
-              : q
-        ),
+        questions:
+          prev.questions.map(
+            (q) =>
+              q.id === question.id
+                ? question
+                : q
+          ),
 
-    }));
+      })
+    );
 
   }
-
-
 
 
 
@@ -164,21 +172,21 @@ export function TestConstructorProvider({
     id: number
   ) {
 
-    setTestState((prev) => ({
+    setTestState(
+      (prev) => ({
 
-      ...prev,
+        ...prev,
 
-      questions:
-        prev.questions.filter(
-          (q) =>
-            q.id !== id
-        ),
+        questions:
+          prev.questions.filter(
+            (q) =>
+              q.id !== id
+          ),
 
-    }));
+      })
+    );
 
   }
-
-
 
 
 
@@ -186,48 +194,50 @@ export function TestConstructorProvider({
     id: number
   ) {
 
-    setTestState((prev) => {
+    setTestState(
+      (prev) => {
 
-      const questions = [
-        ...prev.questions,
-      ];
-
-
-      const index =
-        questions.findIndex(
-          (q) =>
-            q.id === id
-        );
+        const questions =
+          [
+            ...prev.questions,
+          ];
 
 
-      if (index <= 0) {
-        return prev;
+        const index =
+          questions.findIndex(
+            (q) =>
+              q.id === id
+          );
+
+
+        if (index <= 0) {
+
+          return prev;
+
+        }
+
+
+
+        [
+          questions[index - 1],
+          questions[index],
+        ] =
+        [
+          questions[index],
+          questions[index - 1],
+        ];
+
+
+
+        return {
+          ...prev,
+          questions,
+        };
+
       }
-
-
-
-      [
-        questions[index - 1],
-        questions[index],
-      ] = [
-
-        questions[index],
-        questions[index - 1],
-
-      ];
-
-
-
-      return {
-        ...prev,
-        questions,
-      };
-
-    });
+    );
 
   }
-
-
 
 
 
@@ -235,68 +245,65 @@ export function TestConstructorProvider({
     id: number
   ) {
 
-    setTestState((prev) => {
+    setTestState(
+      (prev) => {
 
-      const questions = [
-        ...prev.questions,
-      ];
-
-
-
-      const index =
-        questions.findIndex(
-          (q) =>
-            q.id === id
-        );
+        const questions =
+          [
+            ...prev.questions,
+          ];
 
 
 
-      if (
-        index === -1 ||
-        index ===
-          questions.length - 1
-      ) {
+        const index =
+          questions.findIndex(
+            (q) =>
+              q.id === id
+          );
 
-        return prev;
+
+
+        if (
+          index === -1 ||
+          index === questions.length - 1
+        ) {
+
+          return prev;
+
+        }
+
+
+
+        [
+          questions[index],
+          questions[index + 1],
+        ] =
+        [
+          questions[index + 1],
+          questions[index],
+        ];
+
+
+
+        return {
+          ...prev,
+          questions,
+        };
 
       }
-
-
-
-      [
-        questions[index],
-        questions[index + 1],
-      ] = [
-
-        questions[index + 1],
-        questions[index],
-
-      ];
-
-
-
-      return {
-        ...prev,
-        questions,
-      };
-
-    });
+    );
 
   }
-
-
 
 
 
   function clearTest() {
 
     setTestState(
-      createInitialTest()
+      initialTest
     );
 
   }
-
-
 
 
 
@@ -338,9 +345,8 @@ export function TestConstructorProvider({
 
 
 
-
-
 export function useTestConstructor() {
+
 
   const context =
     useContext(
