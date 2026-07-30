@@ -45,7 +45,11 @@ export default function TestList() {
       {tests.map((test) => (
         <TestCard
           key={test.id}
-          test={test}
+          id={test.id}
+          title={test.title}
+          subject={test.subject}
+          duration={test.duration}
+          questions={test.questions.length}
         />
       ))}
     </div>
