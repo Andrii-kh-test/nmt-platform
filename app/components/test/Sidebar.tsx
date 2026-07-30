@@ -10,8 +10,11 @@ import { useTestSession } from "@/app/context/TestSessionContext";
 
 import { finishTest } from "@/app/services/testEngine";
 
+
 export default function Sidebar() {
+
   const router = useRouter();
+
 
   const {
     test,
@@ -19,28 +22,43 @@ export default function Sidebar() {
     timeLeft,
   } = useTestSession();
 
+
   const [finishOpen, setFinishOpen] =
     useState(false);
+
 
   const [loading, setLoading] =
     useState(false);
 
-  if (!test) {
-    return null;
-  }
+
 
   function formatTime(seconds: number) {
+
     const min = Math.floor(seconds / 60);
+
     const sec = seconds % 60;
+
 
     return `${String(min).padStart(2, "0")}:${String(
       sec
     ).padStart(2, "0")}`;
+
   }
 
+
+
+
   async function handleFinishTest() {
+
+    if (!test) {
+      return;
+    }
+
+
     try {
+
       setLoading(true);
+
 
       await finishTest(
         "manual",
@@ -49,40 +67,127 @@ export default function Sidebar() {
         timeLeft,
         router
       );
+
+
     } catch (error) {
+
       console.error(error);
+
 
       alert(
         "Не вдалося зберегти результат."
       );
+
+
     } finally {
+
       setLoading(false);
+
     }
+
   }
 
-  return (
-    <>
-      <aside className="sticky top-6 bg-white border border-gray-200 rounded-xl shadow-md p-6 h-fit">
 
-        <h2 className="text-2xl font-bold text-[#7A1F2B] mb-6">
+
+
+  if (!test) {
+    return null;
+  }
+
+
+
+  return (
+
+    <>
+
+      <aside
+        className="
+          sticky
+          top-6
+          bg-white
+          border
+          border-gray-200
+          rounded-xl
+          shadow-md
+          p-6
+          h-fit
+        "
+      >
+
+
+        <h2
+          className="
+            text-2xl
+            font-bold
+            text-[#7A1F2B]
+            mb-6
+          "
+        >
           Таймер
         </h2>
 
-        <div className="text-center text-4xl font-bold text-[#7A1F2B] mb-8">
+
+
+        <div
+          className="
+            text-center
+            text-4xl
+            font-bold
+            text-[#7A1F2B]
+            mb-8
+          "
+        >
           {formatTime(timeLeft)}
         </div>
 
-        <h3 className="text-lg font-semibold mb-4">
+
+
+
+        <h3
+          className="
+            text-lg
+            font-semibold
+            mb-4
+          "
+        >
           Номери питань
         </h3>
 
+
+
         <QuestionNumbers />
 
-        <div className="mt-8 border-t border-gray-200 pt-6">
 
-          <div className="flex items-center gap-3 mb-3">
 
-            <div className="w-5 h-5 rounded bg-[#7A1F2B]" />
+
+        <div
+          className="
+            mt-8
+            border-t
+            border-gray-200
+            pt-6
+          "
+        >
+
+
+          <div
+            className="
+              flex
+              items-center
+              gap-3
+              mb-3
+            "
+          >
+
+            <div
+              className="
+                w-5
+                h-5
+                rounded
+                bg-[#7A1F2B]
+              "
+            />
+
 
             <span className="text-sm">
               Відповідь збережена
@@ -90,22 +195,51 @@ export default function Sidebar() {
 
           </div>
 
-          <div className="flex items-center gap-3">
 
-            <div className="w-5 h-5 rounded border border-gray-300 bg-white" />
+
+
+          <div
+            className="
+              flex
+              items-center
+              gap-3
+            "
+          >
+
+            <div
+              className="
+                w-5
+                h-5
+                rounded
+                border
+                border-gray-300
+                bg-white
+              "
+            />
+
 
             <span className="text-sm">
               Відповідь не збережена
             </span>
 
+
           </div>
+
 
         </div>
 
+
+
+
         <button
           type="button"
+
           disabled={loading}
-          onClick={() => setFinishOpen(true)}
+
+          onClick={() =>
+            setFinishOpen(true)
+          }
+
           className="
             mt-8
             w-full
@@ -119,18 +253,35 @@ export default function Sidebar() {
             transition
           "
         >
+
           {loading
             ? "Збереження..."
             : "Завершити тест"}
+
         </button>
+
+
 
       </aside>
 
+
+
+
       <TestFinishedModal
+
         open={finishOpen}
-        onClose={() => setFinishOpen(false)}
+
+        onClose={() =>
+          setFinishOpen(false)
+        }
+
         onFinish={handleFinishTest}
+
       />
+
+
     </>
+
   );
+
 }

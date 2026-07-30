@@ -28,7 +28,11 @@ export default function RestoreSession() {
 
     async function checkSession() {
       try {
-        const data = await loadSession(test.id);
+        if (!test) {
+  return;
+}
+
+const data = await loadSession(test.id);
 
         if (data) {
           setSession(data);

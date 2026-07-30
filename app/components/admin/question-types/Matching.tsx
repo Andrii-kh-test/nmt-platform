@@ -1,163 +1,132 @@
 "use client";
 
-import { Question } from "@/app/types/question";
+import type { Question } from "@/app/types/question";
 
-type Props = {
+
+interface Props {
   question: Question;
   onChange: (question: Question) => void;
-};
+}
+
 
 export default function Matching({
   question,
   onChange,
 }: Props) {
 
-  function updateLeft(
-    index: number,
+
+  const options = question.options ?? [];
+
+
+
+  function updateOption(
+    id: number,
     value: string
   ) {
-    const pairs = [...question.matchingPairs];
-
-    pairs[index] = {
-      ...pairs[index],
-      left: value,
-    };
 
     onChange({
+
       ...question,
-      matchingPairs: pairs,
-    });
-  }
 
-  function updateRight(
-    index: number,
-    value: string
-  ) {
-    const pairs = [...question.matchingPairs];
+      options: options.map(
+        (option) =>
+          option.id === id
+            ? {
+                ...option,
+                text: value,
+              }
+            : option
+      ),
 
-    pairs[index] = {
-      ...pairs[index],
-      right: value,
-    };
-
-    onChange({
-      ...question,
-      matchingPairs: pairs,
-    });
-  }
-
-  function addPair() {
-
-    onChange({
-      ...question,
-      matchingPairs: [
-        ...question.matchingPairs,
-        {
-          id: Date.now(),
-          left: "",
-          right: "",
-        },
-      ],
     });
 
   }
 
-  function deletePair(index: number) {
 
-    if (question.matchingPairs.length <= 2) {
-      return;
-    }
-
-    const pairs =
-      question.matchingPairs.filter(
-        (_, i) => i !== index
-      );
-
-    onChange({
-      ...question,
-      matchingPairs: pairs,
-    });
-
-  }
 
   return (
 
-    <div className="space-y-5">
+    <div
+      className="
+        rounded-lg
+        border
+        border-blue-200
+        bg-blue-50
+        p-4
+      "
+    >
 
-      <h4 className="text-lg font-semibold">
-
-        Пари для встановлення відповідності
-
-      </h4>
-
-      {question.matchingPairs.map(
-        (pair, index) => (
-
-          <div
-            key={pair.id}
-            className="grid grid-cols-12 gap-3 items-center"
-          >
-
-            <div className="col-span-5">
-
-              <input
-                type="text"
-                value={pair.left}
-                placeholder={`Ліва частина ${index + 1}`}
-                onChange={(e) =>
-                  updateLeft(
-                    index,
-                    e.target.value
-                  )
-                }
-                className="w-full border rounded-lg p-3"
-              />
-
-            </div>
-
-            <div className="col-span-5">
-
-              <input
-                type="text"
-                value={pair.right}
-                placeholder={`Права частина ${index + 1}`}
-                onChange={(e) =>
-                  updateRight(
-                    index,
-                    e.target.value
-                  )
-                }
-                className="w-full border rounded-lg p-3"
-              />
-
-            </div>
-
-            <div className="col-span-2">
-
-              <button
-                type="button"
-                onClick={() =>
-                  deletePair(index)
-                }
-                className="w-full bg-red-600 hover:bg-red-700 text-white rounded-lg py-3"
-              >
-                ✕
-              </button>
-
-            </div>
-
-          </div>
-
-        )
-      )}
-
-      <button
-        type="button"
-        onClick={addPair}
-        className="bg-[#7A1F2B] hover:bg-[#651923] text-white px-5 py-3 rounded-lg"
+      <h3
+        className="
+          mb-3
+          font-semibold
+          text-gray-700
+        "
       >
-        + Додати пару
-      </button>
+        Редактор встановлення відповідностей
+      </h3>
+
+
+      <p
+        className="
+          mb-3
+          text-sm
+          text-gray-600
+        "
+      >
+        Введіть варіанти відповідностей.
+      </p>
+
+
+
+      <div className="space-y-3">
+
+
+        {options.map(
+          (option) => (
+
+            <div
+              key={option.id}
+              className="
+                rounded-lg
+                bg-white
+                p-2
+                border
+              "
+            >
+
+              <input
+                type="text"
+
+                value={option.text}
+
+                onChange={(event) =>
+                  updateOption(
+                    option.id,
+                    event.target.value
+                  )
+                }
+
+                className="
+                  w-full
+                  rounded
+                  border
+                  px-3
+                  py-2
+                "
+
+                placeholder="Варіант відповіді"
+
+              />
+
+            </div>
+
+          )
+        )}
+
+
+      </div>
+
 
     </div>
 

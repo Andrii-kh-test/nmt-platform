@@ -1,85 +1,118 @@
-import { Test } from "@/app/types/test";
-import { UserAnswers } from "@/app/context/TestSessionContext";
+import type { Test } from "@/app/types/test";
+import type { UserAnswers } from "@/app/context/TestSessionContext";
+
 
 export type TestResult = {
+  earnedPoints: number;
+  maxPoints: number;
+  percent: number;
+
   correct: number;
   incorrect: number;
   skipped: number;
-
-  earnedPoints: number;
-  maxPoints: number;
-
-  percent: number;
 };
+
+
 
 export function calculateResult(
   test: Test,
   answers: UserAnswers
 ): TestResult {
 
+
   let correct = 0;
+
   let incorrect = 0;
+
   let skipped = 0;
 
-  let earnedPoints = 0;
 
-  let maxPoints = 0;
 
-  for (const question of test.questions) {
+  test.questions.forEach(
+    (question) => {
 
-    maxPoints += question.points;
 
-    const userAnswer =
-      answers[question.id];
+      const userAnswer =
+        answers[question.id];
 
-    if (
-      !userAnswer ||
-      userAnswer.length === 0
-    ) {
-      skipped++;
-      continue;
-    }
 
-    const correctAnswers =
-      [...question.correctAnswers].sort();
 
-    const selectedAnswers =
-      [...userAnswer].sort();
+      // Якщо відповіді немає
+      if (
+        !userAnswer ||
+        userAnswer.length === 0
+      ) {
 
-    const isCorrect =
-      JSON.stringify(correctAnswers) ===
-      JSON.stringify(selectedAnswers);
+        skipped++;
 
-    if (isCorrect) {
+        return;
 
-      correct++;
+      }
 
-      earnedPoints +=
-        question.points;
 
-    } else {
 
-      incorrect++;
+      const correctAnswers =
+        question.options
+          .filter(
+            (option) =>
+              option.isCorrect === true
+          )
+          .map(
+            (option) =>
+              option.id
+          );
 
-    }
-  }
 
-  const percent =
-    maxPoints === 0
-      ? 0
-      : Math.round(
-          (earnedPoints /
-            maxPoints) *
-            100
+
+      const isCorrect =
+
+        correctAnswers.length ===
+          userAnswer.length &&
+
+        correctAnswers.every(
+          (id) =>
+            userAnswer.includes(id)
         );
 
+
+
+      if (isCorrect) {
+
+        correct++;
+
+      } else {
+
+        incorrect++;
+
+      }
+
+    }
+  );
+
+
+
+  const maxPoints =
+    test.maxPoints;
+
+
+
+  const earnedPoints =
+    correct;
+
+
+
+  const percent =
+    maxPoints > 0
+
+      ? Math.round(
+          (earnedPoints / maxPoints) * 100
+        )
+
+      : 0;
+
+
+
   return {
-
-    correct,
-
-    incorrect,
-
-    skipped,
 
     earnedPoints,
 
@@ -87,5 +120,12 @@ export function calculateResult(
 
     percent,
 
+    correct,
+
+    incorrect,
+
+    skipped,
+
   };
+
 }

@@ -1,16 +1,19 @@
-import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
-import { Test } from "@/app/types/test";
-import { UserAnswers } from "@/app/context/TestSessionContext";
+import type { Test } from "@/app/types/test";
+import type { UserAnswers } from "@/app/context/TestSessionContext";
 
 import { calculateResult } from "./result.service";
 import { saveResult } from "./result.api";
 import { finishSession } from "./session.api";
 
+
 export type FinishReason =
   | "manual"
   | "timeout"
   | "security";
+
+
 
 export async function finishTest(
   reason: FinishReason,
@@ -19,8 +22,10 @@ export async function finishTest(
   timeLeft: number,
   router: AppRouterInstance
 ) {
+
+
   // ==========================
-  // Позначаємо сесію завершеною
+  // Завершення сесії тестування
   // ==========================
 
   await finishSession(
@@ -30,8 +35,10 @@ export async function finishTest(
     timeLeft
   );
 
+
+
   // ==========================
-  // Обчислюємо результат
+  // Розрахунок результату
   // ==========================
 
   const result = calculateResult(
@@ -39,32 +46,60 @@ export async function finishTest(
     answers
   );
 
+
+
   // ==========================
-  // Зберігаємо результат
+  // Збереження результату
   // ==========================
 
   const saved = await saveResult({
+
     testId: test.id,
 
-    earnedPoints: result.earnedPoints,
-    maxPoints: result.maxPoints,
-    percent: result.percent,
 
-    correct: result.correct,
-    incorrect: result.incorrect,
-    skipped: result.skipped,
+    earnedPoints:
+      result.earnedPoints,
+
+
+    maxPoints:
+      result.maxPoints,
+
+
+    percent:
+      result.percent,
+
+
+    correct:
+      result.correct,
+
+
+    incorrect:
+      result.incorrect,
+
+
+    skipped:
+      result.skipped,
+
 
     timeSpent:
       test.duration * 60 - timeLeft,
 
+
     answers,
 
+
     finishReason: reason,
+
   });
 
+
+
   // ==========================
-  // Переходимо на сторінку результатів
+  // Перехід на сторінку результатів
   // ==========================
 
-  router.push(`/result/${saved.id}`);
+  router.push(
+    `/result/${saved.id}`
+  );
+
 }
