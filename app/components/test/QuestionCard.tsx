@@ -4,7 +4,7 @@ import { Question } from "@/app/types/question";
 
 import SingleChoice from "./question-types/SingleChoice";
 import MultipleChoice from "./question-types/MultipleChoice";
-import TextAnswer from "./question-types/TextAnswer";
+
 import Matching from "./question-types/Matching";
 import Sequence from "./question-types/Sequence";
 
@@ -80,13 +80,7 @@ export default function QuestionCard({
         />
       )}
 
-      {question.type === "text" && (
-        <TextAnswer
-          question={question}
-          selectedAnswers={selectedAnswers}
-          onChange={onAnswerChange}
-        />
-      )}
+    
 
       {question.type === "matching" && (
         <Matching

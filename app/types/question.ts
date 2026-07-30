@@ -4,8 +4,7 @@ export type QuestionType =
   | "single"
   | "multiple"
   | "matching"
-  | "sequence"
-  | "text";
+  | "sequence";
 
 export interface MatchingPair {
   id: number;
