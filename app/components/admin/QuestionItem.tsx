@@ -6,7 +6,6 @@ import SingleChoice from "./question-types/SingleChoice";
 import MultipleChoice from "./question-types/MultipleChoice";
 import Matching from "./question-types/Matching";
 import Sequence from "./question-types/Sequence";
-import TextAnswer from "./question-types/TextAnswer";
 
 type Props = {
   question: Question;
@@ -33,9 +32,7 @@ export default function QuestionItem({
 
   return (
     <div className="bg-white border rounded-xl shadow-sm p-6">
-
       <div className="flex justify-between items-center mb-6">
-
         <h3 className="text-xl font-bold text-[#7A1F2B]">
           Питання №{number}
         </h3>
@@ -47,13 +44,10 @@ export default function QuestionItem({
         >
           Видалити
         </button>
-
       </div>
 
       <div className="space-y-6">
-
         <div>
-
           <label className="block font-medium mb-2">
             Тип завдання
           </label>
@@ -83,17 +77,10 @@ export default function QuestionItem({
             <option value="sequence">
               Встановлення послідовності
             </option>
-
-            <option value="text">
-              Коротка текстова відповідь
-            </option>
-
           </select>
-
         </div>
 
         <div>
-
           <label className="block font-medium mb-2">
             Текст питання
           </label>
@@ -106,7 +93,6 @@ export default function QuestionItem({
             }
             className="w-full border rounded-lg p-3"
           />
-
         </div>
 
         {question.type === "single" && (
@@ -124,22 +110,20 @@ export default function QuestionItem({
         )}
 
         {question.type === "matching" && (
-  <Matching
-    question={question}
-    onChange={onChange}
-  />
-)}
-
-        {question.type === "sequence" && (
-          <Sequence />
+          <Matching
+            question={question}
+            onChange={onChange}
+          />
         )}
 
-        {question.type === "text" && (
-          <TextAnswer />
+        {question.type === "sequence" && (
+          <Sequence
+            question={question}
+            onChange={onChange}
+          />
         )}
 
         <div>
-
           <label className="block font-medium mb-2">
             Кількість балів
           </label>
@@ -156,11 +140,8 @@ export default function QuestionItem({
             }
             className="w-40 border rounded-lg p-3"
           />
-
         </div>
-
       </div>
-
     </div>
   );
 }
