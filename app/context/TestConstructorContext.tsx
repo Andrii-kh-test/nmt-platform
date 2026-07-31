@@ -50,7 +50,6 @@ type TestConstructorContextType = {
 
 // Новий тест НЕ має id
 const initialTest: Test = {
-
   title: "",
 
   subject: "Українська мова",
@@ -67,6 +66,11 @@ const initialTest: Test = {
     createQuestion(1),
   ],
 
+  isPublished: false,
+
+  codeRequired: true,
+
+  accessCode: "",
 };
 
 

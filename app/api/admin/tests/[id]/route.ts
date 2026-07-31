@@ -227,7 +227,14 @@ export async function PUT(
 
         maxPoints:
           body.maxPoints,
+isPublished:
+  body.isPublished,
 
+codeRequired:
+  body.codeRequired,
+
+accessCode:
+  body.accessCode,
 
 
         questions: {

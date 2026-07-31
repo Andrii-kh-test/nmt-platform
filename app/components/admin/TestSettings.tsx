@@ -153,7 +153,107 @@ export default function TestSettings() {
             className="w-full border rounded-lg p-3"
           />
         </div>
+<hr className="my-6" />
 
+<h3 className="text-xl font-bold text-[#7A1F2B]">
+  Доступ до тесту
+</h3>
+
+<div className="space-y-5 mt-4">
+
+  <label className="flex items-center gap-3">
+    <input
+      type="checkbox"
+      checked={test.isPublished}
+      onChange={(e) =>
+        updateTest("isPublished", e.target.checked)
+      }
+    />
+
+    <span>Опублікувати тест</span>
+  </label>
+
+  <label className="flex items-center gap-3">
+    <input
+      type="checkbox"
+      checked={test.codeRequired}
+      onChange={(e) =>
+        updateTest("codeRequired", e.target.checked)
+      }
+    />
+
+    <span>Вимагати код доступу</span>
+  </label>
+
+  {test.codeRequired && (
+    <>
+
+      <div>
+
+        <label className="block font-medium mb-2">
+          Код доступу
+        </label>
+
+        <input
+          type="text"
+          value={test.accessCode}
+          onChange={(e) =>
+            updateTest("accessCode", e.target.value)
+          }
+          className="w-full border rounded-lg p-3 font-mono"
+        />
+
+      </div>
+
+      <div className="flex gap-3">
+
+        <button
+          type="button"
+          onClick={() => {
+
+            const chars =
+              "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+            let code = "NMT-";
+
+            for (let i = 0; i < 6; i++) {
+              code +=
+                chars[
+                  Math.floor(
+                    Math.random() * chars.length
+                  )
+                ];
+            }
+
+            updateTest(
+              "accessCode",
+              code
+            );
+
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+        >
+          🎲 Згенерувати
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            navigator.clipboard.writeText(
+              test.accessCode
+            )
+          }
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
+        >
+          📋 Копіювати
+        </button>
+
+      </div>
+
+    </>
+  )}
+
+</div>
         <button
           type="button"
           onClick={handleSave}

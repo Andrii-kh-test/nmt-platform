@@ -16,4 +16,19 @@ export interface Test {
   maxPoints: number;
 
   questions: Question[];
+
+  /**
+   * Чи видно тест на головній сторінці
+   */
+  isPublished: boolean;
+
+  /**
+   * Чи потрібен код доступу
+   */
+  codeRequired: boolean;
+
+  /**
+   * Код доступу
+   */
+  accessCode: string;
 }

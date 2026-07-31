@@ -14,6 +14,11 @@ export async function POST(request: Request) {
         duration: body.duration,
         maxPoints: body.maxPoints,
 
+        // Нові поля
+        isPublished: body.isPublished,
+        codeRequired: body.codeRequired,
+        accessCode: body.accessCode,
+
         questions: {
           create: body.questions.map(
             (question: any, index: number) => ({
@@ -41,7 +46,6 @@ export async function POST(request: Request) {
       success: true,
       test,
     });
-
   } catch (error) {
     console.error(error);
 
