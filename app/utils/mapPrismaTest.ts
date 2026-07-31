@@ -17,6 +17,13 @@ export function mapPrismaTest(test: any): Test {
 
     maxPoints: test.maxPoints,
 
+    // Нові поля
+    isPublished: test.isPublished ?? false,
+
+    codeRequired: test.codeRequired ?? true,
+
+    accessCode: test.accessCode ?? "",
+
     questions: test.questions.map(
       (question: any): Question => ({
         id: question.id,
