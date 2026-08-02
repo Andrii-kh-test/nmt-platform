@@ -7,19 +7,19 @@ export async function POST(request: Request) {
 
     const test = await prisma.test.create({
       data: {
-        title: body.title,
-        subject: body.subject,
-        description: body.description,
-        schoolYear: body.schoolYear,
-        duration: body.duration,
-        maxPoints: body.maxPoints,
+  title: body.title,
+  subject: body.subject,
+  description: body.description,
+  schoolYear: body.schoolYear,
+  duration: body.duration,
+  maxPoints: body.maxPoints,
 
-        // Нові поля
-        isPublished: body.isPublished,
-        codeRequired: body.codeRequired,
-        accessCode: body.accessCode,
+  // Нові поля
+  isPublished: body.isPublished ?? false,
+  codeRequired: body.codeRequired ?? true,
+  accessCode: body.accessCode || null,
 
-        questions: {
+  questions: {
           create: body.questions.map(
             (question: any, index: number) => ({
               order: index + 1,

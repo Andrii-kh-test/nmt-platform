@@ -61,16 +61,14 @@ const initialTest: Test = {
   schoolYear: "2026",
 
   maxPoints: 45,
+isPublished: false,
 
+codeRequired: true,
+
+accessCode: "",
   questions: [
     createQuestion(1),
   ],
-
-  isPublished: false,
-
-  codeRequired: true,
-
-  accessCode: "",
 };
 
 

@@ -20,7 +20,7 @@ model Test {
   updatedAt DateTime @updatedAt
 
   /// Публікація тесту
-  isPublished  Boolean @default(false)
+  isPublished Boolean @default(false)
 
   /// Чи потрібен код доступу
   codeRequired Boolean @default(true)
@@ -56,6 +56,18 @@ model AnswerOption {
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
+model Participant {
+  id Int @id @default(autoincrement())
+
+  lastName   String
+  firstName  String
+  middleName String?
+
+  createdAt DateTime @default(now())
+
+  sessions TestSession[]
+}
+
 model TestResult {
   id Int @id @default(autoincrement())
 
@@ -88,8 +100,11 @@ model TestResult {
 model TestSession {
   id Int @id @default(autoincrement())
 
+  participantId Int?
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
   testId Int
-  test   Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   currentQuestion Int @default(0)
 

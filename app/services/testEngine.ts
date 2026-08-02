@@ -7,130 +7,105 @@ import { calculateResult } from "./result.service";
 import { saveResult } from "./result.api";
 import { finishSession } from "./session.api";
 
-
 export type FinishReason =
   | "manual"
   | "timeout"
   | "security";
 
-
-
 export async function finishTest(
-
   reason: FinishReason,
-
   test: Test,
-
   answers: UserAnswers,
-
   timeLeft: number,
-
   router: AppRouterInstance
-
 ) {
 
-
   if (test.id === undefined) {
-
-    throw new Error(
-      "Неможливо завершити тест без id"
-    );
-
+    throw new Error("Неможливо завершити тест без id");
   }
-
-
 
   const testId = test.id;
 
-
-
-  // ==========================
-  // Позначаємо сесію завершеною
-  // ==========================
+  // -------------------------------
+  // Завершуємо сесію
+  // -------------------------------
 
   await finishSession(
+    testId,
+    0,
+    answers,
+    timeLeft
+  );
+
+  // -------------------------------
+  // Розрахунок результату
+  // -------------------------------
+
+  let result = calculateResult(
+    test,
+    answers
+  );
+
+  // -------------------------------
+  // Якщо порушення — анулюємо
+  // -------------------------------
+
+  if (reason === "security") {
+
+    result = {
+      earnedPoints: 0,
+      maxPoints: result.maxPoints,
+      percent: 0,
+      correct: 0,
+      incorrect: 0,
+      skipped: test.questions.length,
+    };
+
+  }
+
+  // -------------------------------
+  // Записуємо результат
+  // -------------------------------
+
+  const saved = await saveResult({
 
     testId,
 
-    0,
+    earnedPoints: result.earnedPoints,
+
+    maxPoints: result.maxPoints,
+
+    percent: result.percent,
+
+    correct: result.correct,
+
+    incorrect: result.incorrect,
+
+    skipped: result.skipped,
+
+    timeSpent: test.duration * 60 - timeLeft,
 
     answers,
 
-    timeLeft
+    finishReason: reason,
 
-  );
+  });
 
+  // -------------------------------
+  // Очищаємо локальну сесію
+  // -------------------------------
 
+  localStorage.removeItem("test-session");
+  localStorage.removeItem("savedAnswers");
+  localStorage.removeItem("selectedAnswers");
+  localStorage.removeItem("currentQuestion");
+  localStorage.removeItem("timeLeft");
 
-  // ==========================
-  // Обчислюємо результат
-  // ==========================
+  sessionStorage.clear();
 
-  const result =
-    calculateResult(
+  // -------------------------------
+  // Прибираємо можливість Back
+  // -------------------------------
 
-      test,
-
-      answers
-
-    );
-
-
-
-  // ==========================
-  // Зберігаємо результат
-  // ==========================
-
-  const saved =
-    await saveResult({
-
-      testId,
-
-
-      earnedPoints:
-        result.earnedPoints,
-
-
-      maxPoints:
-        result.maxPoints,
-
-
-      percent:
-        result.percent,
-
-
-      correct:
-        result.correct,
-
-
-      incorrect:
-        result.incorrect,
-
-
-      skipped:
-        result.skipped,
-
-
-      timeSpent:
-        test.duration * 60 - timeLeft,
-
-
-      answers,
-
-
-      finishReason:
-        reason,
-
-    });
-
-
-
-  // ==========================
-  // Перехід до результату
-  // ==========================
-
-  router.push(
-    `/result/${saved.id}`
-  );
-
+  router.replace(`/result/${saved.id}`);
 }

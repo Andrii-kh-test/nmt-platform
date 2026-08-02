@@ -15,20 +15,12 @@ export interface Test {
 
   maxPoints: number;
 
-  questions: Question[];
-
-  /**
-   * Чи видно тест на головній сторінці
-   */
+  // Нові поля
   isPublished: boolean;
 
-  /**
-   * Чи потрібен код доступу
-   */
   codeRequired: boolean;
 
-  /**
-   * Код доступу
-   */
   accessCode: string;
+
+  questions: Question[];
 }

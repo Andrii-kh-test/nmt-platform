@@ -4,18 +4,23 @@ import TestCard from "@/app/components/start/TestCard";
 
 export default async function Home() {
   const tests = await prisma.test.findMany({
+    where: {
+      isPublished: true,
+    },
+
     orderBy: {
       id: "desc",
     },
+
     include: {
       questions: true,
     },
   });
 
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="min-h-screen bg-slate-100 flex flex-col">
 
-      <div className="max-w-7xl mx-auto px-8 py-12">
+      <div className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full">
 
         <div className="text-center mb-14">
 
@@ -38,7 +43,7 @@ export default async function Home() {
             </h2>
 
             <p className="mt-4 text-gray-500">
-              Створіть тест в адміністративній панелі.
+              Адміністратор ще не опублікував жодного тесту.
             </p>
 
           </div>
@@ -52,6 +57,7 @@ export default async function Home() {
               <TestCard
                 key={test.id}
                 id={test.id}
+                href={`/test/start/${test.id}`}
                 title={test.title}
                 subject={test.subject}
                 duration={test.duration}
@@ -65,6 +71,22 @@ export default async function Home() {
         )}
 
       </div>
+
+      <footer className="bg-white border-t border-gray-200 py-6">
+
+        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3 text-gray-600">
+
+          <span className="text-sm">
+            Створено за підтримки
+          </span>
+
+          <span className="font-semibold">
+            ChatGPT
+          </span>
+
+        </div>
+
+      </footer>
 
     </main>
   );

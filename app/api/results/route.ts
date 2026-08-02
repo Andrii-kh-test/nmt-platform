@@ -8,10 +8,15 @@ export async function GET() {
       orderBy: {
         createdAt: "desc",
       },
+      include: {
+        test: true,
+      },
     });
 
     return NextResponse.json(results);
+
   } catch (error) {
+
     console.error(error);
 
     return NextResponse.json(
@@ -22,15 +27,20 @@ export async function GET() {
         status: 500,
       }
     );
+
   }
 }
 
 export async function POST(request: Request) {
+
   try {
+
     const body = await request.json();
 
     const result = await prisma.testResult.create({
+
       data: {
+
         testId: body.testId,
 
         earnedPoints: body.earnedPoints,
@@ -44,11 +54,28 @@ export async function POST(request: Request) {
         timeSpent: body.timeSpent,
 
         answers: body.answers,
+
+        // Нові поля
+        finishReason:
+          body.finishReason ?? "manual",
+
+        lastName:
+          body.lastName ?? null,
+
+        firstName:
+          body.firstName ?? null,
+
+        middleName:
+          body.middleName ?? null,
+
       },
+
     });
 
     return NextResponse.json(result);
+
   } catch (error) {
+
     console.error(error);
 
     return NextResponse.json(
@@ -59,5 +86,6 @@ export async function POST(request: Request) {
         status: 500,
       }
     );
+
   }
 }

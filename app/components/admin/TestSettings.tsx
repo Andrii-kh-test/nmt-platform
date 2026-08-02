@@ -9,12 +9,11 @@ export default function TestSettings() {
   async function handleSave() {
     console.log("========== SAVE ==========");
     console.log(test);
-    console.log("test.id =", test.id);
 
     try {
       const result = await saveTest(test);
 
-      console.log("Відповідь сервера:", result);
+      console.log(result);
 
       alert(
         test.id
@@ -153,107 +152,78 @@ export default function TestSettings() {
             className="w-full border rounded-lg p-3"
           />
         </div>
-<hr className="my-6" />
 
-<h3 className="text-xl font-bold text-[#7A1F2B]">
-  Доступ до тесту
-</h3>
+        <hr className="my-6" />
 
-<div className="space-y-5 mt-4">
+        <h3 className="text-xl font-semibold text-[#7A1F2B]">
+          Доступ до тесту
+        </h3>
 
-  <label className="flex items-center gap-3">
-    <input
-      type="checkbox"
-      checked={test.isPublished}
-      onChange={(e) =>
-        updateTest("isPublished", e.target.checked)
-      }
-    />
+        <label className="flex items-center gap-3">
 
-    <span>Опублікувати тест</span>
-  </label>
+          <input
+            type="checkbox"
+            checked={test.isPublished}
+            onChange={(e) =>
+              updateTest(
+                "isPublished",
+                e.target.checked
+              )
+            }
+            className="w-5 h-5"
+          />
 
-  <label className="flex items-center gap-3">
-    <input
-      type="checkbox"
-      checked={test.codeRequired}
-      onChange={(e) =>
-        updateTest("codeRequired", e.target.checked)
-      }
-    />
+          <span>
+            Опублікувати тест
+          </span>
 
-    <span>Вимагати код доступу</span>
-  </label>
-
-  {test.codeRequired && (
-    <>
-
-      <div>
-
-        <label className="block font-medium mb-2">
-          Код доступу
         </label>
 
-        <input
-          type="text"
-          value={test.accessCode}
-          onChange={(e) =>
-            updateTest("accessCode", e.target.value)
-          }
-          className="w-full border rounded-lg p-3 font-mono"
-        />
+        <label className="flex items-center gap-3">
 
-      </div>
-
-      <div className="flex gap-3">
-
-        <button
-          type="button"
-          onClick={() => {
-
-            const chars =
-              "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-            let code = "NMT-";
-
-            for (let i = 0; i < 6; i++) {
-              code +=
-                chars[
-                  Math.floor(
-                    Math.random() * chars.length
-                  )
-                ];
+          <input
+            type="checkbox"
+            checked={test.codeRequired}
+            onChange={(e) =>
+              updateTest(
+                "codeRequired",
+                e.target.checked
+              )
             }
+            className="w-5 h-5"
+          />
 
-            updateTest(
-              "accessCode",
-              code
-            );
+          <span>
+            Вимагати код доступу
+          </span>
 
-          }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-        >
-          🎲 Згенерувати
-        </button>
+        </label>
 
-        <button
-          type="button"
-          onClick={() =>
-            navigator.clipboard.writeText(
-              test.accessCode
-            )
-          }
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg"
-        >
-          📋 Копіювати
-        </button>
+        {test.codeRequired && (
 
-      </div>
+          <div>
 
-    </>
-  )}
+            <label className="block font-medium mb-2">
+              Код доступу
+            </label>
 
-</div>
+            <input
+              type="text"
+              value={test.accessCode}
+              onChange={(e) =>
+                updateTest(
+                  "accessCode",
+                  e.target.value
+                )
+              }
+              className="w-full border rounded-lg p-3"
+              placeholder="Наприклад: NMT2026"
+            />
+
+          </div>
+
+        )}
+
         <button
           type="button"
           onClick={handleSave}
