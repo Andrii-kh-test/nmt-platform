@@ -16,9 +16,6 @@ model Test {
   duration    Int
   maxPoints   Int
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
   /// Публікація тесту
   isPublished Boolean @default(false)
 
@@ -27,6 +24,9 @@ model Test {
 
   /// Код доступу
   accessCode String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   questions Question[]
   results   TestResult[]
@@ -68,11 +68,35 @@ model Participant {
   sessions TestSession[]
 }
 
+model TestSession {
+  id Int @id @default(autoincrement())
+
+  participantId Int?
+  participant Participant?
+    @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  testId Int
+  test Test
+    @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  currentQuestion Int @default(0)
+
+  savedAnswers Json
+
+  timeLeft Int
+
+  finished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model TestResult {
   id Int @id @default(autoincrement())
 
   testId Int
-  test   Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  test Test
+    @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   /// Дані учасника
   lastName   String?
@@ -91,29 +115,8 @@ model TestResult {
 
   answers Json
 
-  /// NORMAL | TIMEOUT | SECURITY_VIOLATION | MANUAL
-  finishReason String @default("NORMAL")
+  /// manual | timeout | security
+  finishReason String @default("manual")
 
   createdAt DateTime @default(now())
-}
-
-model TestSession {
-  id Int @id @default(autoincrement())
-
-  participantId Int?
-  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  testId Int
-  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  currentQuestion Int @default(0)
-
-  savedAnswers Json
-
-  timeLeft Int
-
-  finished Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-
 import { prisma } from "@/app/lib/prisma";
 
 export async function POST(request: NextRequest) {
@@ -26,9 +25,7 @@ export async function POST(request: NextRequest) {
           success: false,
           message: "Тест не знайдено",
         },
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
@@ -38,9 +35,7 @@ export async function POST(request: NextRequest) {
           success: false,
           message: "Тест ще не опублікований",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
@@ -53,12 +48,11 @@ export async function POST(request: NextRequest) {
           success: false,
           message: "Невірний код доступу",
         },
-        {
-          status: 403,
-        }
+        { status: 403 }
       );
     }
 
+    // Створюємо учасника
     const participant =
       await prisma.participant.create({
         data: {
@@ -68,6 +62,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
+    // Створюємо сесію
     const session =
       await prisma.testSession.create({
         data: {
@@ -87,11 +82,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-
       participant,
-
       session,
     });
+
   } catch (error) {
     console.error(error);
 
@@ -100,9 +94,7 @@ export async function POST(request: NextRequest) {
         success: false,
         message: "Помилка запуску тесту",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
