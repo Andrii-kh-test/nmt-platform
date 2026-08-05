@@ -2,10 +2,9 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
 
-import TestLoader from "@/app/components/test/TestLoader";
-import TestHeader from "@/app/components/test/TestHeader";
-import QuestionView from "@/app/components/test/QuestionView";
-import QuestionNavigator from "@/app/components/test/QuestionNavigator";
+import TestLoader from "@/app/components/admin/TestLoader";
+import TestSettings from "@/app/components/admin/TestSettings";
+import QuestionList from "@/app/components/admin/QuestionList";
 
 import { mapPrismaTest } from "@/app/utils/mapPrismaTest";
 
@@ -15,7 +14,7 @@ type Props = {
   }>;
 };
 
-export default async function TestPage({
+export default async function EditTestPage({
   params,
 }: Props) {
   const { id } = await params;
@@ -27,7 +26,11 @@ export default async function TestPage({
     include: {
       questions: {
         include: {
-          options: true,
+          options: {
+            orderBy: {
+              order: "asc",
+            },
+          },
         },
         orderBy: {
           order: "asc",
@@ -43,26 +46,24 @@ export default async function TestPage({
   const test = mapPrismaTest(prismaTest);
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC]">
+    <main className="min-h-screen bg-[#F8FAFC] p-8">
 
       <TestLoader test={test} />
 
-      <TestHeader />
+      <div className="max-w-7xl mx-auto">
 
-      <div className="max-w-7xl mx-auto py-8 px-6">
+        <h1 className="text-4xl font-bold text-[#7A1F2B] mb-8">
+          Редагування тесту
+        </h1>
 
         <div className="grid grid-cols-12 gap-8">
 
-          <div className="col-span-9">
-
-            <QuestionView />
-
+          <div className="col-span-4">
+            <TestSettings />
           </div>
 
-          <div className="col-span-3">
-
-            <QuestionNavigator />
-
+          <div className="col-span-8">
+            <QuestionList />
           </div>
 
         </div>

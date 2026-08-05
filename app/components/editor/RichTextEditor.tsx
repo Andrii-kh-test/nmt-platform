@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
 
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -19,88 +19,64 @@ export default function RichTextEditor({
   value,
   onChange,
 }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const inputRef =
-    useRef<HTMLInputElement>(null);
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
 
-  const editor =
-    useEditor({
+      Underline,
 
-      extensions: [
+      Link.configure({
+        openOnClick: false,
+      }),
 
-        StarterKit,
+      Image,
 
-        Underline,
+      TextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+    ],
 
-        Link,
+    content: value,
 
-        Image,
+    immediatelyRender: false,
 
-        TextAlign.configure({
-          types: [
-            "heading",
-            "paragraph",
-          ],
-        }),
+    onUpdate({ editor }) {
+      onChange(editor.getHTML());
+    },
+  });
 
-      ],
+  async function uploadImage(file: File) {
+    try {
+      const formData = new FormData();
 
-      content: value,
+      formData.append("file", file);
 
-      immediatelyRender: false,
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      onUpdate({ editor }) {
+      const result = await response.json();
 
-        onChange(
-          editor.getHTML()
-        );
+      if (!result.success) {
+        alert("Не вдалося завантажити зображення.");
+        return;
+      }
 
-      },
+      editor
+        ?.chain()
+        .focus()
+        .setImage({
+          src: result.url,
+        })
+        .run();
+    } catch (error) {
+      console.error(error);
 
-    });
-
-  async function uploadImage(
-    file: File
-  ) {
-
-    const formData =
-      new FormData();
-
-    formData.append(
-      "file",
-      file
-    );
-
-    const response =
-      await fetch(
-        "/api/upload",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-    const result =
-      await response.json();
-
-    if (!result.url) {
-
-      alert(
-        "Не вдалося завантажити файл."
-      );
-
-      return;
-
+      alert("Помилка завантаження зображення.");
     }
-
-    editor
-      ?.chain()
-      .focus()
-      .setImage({
-        src: result.url,
-      })
-      .run();
-
   }
 
   if (!editor) {
@@ -108,7 +84,6 @@ export default function RichTextEditor({
   }
 
   return (
-
     <div className="border rounded-xl overflow-hidden bg-white">
 
       <div className="flex flex-wrap gap-2 p-3 border-b bg-slate-50">
@@ -116,13 +91,13 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .toggleBold()
-              .run()
+            editor.chain().focus().toggleBold().run()
           }
-          className="px-3 py-1 border rounded"
+          className={`px-3 py-1 border rounded ${
+            editor.isActive("bold")
+              ? "bg-[#7A1F2B] text-white"
+              : ""
+          }`}
         >
           <b>B</b>
         </button>
@@ -130,39 +105,35 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .toggleItalic()
-              .run()
+            editor.chain().focus().toggleItalic().run()
           }
-          className="px-3 py-1 border rounded italic"
+          className={`px-3 py-1 border rounded ${
+            editor.isActive("italic")
+              ? "bg-[#7A1F2B] text-white"
+              : ""
+          }`}
         >
-          I
+          <i>I</i>
         </button>
 
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .toggleUnderline()
-              .run()
+            editor.chain().focus().toggleUnderline().run()
           }
-          className="px-3 py-1 border rounded underline"
+          className={`px-3 py-1 border rounded ${
+            editor.isActive("underline")
+              ? "bg-[#7A1F2B] text-white"
+              : ""
+          }`}
         >
-          U
+          <u>U</u>
         </button>
 
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .toggleBulletList()
-              .run()
+            editor.chain().focus().toggleBulletList().run()
           }
           className="px-3 py-1 border rounded"
         >
@@ -172,11 +143,7 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .toggleOrderedList()
-              .run()
+            editor.chain().focus().toggleOrderedList().run()
           }
           className="px-3 py-1 border rounded"
         >
@@ -186,11 +153,7 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .setTextAlign("left")
-              .run()
+            editor.chain().focus().setTextAlign("left").run()
           }
           className="px-3 py-1 border rounded"
         >
@@ -200,11 +163,7 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .setTextAlign("center")
-              .run()
+            editor.chain().focus().setTextAlign("center").run()
           }
           className="px-3 py-1 border rounded"
         >
@@ -214,11 +173,7 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .setTextAlign("right")
-              .run()
+            editor.chain().focus().setTextAlign("right").run()
           }
           className="px-3 py-1 border rounded"
         >
@@ -228,29 +183,27 @@ export default function RichTextEditor({
         <button
           type="button"
           onClick={() =>
-            inputRef.current?.click()
+            fileInputRef.current?.click()
           }
           className="px-3 py-1 border rounded"
         >
-          📷 Зображення
+          🖼️
         </button>
 
         <input
-          ref={inputRef}
+          ref={fileInputRef}
           type="file"
           accept="image/*"
           hidden
           onChange={(e) => {
-
             const file =
               e.target.files?.[0];
 
             if (file) {
-
               uploadImage(file);
-
             }
 
+            e.target.value = "";
           }}
         />
 
@@ -262,7 +215,5 @@ export default function RichTextEditor({
       />
 
     </div>
-
   );
-
 }

@@ -67,11 +67,11 @@ export default function AdminTestCard({
         <div className="flex flex-col gap-2">
 
           <Link
-            href={`/admin/tests/${test.id}/edit`}
-            className="bg-[#7A1F2B] text-white px-4 py-2 rounded-lg hover:bg-[#641823]"
-          >
-            ✏️ Редагувати
-          </Link>
+  href={`/admin/tests/${test.id}`}
+  className="bg-[#7A1F2B] text-white px-4 py-2 rounded-lg hover:bg-[#641823]"
+>
+  ✏️ Редагувати
+</Link>
 
           <button
             className="border rounded-lg px-4 py-2 hover:bg-gray-100"
