@@ -5,9 +5,9 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
 
-    const file = formData.get("file") as File;
+    const file = formData.get("file");
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json(
         {
           success: false,
@@ -29,12 +29,21 @@ export async function POST(request: Request) {
       url: blob.url,
     });
   } catch (error) {
+    console.error("========== UPLOAD ERROR ==========");
     console.error(error);
+    console.error("==================================");
 
     return NextResponse.json(
       {
         success: false,
-        message: "Помилка завантаження",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Невідома помилка",
+        stack:
+          error instanceof Error
+            ? error.stack
+            : String(error),
       },
       {
         status: 500,
