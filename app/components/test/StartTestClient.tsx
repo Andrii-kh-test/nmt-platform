@@ -80,7 +80,7 @@ export default function StartTestClient({
         String(result.session.id)
       );
 
-      router.push(`/test/${testId}`);
+      router.push(`/test/${testId}/instruction`);
     } catch (error) {
       console.error(error);
 
