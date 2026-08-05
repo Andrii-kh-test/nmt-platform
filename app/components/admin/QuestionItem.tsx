@@ -6,7 +6,7 @@ import SingleChoice from "./question-types/SingleChoice";
 import MultipleChoice from "./question-types/MultipleChoice";
 import Matching from "./question-types/Matching";
 import Sequence from "./question-types/Sequence";
-
+import RichTextEditor from "@/app/components/editor/RichTextEditor";
 type Props = {
   question: Question;
   number: number;
@@ -81,18 +81,16 @@ export default function QuestionItem({
         </div>
 
         <div>
-          <label className="block font-medium mb-2">
-            Текст питання
-          </label>
+  <label className="block font-medium mb-2">
+    Текст питання
+  </label>
 
-          <textarea
-            rows={4}
-            value={question.text}
-            onChange={(e) =>
-              updateField("text", e.target.value)
-            }
-            className="w-full border rounded-lg p-3"
-          />
+  <RichTextEditor
+  value={question.text}
+  onChange={(html) =>
+    updateField("text", html)
+  }
+/>
         </div>
 
         {question.type === "single" && (
