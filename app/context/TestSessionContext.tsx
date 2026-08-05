@@ -158,23 +158,45 @@ export function TestSessionProvider({
   // Завантаження тесту
   // ==========================
 
-  function loadTest(
-    loadedTest: Test
+  function loadTest(loadedTest: Test) {
+
+  setTest((prevTest) => {
+
+    // якщо цей тест вже завантажений —
+    // нічого не перезавантажуємо
+    if (
+      prevTest &&
+      prevTest.id === loadedTest.id
+    ) {
+      return prevTest;
+    }
+
+    return loadedTest;
+
+  });
+
+  // якщо тест уже існує —
+  // не очищаємо відповіді і таймер
+  if (
+    test &&
+    test.id === loadedTest.id
   ) {
-    setTest(loadedTest);
-
-    setCurrentQuestion(0);
-
-    setSelectedAnswers({});
-
-    setSavedAnswers({});
-
-    setTimeLeft(
-      loadedTest.duration * 60
-    );
-
-    setTimerRunning(false);
+    return;
   }
+
+  setCurrentQuestion(0);
+
+  setSelectedAnswers({});
+
+  setSavedAnswers({});
+
+  setTimeLeft(
+    loadedTest.duration * 60
+  );
+
+  setTimerRunning(false);
+
+}
 
   // ==========================
   // Обрати відповідь

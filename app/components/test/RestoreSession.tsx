@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useTestSession } from "@/app/context/TestSessionContext";
-
 import { loadSession } from "@/app/services/session.api";
-
 
 export default function RestoreSession() {
 
@@ -14,78 +12,50 @@ export default function RestoreSession() {
     restoreSession,
   } = useTestSession();
 
+  const restored = useRef(false);
 
   useEffect(() => {
 
+    if (!test) return;
+
+    if (test.id === undefined) return;
+
+    if (restored.current) return;
+
+    restored.current = true;
 
     async function checkSession() {
 
-
-      if (!test) {
-        return;
-      }
-
-
-      if (test.id === undefined) {
-        return;
-      }
-
-
       try {
 
+        const testId = test?.id;
 
-        const testId = test.id;
+if (testId === undefined) return;
 
+const data = await loadSession(testId);
 
-        const data =
-          await loadSession(testId);
+        if (!data) return;
 
-
-
-        if (data) {
-
-
-          restoreSession(
-
-            data.currentQuestion,
-
-            data.savedAnswers,
-
-            data.timeLeft
-
-          );
-
-
-        }
-
+        restoreSession(
+          data.currentQuestion,
+          data.savedAnswers,
+          data.timeLeft
+        );
 
       } catch (error) {
-
 
         console.error(
           "Помилка відновлення сесії:",
           error
         );
 
-
       }
-
 
     }
 
-
-
     checkSession();
 
-
-
-  }, [
-    test,
-    restoreSession,
-  ]);
-
-
+  }, [test]);
 
   return null;
-
 }

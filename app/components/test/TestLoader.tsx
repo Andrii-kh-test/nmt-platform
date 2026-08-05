@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Test } from "@/app/types/test";
 import { useTestSession } from "@/app/context/TestSessionContext";
@@ -15,13 +15,26 @@ export default function TestLoader({
   const {
     loadTest,
     startTimer,
+    test: currentTest,
   } = useTestSession();
 
-  useEffect(() => {
-    loadTest(test);
+  const initialized = useRef(false);
 
+  useEffect(() => {
+    if (initialized.current) return;
+
+    // якщо тест уже був відновлений із сесії —
+    // нічого не перезавантажуємо
+    if (currentTest) {
+      initialized.current = true;
+      return;
+    }
+
+    loadTest(test);
     startTimer();
-  }, [test]);
+
+    initialized.current = true;
+  }, [currentTest, loadTest, startTimer, test]);
 
   return null;
 }
