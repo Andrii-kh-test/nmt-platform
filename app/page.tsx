@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/app/lib/prisma";
 
 import TestCard from "@/app/components/start/TestCard";
@@ -16,6 +18,8 @@ export default async function Home() {
       questions: true,
     },
   });
+
+  console.log("HOME TESTS:", tests);
 
   return (
     <main className="min-h-screen bg-slate-100 flex flex-col">
