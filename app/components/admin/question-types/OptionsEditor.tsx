@@ -1,7 +1,7 @@
 "use client";
 
 import { Question } from "@/app/types/question";
-import RichTextEditor from "@/app/components/admin/RichTextEditor";
+import RichTextEditor from "@/app/components/editor/RichTextEditor";
 
 type Props = {
   question: Question;
