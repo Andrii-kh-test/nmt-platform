@@ -1,6 +1,7 @@
 "use client";
 
 import { Question } from "@/app/types/question";
+import HtmlContent from "@/app/components/common/HtmlContent";
 
 type Props = {
   question: Question;
@@ -33,7 +34,7 @@ export default function MultipleChoice({
       {question.options.map((option) => (
         <label
           key={option.id}
-          className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
+          className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition"
         >
           <input
             type="checkbox"
@@ -41,9 +42,13 @@ export default function MultipleChoice({
             onChange={() =>
               toggleAnswer(option.id)
             }
+            className="mt-1"
           />
 
-          <span>{option.text}</span>
+          <HtmlContent
+            html={option.text}
+            className="flex-1"
+          />
         </label>
       ))}
     </div>

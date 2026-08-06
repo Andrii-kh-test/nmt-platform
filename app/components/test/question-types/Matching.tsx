@@ -1,7 +1,7 @@
 "use client";
 
 import type { Question } from "@/app/types/question";
-
+import HtmlContent from "@/app/components/common/HtmlContent";
 
 type Props = {
   question: Question;
@@ -9,48 +9,29 @@ type Props = {
   onChange: (answers: number[]) => void;
 };
 
-
 export default function Matching({
   question,
   selectedAnswers,
   onChange,
 }: Props) {
-
-
   const options = question.options ?? [];
 
-
-
   function toggleOption(id: number) {
-
     let updatedAnswers: number[];
 
-
-    if (
-      selectedAnswers.includes(id)
-    ) {
-
-      updatedAnswers =
-        selectedAnswers.filter(
-          (answer) =>
-            answer !== id
-        );
-
+    if (selectedAnswers.includes(id)) {
+      updatedAnswers = selectedAnswers.filter(
+        (answer) => answer !== id
+      );
     } else {
-
       updatedAnswers = [
         ...selectedAnswers,
         id,
       ];
-
     }
 
-
     onChange(updatedAnswers);
-
   }
-
-
 
   return (
     <div
@@ -62,7 +43,6 @@ export default function Matching({
         p-6
       "
     >
-
       <h3
         className="
           mb-3
@@ -73,7 +53,6 @@ export default function Matching({
         Завдання на встановлення відповідності
       </h3>
 
-
       <p
         className="
           mb-4
@@ -83,55 +62,37 @@ export default function Matching({
         Оберіть правильні відповідності.
       </p>
 
-
-
       <div className="space-y-2">
-
         {options.map((option) => (
-
           <label
             key={option.id}
             className="
               flex
-              cursor-pointer
-              items-center
+              items-start
               gap-3
+              cursor-pointer
               rounded-lg
               border
               bg-white
               p-3
             "
           >
-
             <input
               type="checkbox"
-
-              checked={
-                selectedAnswers.includes(
-                  option.id
-                )
-              }
-
+              className="mt-1"
+              checked={selectedAnswers.includes(option.id)}
               onChange={() =>
-                toggleOption(
-                  option.id
-                )
+                toggleOption(option.id)
               }
             />
 
-
-            <span>
-              {option.text}
-            </span>
-
-
+            <HtmlContent
+              html={option.text}
+              className="flex-1"
+            />
           </label>
-
         ))}
-
       </div>
-
-
     </div>
   );
 }

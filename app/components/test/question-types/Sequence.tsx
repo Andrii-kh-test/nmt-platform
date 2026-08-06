@@ -1,7 +1,7 @@
 "use client";
 
 import type { Question } from "@/app/types/question";
-
+import HtmlContent from "@/app/components/common/HtmlContent";
 
 type Props = {
   question: Question;
@@ -9,25 +9,18 @@ type Props = {
   onChange: (answers: number[]) => void;
 };
 
-
 export default function Sequence({
   question,
   selectedAnswers,
   onChange,
 }: Props) {
-
-
   const options = question.options ?? [];
-
-
 
   function moveItem(
     index: number,
     direction: number
   ) {
-
     const newIndex = index + direction;
-
 
     if (
       newIndex < 0 ||
@@ -36,34 +29,21 @@ export default function Sequence({
       return;
     }
 
-
-    const updated = [...selectedAnswers];
-
+    const updated = [...currentOrder];
 
     const temp = updated[index];
-
     updated[index] = updated[newIndex];
-
     updated[newIndex] = temp;
 
-
     onChange(updated);
-
   }
-
-
 
   const currentOrder =
     selectedAnswers.length > 0
       ? selectedAnswers
-      : options.map(
-          (option) => option.id
-        );
-
-
+      : options.map((option) => option.id);
 
   return (
-
     <div
       className="
         rounded-lg
@@ -73,7 +53,6 @@ export default function Sequence({
         p-6
       "
     >
-
       <h3
         className="
           mb-3
@@ -84,7 +63,6 @@ export default function Sequence({
         Завдання на встановлення послідовності
       </h3>
 
-
       <p
         className="
           mb-4
@@ -94,101 +72,82 @@ export default function Sequence({
         Розташуйте елементи у правильному порядку.
       </p>
 
-
-
       <div className="space-y-2">
+        {currentOrder.map((id, index) => {
+          const option = options.find(
+            (item) => item.id === id
+          );
 
+          if (!option) return null;
 
-        {currentOrder.map(
-          (id, index) => {
-
-            const option =
-              options.find(
-                (item) =>
-                  item.id === id
-              );
-
-
-            if (!option) return null;
-
-
-            return (
-
-              <div
-                key={id}
-                className="
-                  flex
-                  items-center
-                  justify-between
-                  rounded-lg
-                  border
-                  bg-white
-                  p-3
-                "
-              >
-
-                <span>
-                  {index + 1}. {option.text}
+          return (
+            <div
+              key={id}
+              className="
+                flex
+                items-start
+                justify-between
+                gap-4
+                rounded-lg
+                border
+                bg-white
+                p-3
+              "
+            >
+              <div className="flex gap-3 flex-1">
+                <span className="font-semibold mt-1">
+                  {index + 1}.
                 </span>
 
-
-                <div
-                  className="
-                    flex
-                    gap-2
-                  "
-                >
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      moveItem(
-                        index,
-                        -1
-                      )
-                    }
-                    className="
-                      rounded
-                      bg-gray-200
-                      px-2
-                    "
-                  >
-                    ↑
-                  </button>
-
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      moveItem(
-                        index,
-                        1
-                      )
-                    }
-                    className="
-                      rounded
-                      bg-gray-200
-                      px-2
-                    "
-                  >
-                    ↓
-                  </button>
-
-                </div>
-
-
+                <HtmlContent
+                  html={option.text}
+                  className="flex-1"
+                />
               </div>
 
-            );
+              <div
+                className="
+                  flex
+                  flex-col
+                  gap-2
+                "
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    moveItem(index, -1)
+                  }
+                  className="
+                    rounded
+                    bg-gray-200
+                    px-3
+                    py-1
+                    hover:bg-gray-300
+                  "
+                >
+                  ↑
+                </button>
 
-          }
-        )}
-
-
+                <button
+                  type="button"
+                  onClick={() =>
+                    moveItem(index, 1)
+                  }
+                  className="
+                    rounded
+                    bg-gray-200
+                    px-3
+                    py-1
+                    hover:bg-gray-300
+                  "
+                >
+                  ↓
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
-
-
     </div>
-
   );
 }

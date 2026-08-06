@@ -9,7 +9,7 @@ import Matching from "./question-types/Matching";
 import Sequence from "./question-types/Sequence";
 
 import { useTestSession } from "@/app/context/TestSessionContext";
-
+import HtmlContent from "@/app/components/common/HtmlContent";
 type Props = {
   question: Question;
   number: number;
@@ -58,9 +58,10 @@ export default function QuestionCard({
 
       <div className="mb-8">
 
-        <p className="text-lg leading-7">
-          {question.text}
-        </p>
+        <HtmlContent
+  html={question.text}
+  className="text-lg leading-7"
+/>
 
       </div>
 
