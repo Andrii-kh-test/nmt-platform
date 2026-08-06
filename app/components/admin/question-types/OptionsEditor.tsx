@@ -1,6 +1,7 @@
 "use client";
 
 import { Question } from "@/app/types/question";
+import RichTextEditor from "@/app/components/admin/RichTextEditor";
 
 type Props = {
   question: Question;
@@ -65,25 +66,28 @@ export default function OptionsEditor({
       {question.options.map((option, index) => (
         <div
           key={option.id}
-          className="flex gap-3 items-center"
+          className="border rounded-xl p-4 bg-slate-50 space-y-3"
         >
-          <input
-            type="text"
-            value={option.text}
-            onChange={(e) =>
-              updateOption(index, e.target.value)
-            }
-            placeholder={`Варіант ${index + 1}`}
-            className="flex-1 border rounded-lg p-3"
-          />
+          <div className="flex justify-between items-center">
+            <span className="font-semibold text-[#7A1F2B]">
+              Варіант {index + 1}
+            </span>
 
-          <button
-            type="button"
-            onClick={() => deleteOption(index)}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg"
-          >
-            ✕
-          </button>
+            <button
+              type="button"
+              onClick={() => deleteOption(index)}
+              className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg"
+            >
+              ✕
+            </button>
+          </div>
+
+          <RichTextEditor
+            value={option.text}
+            onChange={(html) =>
+              updateOption(index, html)
+            }
+          />
         </div>
       ))}
 
