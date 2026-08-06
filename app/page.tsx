@@ -4,6 +4,8 @@ import { prisma } from "@/app/lib/prisma";
 
 import TestCard from "@/app/components/start/TestCard";
 
+import { Brain } from "lucide-react";
+
 export default async function Home() {
   const tests = await prisma.test.findMany({
     where: {
@@ -76,17 +78,26 @@ export default async function Home() {
 
       </div>
 
-      <footer className="bg-white border-t border-gray-200 py-6">
+      <footer className="bg-white border-t border-gray-200 py-8 mt-12">
 
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3 text-gray-600">
+        <div className="max-w-7xl mx-auto flex flex-col items-center gap-3 text-center">
 
-          <span className="text-sm">
-            Створено за підтримки
-          </span>
+          <p className="text-gray-700 font-medium">
+            © Хорунжий Андрій Володимирович, 2026
+          </p>
 
-          <span className="font-semibold">
-            ChatGPT
-          </span>
+          <div className="flex items-center gap-2 text-gray-500">
+
+            <Brain
+              className="w-5 h-5 text-[#7A1F2B]"
+              strokeWidth={2}
+            />
+
+            <span>
+              Створено за підтримки технологій штучного інтелекту
+            </span>
+
+          </div>
 
         </div>
 

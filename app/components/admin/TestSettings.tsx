@@ -2,7 +2,7 @@
 
 import { saveTest } from "@/app/api/saveTest";
 import { useTestConstructor } from "@/app/context/TestConstructorContext";
-
+import { generateAccessCode } from "@/app/utils/generateAccessCode";
 export default function TestSettings() {
   const { test, updateTest } = useTestConstructor();
 
@@ -201,28 +201,50 @@ export default function TestSettings() {
 
         {test.codeRequired && (
 
-          <div>
+  <div>
 
-            <label className="block font-medium mb-2">
-              Код доступу
-            </label>
+    <label className="block font-medium mb-2">
+      Код доступу
+    </label>
 
-            <input
-              type="text"
-              value={test.accessCode}
-              onChange={(e) =>
-                updateTest(
-                  "accessCode",
-                  e.target.value
-                )
-              }
-              className="w-full border rounded-lg p-3"
-              placeholder="Наприклад: NMT2026"
-            />
+    <div className="flex gap-3">
 
-          </div>
+      <input
+        type="text"
+        value={test.accessCode}
+        onChange={(e) =>
+          updateTest(
+            "accessCode",
+            e.target.value.toUpperCase()
+          )
+        }
+        className="flex-1 border rounded-lg p-3 font-mono text-lg tracking-wider"
+        placeholder="Q7RM8X"
+      />
 
-        )}
+      <button
+        type="button"
+        onClick={() =>
+          updateTest(
+            "accessCode",
+            generateAccessCode()
+          )
+        }
+        className="bg-[#7A1F2B] hover:bg-[#651923] text-white px-4 rounded-lg"
+        title="Згенерувати випадковий код"
+      >
+        🔄
+      </button>
+
+    </div>
+
+    <p className="text-sm text-gray-500 mt-2">
+      Натисніть 🔄 для автоматичної генерації коду.
+    </p>
+
+  </div>
+
+)}
 
         <button
           type="button"
