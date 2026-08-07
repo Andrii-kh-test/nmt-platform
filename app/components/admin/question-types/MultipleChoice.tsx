@@ -22,19 +22,9 @@ export default function MultipleChoice({
       isCorrect: !options[index].isCorrect,
     };
 
-    const correctAnswers = options
-      .map((option, i) =>
-        option.isCorrect ? i + 1 : null
-      )
-      .filter(
-        (value): value is number =>
-          value !== null
-      );
-
     onChange({
       ...question,
       options,
-      correctAnswers,
     });
 
   }

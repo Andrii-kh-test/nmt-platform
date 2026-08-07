@@ -23,7 +23,6 @@ export default function SingleChoice({
     onChange({
       ...question,
       options,
-      correctAnswers: [index + 1],
     });
 
   }

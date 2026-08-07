@@ -40,6 +40,9 @@ model Question {
   text   String
   points Int
 
+  /// Чи можна перемішувати це питання
+  shuffleQuestion Boolean @default(true)
+
   testId Int
   test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 

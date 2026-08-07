@@ -17,7 +17,6 @@ export function mapPrismaTest(test: any): Test {
 
     maxPoints: test.maxPoints,
 
-    // Нові поля
     isPublished: test.isPublished ?? false,
 
     codeRequired: test.codeRequired ?? true,
@@ -36,16 +35,17 @@ export function mapPrismaTest(test: any): Test {
 
         points: question.points,
 
-        options: question.options.map((option: any) => ({
-          id: option.id,
-          order: option.order,
-          text: option.text,
-          isCorrect: option.isCorrect,
-        })),
+        shuffleQuestion:
+          question.shuffleQuestion ?? true,
 
-        correctAnswers: question.options
-          .filter((option: any) => option.isCorrect)
-          .map((option: any) => option.order),
+        options: question.options.map(
+          (option: any) => ({
+            id: option.id,
+            order: option.order,
+            text: option.text,
+            isCorrect: option.isCorrect,
+          })
+        ),
 
         matchingPairs: [],
 

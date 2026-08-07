@@ -12,6 +12,9 @@ export function createQuestion(
 
     text: "",
 
+    // Нове поле
+    shuffleQuestion: true,
+
     options: [
       {
         id: 1,
@@ -38,9 +41,6 @@ export function createQuestion(
         isCorrect: false,
       },
     ],
-
-    correctAnswers: [1],
-
     matchingPairs: [
       {
         id: 1,

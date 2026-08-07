@@ -5,6 +5,8 @@ import { useEffect, useRef } from "react";
 import { Test } from "@/app/types/test";
 import { useTestSession } from "@/app/context/TestSessionContext";
 
+import { shuffleTest } from "@/app/utils/shuffleTest";
+
 type Props = {
   test: Test;
 };
@@ -30,11 +32,20 @@ export default function TestLoader({
       return;
     }
 
-    loadTest(test);
+    // Створюємо випадковий порядок питань та відповідей
+    const shuffled = shuffleTest(test);
+
+    loadTest(shuffled);
+
     startTimer();
 
     initialized.current = true;
-  }, [currentTest, loadTest, startTimer, test]);
+  }, [
+    currentTest,
+    loadTest,
+    startTimer,
+    test,
+  ]);
 
   return null;
 }

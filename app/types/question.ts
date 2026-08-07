@@ -27,9 +27,9 @@ export interface Question {
 
   text: string;
 
-  options: AnswerOption[];
+  shuffleQuestion: boolean;
 
-  correctAnswers: number[];
+  options: AnswerOption[];
 
   matchingPairs: MatchingPair[];
 

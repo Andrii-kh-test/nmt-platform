@@ -6,7 +6,9 @@ import SingleChoice from "./question-types/SingleChoice";
 import MultipleChoice from "./question-types/MultipleChoice";
 import Matching from "./question-types/Matching";
 import Sequence from "./question-types/Sequence";
+
 import RichTextEditor from "@/app/components/editor/RichTextEditor";
+
 type Props = {
   question: Question;
   number: number;
@@ -32,7 +34,9 @@ export default function QuestionItem({
 
   return (
     <div className="bg-white border rounded-xl shadow-sm p-6">
+
       <div className="flex justify-between items-center mb-6">
+
         <h3 className="text-xl font-bold text-[#7A1F2B]">
           Питання №{number}
         </h3>
@@ -44,10 +48,13 @@ export default function QuestionItem({
         >
           Видалити
         </button>
+
       </div>
 
       <div className="space-y-6">
+
         <div>
+
           <label className="block font-medium mb-2">
             Тип завдання
           </label>
@@ -77,20 +84,53 @@ export default function QuestionItem({
             <option value="sequence">
               Встановлення послідовності
             </option>
+
           </select>
+
         </div>
 
         <div>
-  <label className="block font-medium mb-2">
-    Текст питання
-  </label>
 
-  <RichTextEditor
-  value={question.text}
-  onChange={(html) =>
-    updateField("text", html)
-  }
-/>
+          <label className="block font-medium mb-2">
+            Текст питання
+          </label>
+
+          <RichTextEditor
+            value={question.text}
+            onChange={(html) =>
+              updateField("text", html)
+            }
+          />
+
+        </div>
+
+        <div className="bg-slate-50 border rounded-lg p-4">
+
+          <label className="flex items-center gap-3 cursor-pointer">
+
+            <input
+              type="checkbox"
+              checked={question.shuffleQuestion}
+              onChange={(e) =>
+                updateField(
+                  "shuffleQuestion",
+                  e.target.checked
+                )
+              }
+              className="w-5 h-5"
+            />
+
+            <span className="font-medium">
+              Перемішувати це питання
+            </span>
+
+          </label>
+
+          <p className="text-sm text-gray-500 mt-2 ml-8">
+            Якщо вимкнути, питання завжди залишатиметься
+            на своєму місці під час проходження тесту.
+          </p>
+
         </div>
 
         {question.type === "single" && (
@@ -122,6 +162,7 @@ export default function QuestionItem({
         )}
 
         <div>
+
           <label className="block font-medium mb-2">
             Кількість балів
           </label>
@@ -138,8 +179,11 @@ export default function QuestionItem({
             }
             className="w-40 border rounded-lg p-3"
           />
+
         </div>
+
       </div>
+
     </div>
   );
 }
