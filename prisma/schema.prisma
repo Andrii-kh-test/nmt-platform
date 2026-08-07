@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Test {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   title       String
   subject     String
   description String?
@@ -16,14 +16,9 @@ model Test {
   duration    Int
   maxPoints   Int
 
-  /// Публікація тесту
-  isPublished Boolean @default(false)
-
-  /// Чи потрібен код доступу
+  isPublished  Boolean @default(false)
   codeRequired Boolean @default(true)
-
-  /// Код доступу
-  accessCode String?
+  accessCode   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -34,17 +29,15 @@ model Test {
 }
 
 model Question {
-  id     Int    @id @default(autoincrement())
-  order  Int
-  type   String
-  text   String
-  points Int
-
-  /// Чи можна перемішувати це питання
+  id              Int     @id @default(autoincrement())
+  order           Int
+  type            String
+  text            String
+  points          Int
   shuffleQuestion Boolean @default(true)
 
   testId Int
-  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  test   Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   options AnswerOption[]
 }
@@ -56,14 +49,13 @@ model AnswerOption {
   isCorrect Boolean
 
   questionId Int
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
 model Participant {
-  id Int @id @default(autoincrement())
-
-  lastName String
-  firstName String
+  id         Int     @id @default(autoincrement())
+  lastName   String
+  firstName  String
   middleName String?
 
   createdAt DateTime @default(now())
@@ -75,23 +67,17 @@ model TestSession {
   id Int @id @default(autoincrement())
 
   participantId Int?
-
-  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  participant   Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   testId Int
+  test   Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 
-  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  currentQuestion Int @default(0)
-
-  savedAnswers Json
-
-  timeLeft Int
-
-  finished Boolean @default(false)
+  currentQuestion Int     @default(0)
+  savedAnswers    Json
+  timeLeft        Int
+  finished        Boolean @default(false)
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 }
 
@@ -99,24 +85,22 @@ model TestResult {
   id Int @id @default(autoincrement())
 
   testId Int
+  test   Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 
-  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
-
-  lastName String?
-  firstName String?
+  lastName   String?
+  firstName  String?
   middleName String?
 
   earnedPoints Int
-  maxPoints Int
-  percent Int
+  maxPoints    Int
+  percent      Int
 
-  correct Int
+  correct   Int
   incorrect Int
-  skipped Int
+  skipped   Int
 
   timeSpent Int
-
-  answers Json
+  answers   Json
 
   finishReason String @default("manual")
 

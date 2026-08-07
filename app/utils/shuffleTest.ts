@@ -21,12 +21,14 @@ function shuffleOptions(
   question: Question
 ): Question {
 
-  // Для послідовності не перемішуємо
+  // Послідовність не перемішуємо
   if (question.type === "sequence") {
     return question;
   }
 
-  const shuffledOptions = shuffleArray(question.options).map(
+  const shuffledOptions = shuffleArray(
+    question.options
+  ).map(
     (option: AnswerOption, index: number) => ({
       ...option,
       order: index + 1,
@@ -43,6 +45,7 @@ export function shuffleTest(
   test: Test
 ): Test {
 
+  // лише ті, які можна перемішувати
   const movableQuestions = shuffleArray(
     test.questions.filter(
       (q) => q.shuffleQuestion !== false
@@ -51,29 +54,36 @@ export function shuffleTest(
 
   let movableIndex = 0;
 
-  const questions = test.questions.map((question) => {
+  // Сортуємо за початковим порядком
+  const sortedQuestions = [...test.questions].sort(
+    (a, b) => a.order - b.order
+  );
+
+  const result: Question[] = [];
+
+  for (const question of sortedQuestions) {
 
     if (question.shuffleQuestion === false) {
-      return shuffleOptions(question);
+
+      result.push(
+        shuffleOptions(question)
+      );
+
+    } else {
+
+      result.push(
+        shuffleOptions(
+          movableQuestions[movableIndex++]
+        )
+      );
+
     }
 
-    const shuffledQuestion =
-      movableQuestions[movableIndex++];
-
-    return shuffleOptions(shuffledQuestion);
-
-  });
-
-  // Перенумеровуємо порядок питань
-  const normalizedQuestions = questions.map(
-    (question, index) => ({
-      ...question,
-      order: index + 1,
-    })
-  );
+  }
 
   return {
     ...test,
-    questions: normalizedQuestions,
+    questions: result,
   };
+
 }

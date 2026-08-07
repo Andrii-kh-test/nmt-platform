@@ -240,58 +240,33 @@ accessCode:
         questions: {
 
           create:
+  (body.questions ?? []).map(
+    (question: any, index: number) => ({
 
-            (body.questions ?? [])
-              .map(
-                (
-                  question: any,
-                  index: number
-                ) => ({
+      order: index + 1,
 
-                  order:
-                    index + 1,
+      type: question.type,
 
-                  type:
-                    question.type,
+      text: question.text,
 
-                  text:
-                    question.text,
+      points: question.points,
 
-                  points:
-                    question.points,
+      shuffleQuestion:
+        question.shuffleQuestion ?? true,
 
+      options: {
+        create:
+          (question.options ?? []).map(
+            (option: any, optionIndex: number) => ({
+              order: optionIndex + 1,
+              text: option.text,
+              isCorrect: option.isCorrect,
+            })
+          ),
+      },
 
-                  options: {
-
-                    create:
-
-                      (
-                        question.options ?? []
-                      )
-                      .map(
-                        (
-                          option: any,
-                          optionIndex: number
-                        ) => ({
-
-                          order:
-                            optionIndex + 1,
-
-                          text:
-                            option.text,
-
-                          isCorrect:
-                            option.isCorrect,
-
-                        })
-                      ),
-
-                  },
-
-
-                })
-
-              ),
+    })
+  ),
 
 
         },
