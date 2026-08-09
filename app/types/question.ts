@@ -12,6 +12,17 @@ export interface MatchingPair {
   right: string;
 }
 
+export interface MatchingLeftItem {
+  id: number;
+  text: string;
+  correctRightId: number;
+}
+
+export interface MatchingRightItem {
+  id: number;
+  text: string;
+}
+
 export interface SequenceItem {
   id: number;
   text: string;
@@ -27,17 +38,22 @@ export interface Question {
 
   text: string;
 
+  points: number;
+
   shuffleQuestion: boolean;
 
   options: AnswerOption[];
 
-  matchingPairs: MatchingPair[];
+  // Для завдань на встановлення відповідності
+  matchingLeftItems: MatchingLeftItem[];
 
+  matchingRightItems: MatchingRightItem[];
+
+  // Для завдань на встановлення послідовності
   sequenceItems: SequenceItem[];
 
+  // Для відкритої відповіді
   textAnswer: string;
-
-  points: number;
 
   explanation?: string;
 }

@@ -24,37 +24,91 @@ export function mapPrismaTest(test: any): Test {
     accessCode: test.accessCode ?? "",
 
     questions: test.questions.map(
-      (question: any): Question => ({
-        id: question.id,
+      (question: any): Question => {
+        const options = question.options ?? [];
 
-        order: question.order,
+        const isMatching =
+          question.type === "matching";
 
-        type: question.type,
+        const matchingLeftItems = isMatching
+          ? options
+              .filter((option: any) =>
+                option.text?.startsWith("L|")
+              )
+              .map((option: any) => {
+                const parts =
+                  option.text.split("|");
 
-        text: question.text,
+                return {
+                  id: Number(parts[1]),
+                  text: parts[2] ?? "",
+                  correctRightId:
+                    Number(parts[3]),
+                };
+              })
+              .sort(
+                (a: any, b: any) =>
+                  a.id - b.id
+              )
+          : [];
 
-        points: question.points,
+        const matchingRightItems = isMatching
+          ? options
+              .filter((option: any) =>
+                option.text?.startsWith("R|")
+              )
+              .map((option: any) => {
+                const parts =
+                  option.text.split("|");
 
-        shuffleQuestion:
-          question.shuffleQuestion ?? true,
+                return {
+                  id: Number(parts[1]),
+                  text: parts.slice(2).join("|"),
+                };
+              })
+              .sort(
+                (a: any, b: any) =>
+                  a.id - b.id
+              )
+          : [];
 
-        options: question.options.map(
-          (option: any) => ({
-            id: option.id,
-            order: option.order,
-            text: option.text,
-            isCorrect: option.isCorrect,
-          })
-        ),
+        return {
+          id: question.id,
 
-        matchingPairs: [],
+          order: question.order,
 
-        sequenceItems: [],
+          type: question.type,
 
-        textAnswer: "",
+          text: question.text,
 
-        explanation: "",
-      })
+          points: question.points,
+
+          shuffleQuestion:
+            question.shuffleQuestion ?? true,
+
+          options: isMatching
+            ? []
+            : options.map(
+                (option: any) => ({
+                  id: option.id,
+                  order: option.order,
+                  text: option.text,
+                  isCorrect:
+                    option.isCorrect,
+                })
+              ),
+
+          matchingLeftItems,
+
+          matchingRightItems,
+
+          sequenceItems: [],
+
+          textAnswer: "",
+
+          explanation: "",
+        };
+      }
     ),
   };
 }

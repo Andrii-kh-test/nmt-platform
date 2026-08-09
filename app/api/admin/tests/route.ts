@@ -23,31 +23,97 @@ export async function POST(request: Request) {
 
         questions: {
           create: (body.questions ?? []).map(
-            (question: any, index: number) => ({
-              order: index + 1,
+            (question: any, index: number) => {
+              let options: {
+                order: number;
+                text: string;
+                isCorrect: boolean;
+              }[] = [];
 
-              type: question.type,
-
-              text: question.text,
-
-              points: question.points,
-
-              // Чи дозволено перемішувати це питання
-              shuffleQuestion:
-                question.shuffleQuestion ?? true,
-
-              options: {
-                create: (question.options ?? []).map(
+              /*
+               * Звичайні питання:
+               * single / multiple
+               */
+              if (question.type !== "matching") {
+                options = (question.options ?? []).map(
                   (option: any, optionIndex: number) => ({
                     order: optionIndex + 1,
-
-                    text: option.text,
-
-                    isCorrect: option.isCorrect,
+                    text: option.text ?? "",
+                    isCorrect:
+                      option.isCorrect ?? false,
                   })
-                ),
-              },
-            })
+                );
+              }
+
+              /*
+               * Завдання на встановлення відповідності.
+               *
+               * Зберігаємо Matching через вже існуючу
+               * таблицю AnswerOption.
+               *
+               * L|id|текст|correctRightId
+               * R|id|текст
+               */
+              if (question.type === "matching") {
+                const leftItems =
+                  question.matchingLeftItems ?? [];
+
+                const rightItems =
+                  question.matchingRightItems ?? [];
+
+                options = [
+                  ...leftItems.map(
+                    (
+                      item: any,
+                      itemIndex: number
+                    ) => ({
+                      order: itemIndex + 1,
+
+                      text:
+                        `L|${item.id}|${item.text ?? ""}|${item.correctRightId}`,
+
+                      isCorrect: false,
+                    })
+                  ),
+
+                  ...rightItems.map(
+                    (
+                      item: any,
+                      itemIndex: number
+                    ) => ({
+                      order:
+                        leftItems.length +
+                        itemIndex +
+                        1,
+
+                      text:
+                        `R|${item.id}|${item.text ?? ""}`,
+
+                      isCorrect: false,
+                    })
+                  ),
+                ];
+              }
+
+              return {
+                order: index + 1,
+
+                type: question.type,
+
+                text: question.text ?? "",
+
+                points: question.points ?? 1,
+
+                // Чи дозволено перемішувати питання
+                shuffleQuestion:
+                  question.shuffleQuestion ??
+                  true,
+
+                options: {
+                  create: options,
+                },
+              };
+            }
           ),
         },
       },
@@ -55,7 +121,15 @@ export async function POST(request: Request) {
       include: {
         questions: {
           include: {
-            options: true,
+            options: {
+              orderBy: {
+                order: "asc",
+              },
+            },
+          },
+
+          orderBy: {
+            order: "asc",
           },
         },
       },
@@ -66,7 +140,10 @@ export async function POST(request: Request) {
       test,
     });
   } catch (error) {
-    console.error(error);
+    console.error(
+      "CREATE TEST ERROR:",
+      error
+    );
 
     return NextResponse.json(
       {

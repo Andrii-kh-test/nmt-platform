@@ -1,135 +1,231 @@
 "use client";
 
-import type { Question } from "@/app/types/question";
+import { Question } from "@/app/types/question";
 
-
-interface Props {
+type Props = {
   question: Question;
   onChange: (question: Question) => void;
-}
-
+};
 
 export default function Matching({
   question,
   onChange,
 }: Props) {
 
+  function updateQuestionText(
+    value: string
+  ) {
+    onChange({
+      ...question,
+      text: value,
+    });
+  }
 
-  const options = question.options ?? [];
-
-
-
-  function updateOption(
+  function updateLeft(
     id: number,
     value: string
   ) {
-
     onChange({
-
       ...question,
-
-      options: options.map(
-        (option) =>
-          option.id === id
+      matchingLeftItems:
+        question.matchingLeftItems.map((item) =>
+          item.id === id
             ? {
-                ...option,
+                ...item,
                 text: value,
               }
-            : option
-      ),
-
+            : item
+        ),
     });
-
   }
 
+  function updateRight(
+    id: number,
+    value: string
+  ) {
+    onChange({
+      ...question,
+      matchingRightItems:
+        question.matchingRightItems.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                text: value,
+              }
+            : item
+        ),
+    });
+  }
 
+  function updateCorrect(
+    leftId: number,
+    rightId: number
+  ) {
+    onChange({
+      ...question,
+      matchingLeftItems:
+        question.matchingLeftItems.map((item) =>
+          item.id === leftId
+            ? {
+                ...item,
+                correctRightId: rightId,
+              }
+            : item
+        ),
+    });
+  }
 
-  return (
+  const letters = [
+    "А",
+    "Б",
+    "В",
+    "Г",
+    "Д",
+  ];
+    return (
+    <div className="space-y-6">
 
-    <div
-      className="
-        rounded-lg
-        border
-        border-blue-200
-        bg-blue-50
-        p-4
-      "
-    >
+      {/* Умова */}
+      <div>
+        <label className="mb-2 block font-semibold">
+          Умова завдання
+        </label>
 
-      <h3
-        className="
-          mb-3
-          font-semibold
-          text-gray-700
-        "
-      >
-        Редактор встановлення відповідностей
-      </h3>
+        <textarea
+          value={question.text}
+          onChange={(e) =>
+            updateQuestionText(e.target.value)
+          }
+          rows={4}
+          className="
+            w-full
+            rounded-lg
+            border
+            p-3
+          "
+          placeholder="Введіть умову завдання..."
+        />
+      </div>
 
+      <div className="grid grid-cols-2 gap-8">
 
-      <p
-        className="
-          mb-3
-          text-sm
-          text-gray-600
-        "
-      >
-        Введіть варіанти відповідностей.
-      </p>
+        {/* Ліва колонка */}
+        <div>
 
+          <h3 className="mb-3 font-semibold">
+            Ліва колонка
+          </h3>
 
+          <div className="space-y-3">
 
-      <div className="space-y-3">
+            {question.matchingLeftItems.map((item, index) => (
 
+              <div
+                key={item.id}
+                className="flex items-center gap-3"
+              >
 
-        {options.map(
-          (option) => (
+                <div className="w-6 font-bold">
+                  {index + 1}.
+                </div>
 
-            <div
-              key={option.id}
-              className="
-                rounded-lg
-                bg-white
-                p-2
-                border
-              "
-            >
+                <input
+                  value={item.text}
+                  onChange={(e) =>
+                    updateLeft(
+                      item.id,
+                      e.target.value
+                    )
+                  }
+                  className="
+                    flex-1
+                    rounded
+                    border
+                    p-2
+                  "
+                />
 
-              <input
-                type="text"
+                <select
+                  value={item.correctRightId}
+                  onChange={(e) =>
+                    updateCorrect(
+                      item.id,
+                      Number(e.target.value)
+                    )
+                  }
+                  className="
+                    rounded
+                    border
+                    p-2
+                  "
+                >
 
-                value={option.text}
+                  {letters.map((letter, index) => (
 
-                onChange={(event) =>
-                  updateOption(
-                    option.id,
-                    event.target.value
-                  )
-                }
+                    <option
+                      key={index}
+                      value={index + 1}
+                    >
+                      {letter}
+                    </option>
 
-                className="
-                  w-full
-                  rounded
-                  border
-                  px-3
-                  py-2
-                "
+                  ))}
 
-                placeholder="Варіант відповіді"
+                </select>
 
-              />
+              </div>
 
-            </div>
+            ))}
 
-          )
-        )}
+          </div>
 
+        </div>
+                {/* Права колонка */}
+        <div>
+
+          <h3 className="mb-3 font-semibold">
+            Права колонка
+          </h3>
+
+          <div className="space-y-3">
+
+            {question.matchingRightItems.map((item, index) => (
+
+              <div
+                key={item.id}
+                className="flex items-center gap-3"
+              >
+
+                <div className="w-6 font-bold">
+                  {letters[index]}.
+                </div>
+
+                <input
+                  value={item.text}
+                  onChange={(e) =>
+                    updateRight(
+                      item.id,
+                      e.target.value
+                    )
+                  }
+                  className="
+                    flex-1
+                    rounded
+                    border
+                    p-2
+                  "
+                />
+
+              </div>
+
+            ))}
+
+          </div>
+
+        </div>
 
       </div>
 
-
     </div>
-
   );
-
 }

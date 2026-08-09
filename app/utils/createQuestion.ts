@@ -12,7 +12,7 @@ export function createQuestion(
 
     text: "",
 
-    // Нове поле
+    // Чи дозволено перемішувати питання
     shuffleQuestion: true,
 
     options: [
@@ -41,21 +41,52 @@ export function createQuestion(
         isCorrect: false,
       },
     ],
-    matchingPairs: [
+
+    // Ліва колонка (1–4)
+    matchingLeftItems: [
       {
         id: 1,
-        left: "",
-        right: "",
+        text: "",
+        correctRightId: 1,
       },
       {
         id: 2,
-        left: "",
-        right: "",
+        text: "",
+        correctRightId: 2,
       },
       {
         id: 3,
-        left: "",
-        right: "",
+        text: "",
+        correctRightId: 3,
+      },
+      {
+        id: 4,
+        text: "",
+        correctRightId: 4,
+      },
+    ],
+
+    // Права колонка (А–Д)
+    matchingRightItems: [
+      {
+        id: 1,
+        text: "",
+      },
+      {
+        id: 2,
+        text: "",
+      },
+      {
+        id: 3,
+        text: "",
+      },
+      {
+        id: 4,
+        text: "",
+      },
+      {
+        id: 5,
+        text: "",
       },
     ],
 
