@@ -13,10 +13,10 @@ export async function POST(
   req: NextRequest
 ) {
   try {
-    const body =
-      await req.json();
+    const body = await req.json();
 
     const {
+      sessionId,
       testId,
       currentQuestion,
       savedAnswers,
@@ -24,18 +24,99 @@ export async function POST(
       finished,
     } = body;
 
-    // -----------------------
-    // Перевірка testId
-    // -----------------------
+    const numericSessionId =
+      sessionId !== undefined &&
+      sessionId !== null
+        ? Number(sessionId)
+        : null;
+
+    const numericTestId =
+      testId !== undefined &&
+      testId !== null
+        ? Number(testId)
+        : null;
+
+    // =====================================================
+    // 1. Якщо передано sessionId —
+    //    працюємо саме з цією сесією
+    // =====================================================
 
     if (
-      !testId ||
-      Number(testId) <= 0
+      numericSessionId &&
+      numericSessionId > 0
+    ) {
+      const existingSession =
+        await prisma.testSession.findUnique({
+          where: {
+            id: numericSessionId,
+          },
+        });
+
+      if (!existingSession) {
+        return NextResponse.json(
+          {
+            error:
+              "Сесію тестування не знайдено.",
+          },
+          {
+            status: 404,
+          }
+        );
+      }
+
+      const updatedSession =
+        await prisma.testSession.update({
+          where: {
+            id: numericSessionId,
+          },
+
+          data: {
+            currentQuestion:
+              Number(
+                currentQuestion ?? 0
+              ),
+
+            savedAnswers:
+              savedAnswers ?? {},
+
+            timeLeft:
+              Number(
+                timeLeft ?? 0
+              ),
+
+            finished:
+              Boolean(
+                finished ?? false
+              ),
+
+            ...(finished
+              ? {
+                  finishedAt:
+                    existingSession.finishedAt ??
+                    new Date(),
+                }
+              : {}),
+          },
+        });
+
+      return NextResponse.json(
+        updatedSession
+      );
+    }
+
+    // =====================================================
+    // 2. Якщо sessionId немає —
+    //    використовуємо testId
+    // =====================================================
+
+    if (
+      !numericTestId ||
+      numericTestId <= 0
     ) {
       return NextResponse.json(
         {
           error:
-            "Некоректний id тесту.",
+            "Не передано коректний sessionId або testId.",
         },
         {
           status: 400,
@@ -43,114 +124,101 @@ export async function POST(
       );
     }
 
-    const numericTestId =
-      Number(testId);
-
-    // -----------------------
-    // Шукаємо активну сесію
-    // -----------------------
+    // =====================================================
+    // 3. Шукаємо активну сесію цього тесту
+    // =====================================================
 
     let session =
-      await prisma.testSession.findFirst(
-        {
-          where: {
-            testId:
-              numericTestId,
+      await prisma.testSession.findFirst({
+        where: {
+          testId: numericTestId,
+          finished: false,
+        },
 
-            finished: false,
-          },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
-          orderBy: {
-            createdAt: "desc",
-          },
-        }
-      );
-
-    // -----------------------
-    // Якщо сесії немає —
-    // створюємо
-    // -----------------------
+    // =====================================================
+    // 4. Якщо сесії немає — створюємо
+    // =====================================================
 
     if (!session) {
       session =
-        await prisma.testSession.create(
-          {
-            data: {
-              testId:
-                numericTestId,
+        await prisma.testSession.create({
+          data: {
+            testId:
+              numericTestId,
 
-              currentQuestion:
-                Number(
-                  currentQuestion ?? 0
-                ),
+            currentQuestion:
+              Number(
+                currentQuestion ?? 0
+              ),
 
-              savedAnswers:
-                savedAnswers ?? {},
+            savedAnswers:
+              savedAnswers ?? {},
 
-              timeLeft:
-                Number(
-                  timeLeft ?? 0
-                ),
+            timeLeft:
+              Number(
+                timeLeft ?? 0
+              ),
 
-              finished:
-                Boolean(
-                  finished ?? false
-                ),
+            finished:
+              Boolean(
+                finished ?? false
+              ),
 
-              finishedAt:
-                finished
-                  ? new Date()
-                  : null,
-            },
-          }
-        );
+            finishedAt:
+              finished
+                ? new Date()
+                : null,
+          },
+        });
+
+      return NextResponse.json(
+        session
+      );
     }
 
-    // -----------------------
-    // Якщо сесія існує —
-    // оновлюємо
-    // -----------------------
+    // =====================================================
+    // 5. Оновлюємо знайдену сесію
+    // =====================================================
 
-    else {
-      session =
-        await prisma.testSession.update(
-          {
-            where: {
-              id: session.id,
-            },
+    session =
+      await prisma.testSession.update({
+        where: {
+          id: session.id,
+        },
 
-            data: {
-              currentQuestion:
-                Number(
-                  currentQuestion ?? 0
-                ),
+        data: {
+          currentQuestion:
+            Number(
+              currentQuestion ?? 0
+            ),
 
-              savedAnswers:
-                savedAnswers ?? {},
+          savedAnswers:
+            savedAnswers ?? {},
 
-              timeLeft:
-                Number(
-                  timeLeft ?? 0
-                ),
+          timeLeft:
+            Number(
+              timeLeft ?? 0
+            ),
 
-              finished:
-                Boolean(
-                  finished ?? false
-                ),
+          finished:
+            Boolean(
+              finished ?? false
+            ),
 
-              // Записуємо час завершення
-              // тільки під час завершення
-              ...(finished
-                ? {
-                    finishedAt:
-                      session.finishedAt ??
-                      new Date(),
-                  }
-                : {}),
-            },
-          }
-        );
-    }
+          ...(finished
+            ? {
+                finishedAt:
+                  session.finishedAt ??
+                  new Date(),
+              }
+            : {}),
+        },
+      });
 
     return NextResponse.json(
       session
