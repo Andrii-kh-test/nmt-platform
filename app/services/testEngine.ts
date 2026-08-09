@@ -1,7 +1,7 @@
-import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
-import { Test } from "@/app/types/test";
-import { UserAnswers } from "@/app/context/TestSessionContext";
+import type { Test } from "@/app/types/test";
+import type { UserAnswers } from "@/app/context/TestSessionContext";
 
 import { calculateResult } from "./result.service";
 import { saveResult } from "./result.api";
@@ -17,21 +17,29 @@ export async function finishTest(
   test: Test,
   answers: UserAnswers,
   timeLeft: number,
+  sessionId: number,
   router: AppRouterInstance
 ) {
-
   if (test.id === undefined) {
-    throw new Error("Неможливо завершити тест без id");
+    throw new Error(
+      "Неможливо завершити тест без id"
+    );
+  }
+
+  if (!sessionId || sessionId <= 0) {
+    throw new Error(
+      "Неможливо завершити тест без sessionId"
+    );
   }
 
   const testId = test.id;
 
   // -------------------------------
-  // Завершуємо сесію
+  // Завершуємо конкретну сесію
   // -------------------------------
 
   await finishSession(
-    testId,
+    sessionId,
     0,
     answers,
     timeLeft
@@ -47,20 +55,26 @@ export async function finishTest(
   );
 
   // -------------------------------
-  // Якщо порушення — анулюємо
+  // Якщо порушення —
+  // анулюємо результат
   // -------------------------------
 
   if (reason === "security") {
-
     result = {
       earnedPoints: 0,
-      maxPoints: result.maxPoints,
-      percent: 0,
-      correct: 0,
-      incorrect: 0,
-      skipped: test.questions.length,
-    };
 
+      maxPoints:
+        result.maxPoints,
+
+      percent: 0,
+
+      correct: 0,
+
+      incorrect: 0,
+
+      skipped:
+        test.questions.length,
+    };
   }
 
   // -------------------------------
@@ -68,44 +82,71 @@ export async function finishTest(
   // -------------------------------
 
   const saved = await saveResult({
-
     testId,
 
-    earnedPoints: result.earnedPoints,
+    sessionId,
 
-    maxPoints: result.maxPoints,
+    earnedPoints:
+      result.earnedPoints,
 
-    percent: result.percent,
+    maxPoints:
+      result.maxPoints,
 
-    correct: result.correct,
+    percent:
+      result.percent,
 
-    incorrect: result.incorrect,
+    correct:
+      result.correct,
 
-    skipped: result.skipped,
+    incorrect:
+      result.incorrect,
 
-    timeSpent: test.duration * 60 - timeLeft,
+    skipped:
+      result.skipped,
+
+    timeSpent:
+      test.duration * 60 - timeLeft,
 
     answers,
 
     finishReason: reason,
-
   });
 
   // -------------------------------
   // Очищаємо локальну сесію
   // -------------------------------
 
-  localStorage.removeItem("test-session");
-  localStorage.removeItem("savedAnswers");
-  localStorage.removeItem("selectedAnswers");
-  localStorage.removeItem("currentQuestion");
-  localStorage.removeItem("timeLeft");
+  localStorage.removeItem(
+    "test-session"
+  );
+
+  localStorage.removeItem(
+    "savedAnswers"
+  );
+
+  localStorage.removeItem(
+    "selectedAnswers"
+  );
+
+  localStorage.removeItem(
+    "currentQuestion"
+  );
+
+  localStorage.removeItem(
+    "timeLeft"
+  );
+
+  localStorage.removeItem(
+    "sessionId"
+  );
 
   sessionStorage.clear();
 
   // -------------------------------
-  // Прибираємо можливість Back
+  // Переходимо на результат
   // -------------------------------
 
-  router.replace(`/result/${saved.id}`);
+  router.replace(
+    `/result/${saved.id}`
+  );
 }

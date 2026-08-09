@@ -23,7 +23,9 @@ export default function FullscreenGuard() {
 
   useEffect(() => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
+      document.documentElement
+        .requestFullscreen()
+        .catch(() => {});
     }
 
     const handleFullscreen = async () => {
@@ -31,24 +33,52 @@ export default function FullscreenGuard() {
         return;
       }
 
-      const nextViolations = violations + 1;
+      const nextViolations =
+        violations + 1;
 
       setViolations(nextViolations);
 
+      // Перше порушення — тільки попередження
       if (nextViolations === 1) {
         setShowWarning(true);
         return;
       }
 
-      if (!test) return;
+      if (!test) {
+        return;
+      }
 
-      await finishTest(
-        "security",
-        test,
-        savedAnswers,
-        timeLeft,
-        router
-      );
+      const storedSessionId =
+        localStorage.getItem(
+          "testSessionId"
+        );
+
+      const sessionId =
+        Number(storedSessionId);
+
+      if (!sessionId) {
+        console.error(
+          "Не знайдено testSessionId"
+        );
+
+        return;
+      }
+
+      try {
+        await finishTest(
+  "security",
+  test,
+  savedAnswers,
+  timeLeft,
+  sessionId,
+  router
+);
+      } catch (error) {
+        console.error(
+          "Помилка завершення тесту:",
+          error
+        );
+      }
     };
 
     document.addEventListener(
@@ -83,29 +113,64 @@ export default function FullscreenGuard() {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center">
-
-      <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-8">
-
-        <h2 className="text-3xl font-bold text-red-700 mb-6">
+    <div
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        flex
+        items-center
+        justify-center
+        bg-black/60
+        p-6
+      "
+    >
+      <div
+        className="
+          bg-white
+          rounded-2xl
+          shadow-2xl
+          max-w-xl
+          w-full
+          p-8
+        "
+      >
+        <h2
+          className="
+            text-3xl
+            font-bold
+            text-red-700
+            mb-6
+          "
+        >
           Попередження
         </h2>
 
-        <p className="text-lg leading-8 mb-8">
-          Ви вийшли з повноекранного режиму.
+        <p
+          className="
+            text-lg
+            leading-8
+            mb-8
+          "
+        >
+          Ви вийшли з
+          повноекранного режиму.
 
           <br />
           <br />
 
-          Це є порушенням правил проходження тестування.
+          Це є порушенням правил
+          проходження тестування.
 
           <br />
           <br />
 
-          Повторне порушення автоматично завершить тест.
+          Повторне порушення
+          автоматично завершить тест.
         </p>
 
         <button
+          type="button"
           onClick={returnFullscreen}
           className="
             w-full
@@ -120,9 +185,7 @@ export default function FullscreenGuard() {
         >
           Повернутися до тестування
         </button>
-
       </div>
-
     </div>
   );
 }

@@ -7,11 +7,11 @@ export type ParticipantData = {
   firstName: string;
   middleName: string;
   accessCode: string;
+  sessionId: number;
 };
 
 type Props = {
   onSubmit: (data: ParticipantData) => void;
-
   testId?: number;
 };
 
@@ -19,7 +19,7 @@ export default function ParticipantForm({
   onSubmit,
   testId,
 }: Props) {
-  const [form, setForm] = useState<ParticipantData>({
+  const [form, setForm] = useState({
     lastName: "",
     firstName: "",
     middleName: "",
@@ -29,7 +29,7 @@ export default function ParticipantForm({
   const [loading, setLoading] = useState(false);
 
   function updateField(
-    field: keyof ParticipantData,
+    field: keyof typeof form,
     value: string
   ) {
     setForm((prev) => ({
@@ -37,85 +37,149 @@ export default function ParticipantForm({
       [field]: value,
     }));
   }
-if (!testId) {
-  alert("Не вдалося визначити тест.");
-  return;
-}
+
   async function handleStart() {
+    if (!testId) {
+      alert("Не вдалося визначити тест.");
+      return;
+    }
+
     if (
       !form.lastName.trim() ||
       !form.firstName.trim() ||
       !form.middleName.trim()
     ) {
-      alert("Заповніть прізвище, ім'я та по батькові.");
+      alert(
+        "Заповніть прізвище, ім'я та по батькові."
+      );
 
       return;
     }
 
     if (!form.accessCode.trim()) {
       alert("Введіть код доступу.");
-
       return;
     }
 
     try {
       setLoading(true);
 
-      const response = await fetch("/api/test/start", {
-        method: "POST",
+      const response = await fetch(
+        "/api/test/start",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-        body: JSON.stringify({
-          testId,
+          body: JSON.stringify({
+            testId,
 
-          lastName: form.lastName,
+            lastName:
+              form.lastName,
 
-          firstName: form.firstName,
+            firstName:
+              form.firstName,
 
-          middleName: form.middleName,
+            middleName:
+              form.middleName,
 
-          accessCode: form.accessCode,
-        }),
-      });
+            accessCode:
+              form.accessCode,
+          }),
+        }
+      );
 
-      const result = await response.json();
+      const result =
+        await response.json();
 
-      if (!response.ok || !result.success) {
-        alert(result.message ?? "Помилка запуску тесту.");
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        alert(
+          result.message ??
+            "Помилка запуску тесту."
+        );
 
         return;
       }
 
-      onSubmit(form);
+      // Перевіряємо, що сервер
+      // повернув реальну сесію
+      if (
+        !result.session ||
+        !result.session.id
+      ) {
+        console.error(
+          "START TEST RESPONSE:",
+          result
+        );
+
+        alert(
+          "Сервер не повернув ідентифікатор сесії."
+        );
+
+        return;
+      }
+
+      // Зберігаємо sessionId локально.
+      // Це дозволить надалі однозначно
+      // працювати саме з цією сесією.
+      localStorage.setItem(
+        "sessionId",
+        String(result.session.id)
+      );
+
+      onSubmit({
+        ...form,
+        sessionId:
+          result.session.id,
+      });
     } catch (error) {
       console.error(error);
 
-      alert("Помилка з'єднання із сервером.");
+      alert(
+        "Помилка з'єднання із сервером."
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-8">
-
-      <h1 className="text-3xl font-bold text-[#7A1F2B] mb-8 text-center">
+    <div>
+      <h1
+        className="
+          text-3xl
+          font-bold
+          text-[#7A1F2B]
+          mb-8
+          text-center
+        "
+      >
         Допуск до тестування
       </h1>
 
       <div className="space-y-5">
-
         <input
           type="text"
           placeholder="Прізвище"
           value={form.lastName}
           onChange={(e) =>
-            updateField("lastName", e.target.value)
+            updateField(
+              "lastName",
+              e.target.value
+            )
           }
-          className="w-full border rounded-lg p-3"
+          className="
+            w-full
+            border
+            rounded-lg
+            p-3
+          "
         />
 
         <input
@@ -123,9 +187,17 @@ if (!testId) {
           placeholder="Ім'я"
           value={form.firstName}
           onChange={(e) =>
-            updateField("firstName", e.target.value)
+            updateField(
+              "firstName",
+              e.target.value
+            )
           }
-          className="w-full border rounded-lg p-3"
+          className="
+            w-full
+            border
+            rounded-lg
+            p-3
+          "
         />
 
         <input
@@ -133,9 +205,17 @@ if (!testId) {
           placeholder="По батькові"
           value={form.middleName}
           onChange={(e) =>
-            updateField("middleName", e.target.value)
+            updateField(
+              "middleName",
+              e.target.value
+            )
           }
-          className="w-full border rounded-lg p-3"
+          className="
+            w-full
+            border
+            rounded-lg
+            p-3
+          "
         />
 
         <input
@@ -143,24 +223,40 @@ if (!testId) {
           placeholder="Код доступу"
           value={form.accessCode}
           onChange={(e) =>
-            updateField("accessCode", e.target.value)
+            updateField(
+              "accessCode",
+              e.target.value
+            )
           }
-          className="w-full border rounded-lg p-3"
+          className="
+            w-full
+            border
+            rounded-lg
+            p-3
+          "
         />
 
         <button
           type="button"
           onClick={handleStart}
           disabled={loading}
-          className="w-full bg-[#7A1F2B] hover:bg-[#651923] disabled:bg-gray-400 text-white py-3 rounded-lg font-semibold transition"
+          className="
+            w-full
+            bg-[#7A1F2B]
+            hover:bg-[#651923]
+            disabled:bg-gray-400
+            text-white
+            py-3
+            rounded-lg
+            font-semibold
+            transition
+          "
         >
           {loading
             ? "Перевірка..."
             : "Розпочати тестування"}
         </button>
-
       </div>
-
     </div>
   );
 }

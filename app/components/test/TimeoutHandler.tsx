@@ -23,13 +23,26 @@ export default function TimeoutHandler() {
     setOnTimeExpired(() => {
       return async () => {
         try {
-          await finishTest(
-            "timeout",
-            test,
-            savedAnswers,
-            0,
-            router
-          );
+          const storedSessionId =
+  localStorage.getItem("testSessionId");
+
+const sessionId =
+  Number(storedSessionId);
+
+if (!sessionId) {
+  throw new Error(
+    "Не знайдено sessionId тестування"
+  );
+}
+
+await finishTest(
+  "timeout",
+  test,
+  savedAnswers,
+  timeLeft,
+  sessionId,
+  router
+);
         } catch (error) {
           console.error(error);
         }

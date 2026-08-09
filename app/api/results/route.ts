@@ -4,88 +4,122 @@ import { prisma } from "@/app/lib/prisma";
 
 export async function GET() {
   try {
-    const results = await prisma.testResult.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        test: true,
-      },
-    });
+    const results =
+      await prisma.testResult.findMany({
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          test: {
+            include: {
+              questions: {
+                orderBy: {
+                  order: "asc",
+                },
+                include: {
+                  options: {
+                    orderBy: {
+                      order: "asc",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
 
     return NextResponse.json(results);
-
   } catch (error) {
-
     console.error(error);
 
     return NextResponse.json(
       {
-        message: "Не вдалося отримати результати.",
+        message:
+          "Не вдалося отримати результати.",
       },
       {
         status: 500,
       }
     );
-
   }
 }
 
-export async function POST(request: Request) {
-
+export async function POST(
+  request: Request
+) {
   try {
-
     const body = await request.json();
 
-    const result = await prisma.testResult.create({
+    const result =
+      await prisma.testResult.create({
+        data: {
+          testId: body.testId,
 
-      data: {
 
-        testId: body.testId,
+          earnedPoints:
+            body.earnedPoints,
 
-        earnedPoints: body.earnedPoints,
-        maxPoints: body.maxPoints,
-        percent: body.percent,
+          maxPoints:
+            body.maxPoints,
 
-        correct: body.correct,
-        incorrect: body.incorrect,
-        skipped: body.skipped,
+          percent:
+            body.percent,
 
-        timeSpent: body.timeSpent,
+          correct:
+            body.correct,
 
-        answers: body.answers,
+          incorrect:
+            body.incorrect,
 
-        // Нові поля
-        finishReason:
-          body.finishReason ?? "manual",
+          skipped:
+            body.skipped,
 
-        lastName:
-          body.lastName ?? null,
+          timeSpent:
+            body.timeSpent,
 
-        firstName:
-          body.firstName ?? null,
+          answers:
+            body.answers,
 
-        middleName:
-          body.middleName ?? null,
+          finishReason:
+            body.finishReason ?? "manual",
 
-      },
+          lastName:
+            body.lastName ?? null,
 
-    });
+          firstName:
+            body.firstName ?? null,
+
+          middleName:
+            body.middleName ?? null,
+
+          accessCode:
+            body.accessCode ?? null,
+
+          startedAt:
+            body.startedAt
+              ? new Date(body.startedAt)
+              : new Date(),
+
+          finishedAt:
+            body.finishedAt
+              ? new Date(body.finishedAt)
+              : new Date(),
+        },
+      });
 
     return NextResponse.json(result);
-
   } catch (error) {
-
     console.error(error);
 
     return NextResponse.json(
       {
-        message: "Помилка збереження результату.",
+        message:
+          "Помилка збереження результату.",
       },
       {
         status: 500,
       }
     );
-
   }
 }

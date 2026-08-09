@@ -14,14 +14,20 @@ export type UserAnswers = Record<number, number[]>;
 
 type TestSessionContextType = {
   // ==========================
+  // ID поточної сесії
+  // ==========================
+
+  sessionId: number | null;
+
+  setSessionId: (id: number | null) => void;
+
+  // ==========================
   // Завантажений тест
   // ==========================
 
   test: Test | null;
 
-  loadTest: (
-    test: Test
-  ) => void;
+  loadTest: (test: Test) => void;
 
   // ==========================
   // Поточне питання
@@ -29,9 +35,7 @@ type TestSessionContextType = {
 
   currentQuestion: number;
 
-  setCurrentQuestion: (
-    index: number
-  ) => void;
+  setCurrentQuestion: (index: number) => void;
 
   // ==========================
   // Поточний вибір
@@ -50,25 +54,27 @@ type TestSessionContextType = {
 
   savedAnswers: UserAnswers;
 
-saveAnswer: (
-  questionId: number
-) => void;
+  saveAnswer: (questionId: number) => void;
 
-isQuestionSaved: (
-  questionId: number
-) => boolean;
+  isQuestionSaved: (questionId: number) => boolean;
 
-restoreSession: (
-  currentQuestion: number,
-  savedAnswers: UserAnswers,
-  timeLeft: number
-) => void;
+  // ==========================
+  // Відновлення сесії
+  // ==========================
 
-timeLeft: number;
+  restoreSession: (
+    currentQuestion: number,
+    savedAnswers: UserAnswers,
+    timeLeft: number
+  ) => void;
 
-setTimeLeft: (
-  seconds: number
-) => void;
+  // ==========================
+  // Таймер
+  // ==========================
+
+  timeLeft: number;
+
+  setTimeLeft: (seconds: number) => void;
 
   timerRunning: boolean;
 
@@ -94,15 +100,16 @@ setTimeLeft: (
 };
 
 const TestSessionContext =
-  createContext<TestSessionContextType | null>(
-    null
-  );
+  createContext<TestSessionContextType | null>(null);
 
 export function TestSessionProvider({
   children,
 }: {
   children: ReactNode;
 }) {
+  const [sessionId, setSessionId] =
+    useState<number | null>(null);
+
   const [test, setTest] =
     useState<Test | null>(null);
 
@@ -150,53 +157,47 @@ export function TestSessionProvider({
   const [
     onTimeExpired,
     setOnTimeExpired,
-  ] = useState<(() => void) | null>(
-    null
-  );
+  ] = useState<(() => void) | null>(null);
 
   // ==========================
   // Завантаження тесту
   // ==========================
 
   function loadTest(loadedTest: Test) {
+    setTest((prevTest) => {
+      // Якщо цей тест уже завантажений —
+      // не перезавантажуємо його
+      if (
+        prevTest &&
+        prevTest.id === loadedTest.id
+      ) {
+        return prevTest;
+      }
 
-  setTest((prevTest) => {
+      return loadedTest;
+    });
 
-    // якщо цей тест вже завантажений —
-    // нічого не перезавантажуємо
+    // Якщо цей тест уже існує —
+    // не очищаємо відповіді та таймер
     if (
-      prevTest &&
-      prevTest.id === loadedTest.id
+      test &&
+      test.id === loadedTest.id
     ) {
-      return prevTest;
+      return;
     }
 
-    return loadedTest;
+    setCurrentQuestion(0);
 
-  });
+    setSelectedAnswers({});
 
-  // якщо тест уже існує —
-  // не очищаємо відповіді і таймер
-  if (
-    test &&
-    test.id === loadedTest.id
-  ) {
-    return;
+    setSavedAnswers({});
+
+    setTimeLeft(
+      loadedTest.duration * 60
+    );
+
+    setTimerRunning(false);
   }
-
-  setCurrentQuestion(0);
-
-  setSelectedAnswers({});
-
-  setSavedAnswers({});
-
-  setTimeLeft(
-    loadedTest.duration * 60
-  );
-
-  setTimerRunning(false);
-
-}
 
   // ==========================
   // Обрати відповідь
@@ -281,7 +282,9 @@ export function TestSessionProvider({
       });
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [
     timerRunning,
     timeLeft,
@@ -289,51 +292,61 @@ export function TestSessionProvider({
   ]);
 
   // ==========================
+  // Відновлення сесії
+  // ==========================
+
+  function restoreSession(
+    question: number,
+    answers: UserAnswers,
+    seconds: number
+  ) {
+    setCurrentQuestion(question);
+
+    setSelectedAnswers(answers);
+
+    setSavedAnswers(answers);
+
+    setTimeLeft(seconds);
+
+    setTimerRunning(true);
+  }
+
+  // ==========================
   // Скидання тесту
   // ==========================
 
   function resetTest() {
-    setTest(null);
+  setSessionId(null);
 
-    setCurrentQuestion(0);
+  setTest(null);
 
-    setSelectedAnswers({});
+  setCurrentQuestion(0);
 
-    setSavedAnswers({});
+  setSelectedAnswers({});
 
-    setTimeLeft(0);
+  setSavedAnswers({});
 
-    setTimerRunning(false);
+  setTimeLeft(0);
 
-    setOnTimeExpired(null);
-  }
-function restoreSession(
-  question: number,
-  answers: UserAnswers,
-  seconds: number
-) {
+  setTimerRunning(false);
 
-  setCurrentQuestion(question);
-
-  setSelectedAnswers(answers);
-
-  setSavedAnswers(answers);
-
-  setTimeLeft(seconds);
-
-  setTimerRunning(true);
-
+  setOnTimeExpired(null);
 }
+
   return (
-    <TestSessionContext.Provider
-      value={{
-        test,
+  <TestSessionContext.Provider
+    value={{
+      sessionId,
 
-        loadTest,
+      setSessionId,
 
-        currentQuestion,
+      test,
 
-        setCurrentQuestion,
+      loadTest,
+
+      currentQuestion,
+
+      setCurrentQuestion,
 
         selectedAnswers,
 
@@ -344,6 +357,8 @@ function restoreSession(
         saveAnswer,
 
         isQuestionSaved,
+
+        restoreSession,
 
         timeLeft,
 
@@ -360,10 +375,7 @@ function restoreSession(
         setOnTimeExpired,
 
         resetTest,
-
-restoreSession,
-
-}}
+      }}
     >
       {children}
     </TestSessionContext.Provider>
@@ -371,9 +383,8 @@ restoreSession,
 }
 
 export function useTestSession() {
-  const context = useContext(
-    TestSessionContext
-  );
+  const context =
+    useContext(TestSessionContext);
 
   if (!context) {
     throw new Error(

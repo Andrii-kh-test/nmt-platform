@@ -6,85 +6,48 @@ import { useTestSession } from "@/app/context/TestSessionContext";
 
 import { saveSession } from "@/app/services/session.api";
 
-
 export default function AutoSaveSession() {
-
   const {
-    test,
+    sessionId,
     currentQuestion,
     savedAnswers,
     timeLeft,
   } = useTestSession();
 
-
-
   useEffect(() => {
-
-    if (!test) {
+    if (!sessionId) {
       return;
     }
-
-
-    if (test.id === undefined) {
-      return;
-    }
-
-
-    const testId = test.id;
-
-
 
     const interval = setInterval(
       async () => {
-
         try {
-
           await saveSession({
-
-            testId,
-
+            sessionId,
             currentQuestion,
-
             savedAnswers,
-
             timeLeft,
-
             finished: false,
-
           });
-
-
         } catch (error) {
-
           console.error(
             "Помилка автозбереження сесії:",
             error
           );
-
         }
-
       },
       30000
     );
 
-
-
     return () => {
-
       clearInterval(interval);
-
     };
-
-
   }, [
-    test,
+    sessionId,
     currentQuestion,
     savedAnswers,
     timeLeft,
   ]);
 
-
-
   return null;
-
 }

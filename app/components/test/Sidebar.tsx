@@ -7,14 +7,10 @@ import QuestionNumbers from "./QuestionNumbers";
 import TestFinishedModal from "./TestFinishedModal";
 
 import { useTestSession } from "@/app/context/TestSessionContext";
-
 import { finishTest } from "@/app/services/testEngine";
 
-
 export default function Sidebar() {
-
   const router = useRouter();
-
 
   const {
     test,
@@ -22,84 +18,59 @@ export default function Sidebar() {
     timeLeft,
   } = useTestSession();
 
-
-  const [finishOpen, setFinishOpen] =
-    useState(false);
-
-
-  const [loading, setLoading] =
-    useState(false);
-
-
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   function formatTime(seconds: number) {
-
     const min = Math.floor(seconds / 60);
-
     const sec = seconds % 60;
 
-
-    return `${String(min).padStart(2, "0")}:${String(
-      sec
-    ).padStart(2, "0")}`;
-
+    return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   }
 
-
-
-
   async function handleFinishTest() {
-
     if (!test) {
       return;
     }
 
-
     try {
-
       setLoading(true);
 
+      const storedSessionId =
+  localStorage.getItem("testSessionId");
 
-      await finishTest(
-        "manual",
-        test,
-        savedAnswers,
-        timeLeft,
-        router
-      );
+const sessionId =
+  Number(storedSessionId);
 
+if (!sessionId) {
+  throw new Error(
+    "Не знайдено sessionId тестування"
+  );
+}
 
+await finishTest(
+  "manual",
+  test,
+  savedAnswers,
+  timeLeft,
+  sessionId,
+  router
+);
     } catch (error) {
-
       console.error(error);
 
-
-      alert(
-        "Не вдалося зберегти результат."
-      );
-
-
+      alert("Не вдалося зберегти результат.");
     } finally {
-
       setLoading(false);
-
     }
-
   }
-
-
-
 
   if (!test) {
     return null;
   }
 
-
-
   return (
-
     <>
-
       <aside
         className="
           sticky
@@ -113,8 +84,6 @@ export default function Sidebar() {
           h-fit
         "
       >
-
-
         <h2
           className="
             text-2xl
@@ -125,8 +94,6 @@ export default function Sidebar() {
         >
           Таймер
         </h2>
-
-
 
         <div
           className="
@@ -140,9 +107,6 @@ export default function Sidebar() {
           {formatTime(timeLeft)}
         </div>
 
-
-
-
         <h3
           className="
             text-lg
@@ -153,12 +117,7 @@ export default function Sidebar() {
           Номери питань
         </h3>
 
-
-
         <QuestionNumbers />
-
-
-
 
         <div
           className="
@@ -168,8 +127,6 @@ export default function Sidebar() {
             pt-6
           "
         >
-
-
           <div
             className="
               flex
@@ -178,7 +135,6 @@ export default function Sidebar() {
               mb-3
             "
           >
-
             <div
               className="
                 w-5
@@ -188,15 +144,10 @@ export default function Sidebar() {
               "
             />
 
-
             <span className="text-sm">
               Відповідь збережена
             </span>
-
           </div>
-
-
-
 
           <div
             className="
@@ -205,7 +156,6 @@ export default function Sidebar() {
               gap-3
             "
           >
-
             <div
               className="
                 w-5
@@ -217,29 +167,16 @@ export default function Sidebar() {
               "
             />
 
-
             <span className="text-sm">
               Відповідь не збережена
             </span>
-
-
           </div>
-
-
         </div>
-
-
-
 
         <button
           type="button"
-
           disabled={loading}
-
-          onClick={() =>
-            setFinishOpen(true)
-          }
-
+          onClick={() => setFinishOpen(true)}
           className="
             mt-8
             w-full
@@ -253,35 +190,17 @@ export default function Sidebar() {
             transition
           "
         >
-
           {loading
             ? "Збереження..."
             : "Завершити тест"}
-
         </button>
-
-
-
       </aside>
 
-
-
-
       <TestFinishedModal
-
         open={finishOpen}
-
-        onClose={() =>
-          setFinishOpen(false)
-        }
-
+        onClose={() => setFinishOpen(false)}
         onFinish={handleFinishTest}
-
       />
-
-
     </>
-
   );
-
 }

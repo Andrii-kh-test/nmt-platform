@@ -38,13 +38,26 @@ export default function VisibilityGuard() {
 
       if (!test) return;
 
-      await finishTest(
-        "security",
-        test,
-        savedAnswers,
-        timeLeft,
-        router
-      );
+      const storedSessionId =
+  localStorage.getItem("testSessionId");
+
+const sessionId =
+  Number(storedSessionId);
+
+if (!sessionId) {
+  throw new Error(
+    "Не знайдено sessionId тестування"
+  );
+}
+
+await finishTest(
+  "security",
+  test,
+  savedAnswers,
+  timeLeft,
+  sessionId,
+  router
+);
     }
 
     document.addEventListener(

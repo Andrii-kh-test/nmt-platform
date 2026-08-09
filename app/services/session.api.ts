@@ -1,5 +1,5 @@
 export type SaveSessionDto = {
-  testId: number;
+  sessionId: number;
 
   currentQuestion: number;
 
@@ -13,15 +13,19 @@ export type SaveSessionDto = {
 export async function saveSession(
   data: SaveSessionDto
 ) {
-  const response = await fetch("/api/session", {
-    method: "POST",
+  const response = await fetch(
+    "/api/session",
+    {
+      method: "POST",
 
-    headers: {
-      "Content-Type": "application/json",
-    },
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
 
-    body: JSON.stringify(data),
-  });
+      body: JSON.stringify(data),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -31,6 +35,7 @@ export async function saveSession(
 
   return response.json();
 }
+
 export async function loadSession(
   testId: number
 ) {
@@ -46,10 +51,10 @@ export async function loadSession(
 
   return response.json();
 }
+
 export async function deleteSession(
   testId: number
 ) {
-
   const response = await fetch(
     "/api/session/delete",
     {
@@ -71,29 +76,40 @@ export async function deleteSession(
       "Не вдалося видалити сесію."
     );
   }
-
 }
+
 export async function finishSession(
-  testId: number,
+  sessionId: number,
   currentQuestion: number,
-  savedAnswers: Record<number, number[]>,
+  savedAnswers: Record<
+    number,
+    number[]
+  >,
   timeLeft: number
 ) {
-  const response = await fetch("/api/session", {
-    method: "POST",
+  const response = await fetch(
+    "/api/session",
+    {
+      method: "POST",
 
-    headers: {
-      "Content-Type": "application/json",
-    },
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
 
-    body: JSON.stringify({
-      testId,
-      currentQuestion,
-      savedAnswers,
-      timeLeft,
-      finished: true,
-    }),
-  });
+      body: JSON.stringify({
+        sessionId,
+
+        currentQuestion,
+
+        savedAnswers,
+
+        timeLeft,
+
+        finished: true,
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(
