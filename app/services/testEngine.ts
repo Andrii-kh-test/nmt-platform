@@ -33,7 +33,9 @@ export async function finishTest(
   }
 
   const testId = test.id;
-
+const participantData = JSON.parse(
+  localStorage.getItem("participant") || "{}"
+);
   // -------------------------------
   // Завершуємо конкретну сесію
   // -------------------------------
@@ -82,35 +84,47 @@ export async function finishTest(
   // -------------------------------
 
   const saved = await saveResult({
-    testId,
+  testId,
 
-    sessionId,
+  sessionId,
 
-    earnedPoints:
-      result.earnedPoints,
+  lastName:
+    participantData.lastName || null,
 
-    maxPoints:
-      result.maxPoints,
+  firstName:
+    participantData.firstName || null,
 
-    percent:
-      result.percent,
+  middleName:
+    participantData.middleName || null,
 
-    correct:
-      result.correct,
+  accessCode:
+    participantData.accessCode || null,
 
-    incorrect:
-      result.incorrect,
+  earnedPoints:
+    result.earnedPoints,
 
-    skipped:
-      result.skipped,
+  maxPoints:
+    result.maxPoints,
 
-    timeSpent:
-      test.duration * 60 - timeLeft,
+  percent:
+    result.percent,
 
-    answers,
+  correct:
+    result.correct,
 
-    finishReason: reason,
-  });
+  incorrect:
+    result.incorrect,
+
+  skipped:
+    result.skipped,
+
+  timeSpent:
+    test.duration * 60 - timeLeft,
+
+  answers,
+
+  finishReason: reason,
+});
 
   // -------------------------------
   // Очищаємо локальну сесію

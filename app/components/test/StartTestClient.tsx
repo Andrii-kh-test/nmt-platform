@@ -109,18 +109,14 @@ export default function StartTestClient({
       // --------------------------------
 
       localStorage.setItem(
-        "participant",
-        JSON.stringify({
-          lastName:
-            participant.lastName,
-
-          firstName:
-            participant.firstName,
-
-          middleName:
-            participant.middleName,
-        })
-      );
+  "participant",
+  JSON.stringify({
+    lastName: participant.lastName,
+    firstName: participant.firstName,
+    middleName: participant.middleName,
+    accessCode: participant.accessCode,
+  })
+);
 
       // --------------------------------
       // Додатково зберігаємо sessionId
