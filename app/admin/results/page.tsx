@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
-
+export const dynamic = "force-dynamic";
 function formatDate(date: Date | null) {
   if (!date) {
     return "—";
