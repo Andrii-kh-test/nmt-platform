@@ -1,12 +1,33 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
 // =====================================================
 // POST — створення / оновлення сесії учасником
+//
+// ВАЖЛИВО:
+//
+// Учасник може змінювати:
+// - currentQuestion
+// - savedAnswers
+// - finished
+//
+// Учасник НЕ може через цей маршрут змінювати:
+// - timeLeft
+// - extraTime
+// - blocked
+// - blockReason
+//
+// Ці поля контролюються сервером та
+// адміністративною панеллю.
 // =====================================================
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest
+) {
   try {
     const body = await req.json();
 
@@ -18,35 +39,45 @@ export async function POST(req: NextRequest) {
       finished,
     } = body;
 
+    // =====================================================
+    // Перетворення ID
+    // =====================================================
+
     const numericSessionId =
-      sessionId !== undefined && sessionId !== null
+      sessionId !== undefined &&
+      sessionId !== null
         ? Number(sessionId)
         : null;
 
     const numericTestId =
-      testId !== undefined && testId !== null
+      testId !== undefined &&
+      testId !== null
         ? Number(testId)
         : null;
 
     // =====================================================
-    // 1. Якщо є sessionId — працюємо саме з цією сесією
+    // 1. Якщо передано sessionId
     // =====================================================
 
     if (
-      numericSessionId &&
-      Number.isInteger(numericSessionId) &&
+      numericSessionId !== null &&
+      Number.isInteger(
+        numericSessionId
+      ) &&
       numericSessionId > 0
     ) {
-      const session = await prisma.testSession.findUnique({
-        where: {
-          id: numericSessionId,
-        },
-      });
+      const session =
+        await prisma.testSession.findUnique({
+          where: {
+            id: numericSessionId,
+          },
+        });
 
       if (!session) {
         return NextResponse.json(
           {
-            error: "Сесію тестування не знайдено.",
+            error:
+              "Сесію тестування не знайдено.",
           },
           {
             status: 404,
@@ -54,13 +85,79 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // ---------------------------------------------------
-      // ВАЖЛИВО:
-      // учасник НЕ передає timeLeft.
+      // ===================================================
+      // Дані, які дозволено змінювати учаснику
+      // ===================================================
+
+      const updateData: {
+        currentQuestion?: number;
+        savedAnswers?: any;
+        finished?: boolean;
+        finishedAt?: Date | null;
+        lastActivityAt: Date;
+      } = {
+        lastActivityAt: new Date(),
+      };
+
+      // ===================================================
+      // Поточне питання
+      // ===================================================
+
+      if (
+        typeof currentQuestion ===
+          "number" &&
+        Number.isInteger(
+          currentQuestion
+        ) &&
+        currentQuestion >= 0
+      ) {
+        updateData.currentQuestion =
+          currentQuestion;
+      }
+
+      // ===================================================
+      // Збережені відповіді
+      // ===================================================
+
+      if (
+        savedAnswers !== undefined
+      ) {
+        updateData.savedAnswers =
+          savedAnswers;
+      }
+
+      // ===================================================
+      // Завершення тестування
+      // ===================================================
+
+      if (
+        typeof finished === "boolean"
+      ) {
+        updateData.finished =
+          finished;
+
+        if (finished) {
+          updateData.finishedAt =
+            session.finishedAt ??
+            new Date();
+        }
+      }
+
+      // ===================================================
+      // Оновлення сесії
       //
-      // timeLeft контролюється сервером та адміністративними
-      // командами.
-      // ---------------------------------------------------
+      // КРИТИЧНО:
+      //
+      // тут НЕ змінюються:
+      //
+      // timeLeft
+      // extraTime
+      // blocked
+      // blockReason
+      //
+      // тому адміністративні зміни не
+      // перезаписуються браузером.
+      // ===================================================
 
       const updatedSession =
         await prisma.testSession.update({
@@ -68,47 +165,23 @@ export async function POST(req: NextRequest) {
             id: session.id,
           },
 
-          data: {
-            ...(typeof currentQuestion === "number"
-              ? {
-                  currentQuestion,
-                }
-              : {}),
-
-            ...(savedAnswers !== undefined
-              ? {
-                  savedAnswers,
-                }
-              : {}),
-
-            ...(typeof finished === "boolean"
-              ? {
-                  finished,
-                }
-              : {}),
-
-            ...(finished === true
-              ? {
-                  finishedAt:
-                    session.finishedAt ??
-                    new Date(),
-                }
-              : {}),
-
-            lastActivityAt: new Date(),
-          },
+          data: updateData,
         });
 
-      return NextResponse.json(updatedSession);
+      return NextResponse.json(
+        updatedSession
+      );
     }
 
     // =====================================================
-    // 2. Якщо sessionId немає — використовуємо testId
+    // 2. Якщо sessionId немає — працюємо через testId
     // =====================================================
 
     if (
-      !numericTestId ||
-      !Number.isInteger(numericTestId) ||
+      numericTestId === null ||
+      !Number.isInteger(
+        numericTestId
+      ) ||
       numericTestId <= 0
     ) {
       return NextResponse.json(
@@ -123,7 +196,7 @@ export async function POST(req: NextRequest) {
     }
 
     // =====================================================
-    // 3. Шукаємо активну сесію
+    // 3. Шукаємо активну сесію тесту
     // =====================================================
 
     let session =
@@ -146,20 +219,29 @@ export async function POST(req: NextRequest) {
       session =
         await prisma.testSession.create({
           data: {
-            testId: numericTestId,
+            testId:
+              numericTestId,
 
             currentQuestion:
-              typeof currentQuestion === "number"
+              typeof currentQuestion ===
+                "number" &&
+              Number.isInteger(
+                currentQuestion
+              )
                 ? currentQuestion
                 : 0,
 
             savedAnswers:
               savedAnswers ?? {},
 
+            // Початковий час повинен
+            // встановлюватися під час
+            // запуску тесту.
             timeLeft: 0,
 
             finished:
-              typeof finished === "boolean"
+              typeof finished ===
+              "boolean"
                 ? finished
                 : false,
 
@@ -168,15 +250,86 @@ export async function POST(req: NextRequest) {
                 ? new Date()
                 : null,
 
-            lastActivityAt: new Date(),
+            lastActivityAt:
+              new Date(),
           },
         });
 
-      return NextResponse.json(session);
+      return NextResponse.json(
+        session
+      );
     }
 
     // =====================================================
-    // 5. Оновлюємо сесію
+    // 5. Оновлюємо існуючу сесію
+    // =====================================================
+
+    const updateData: {
+      currentQuestion?: number;
+      savedAnswers?: any;
+      finished?: boolean;
+      finishedAt?: Date | null;
+      lastActivityAt: Date;
+    } = {
+      lastActivityAt: new Date(),
+    };
+
+    // =====================================================
+    // Поточне питання
+    // =====================================================
+
+    if (
+      typeof currentQuestion ===
+        "number" &&
+      Number.isInteger(
+        currentQuestion
+      ) &&
+      currentQuestion >= 0
+    ) {
+      updateData.currentQuestion =
+        currentQuestion;
+    }
+
+    // =====================================================
+    // Збережені відповіді
+    // =====================================================
+
+    if (
+      savedAnswers !== undefined
+    ) {
+      updateData.savedAnswers =
+        savedAnswers;
+    }
+
+    // =====================================================
+    // Завершення
+    // =====================================================
+
+    if (
+      typeof finished === "boolean"
+    ) {
+      updateData.finished =
+        finished;
+
+      if (finished) {
+        updateData.finishedAt =
+          session.finishedAt ??
+          new Date();
+      }
+    }
+
+    // =====================================================
+    // КРИТИЧНО:
+    //
+    // Тут НЕ повинно бути:
+    //
+    // timeLeft: ...
+    // extraTime: ...
+    // blocked: ...
+    // blockReason: ...
+    //
+    // Інакше автозбереження може
+    // скасувати адміністративні зміни.
     // =====================================================
 
     session =
@@ -185,38 +338,12 @@ export async function POST(req: NextRequest) {
           id: session.id,
         },
 
-        data: {
-          ...(typeof currentQuestion === "number"
-            ? {
-                currentQuestion,
-              }
-            : {}),
-
-          ...(savedAnswers !== undefined
-            ? {
-                savedAnswers,
-              }
-            : {}),
-
-          ...(typeof finished === "boolean"
-            ? {
-                finished,
-              }
-            : {}),
-
-          ...(finished === true
-            ? {
-                finishedAt:
-                  session.finishedAt ??
-                  new Date(),
-              }
-            : {}),
-
-          lastActivityAt: new Date(),
-        },
+        data: updateData,
       });
 
-    return NextResponse.json(session);
+    return NextResponse.json(
+      session
+    );
   } catch (error) {
     console.error(
       "SESSION API ERROR:",
