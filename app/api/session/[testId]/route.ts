@@ -12,7 +12,7 @@ type Props = {
 };
 
 // =====================================================
-// GET — отримання активної сесії конкретного тесту
+// GET — отримання стану конкретної сесії
 // =====================================================
 
 export async function GET(
@@ -22,15 +22,41 @@ export async function GET(
   try {
     const { testId } = await params;
 
-    const numericTestId = Number(testId);
+    const sessionIdParam =
+      req.nextUrl.searchParams.get(
+        "sessionId"
+      );
+
+    const testIdNumber = Number(testId);
+
+    const sessionId = sessionIdParam
+      ? Number(sessionIdParam)
+      : null;
 
     if (
-      !Number.isInteger(numericTestId) ||
-      numericTestId <= 0
+      !Number.isInteger(testIdNumber) ||
+      testIdNumber <= 0
     ) {
       return NextResponse.json(
         {
-          error: "Некоректний ID тесту.",
+          error:
+            "Некоректний id тесту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      !sessionId ||
+      !Number.isInteger(sessionId) ||
+      sessionId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Некоректний id сесії.",
         },
         {
           status: 400,
@@ -41,27 +67,25 @@ export async function GET(
     const session =
       await prisma.testSession.findFirst({
         where: {
-          testId: numericTestId,
-          finished: false,
+          id: sessionId,
+          testId: testIdNumber,
         },
 
-        orderBy: {
-          updatedAt: "desc",
-        },
-
-        include: {
-          participant: true,
-
-          test: {
-            select: {
-              id: true,
-              title: true,
-              subject: true,
-              duration: true,
-            },
-          },
+        select: {
+          id: true,
+          blocked: true,
+          blockReason: true,
+          timeLeft: true,
+          extraTime: true,
+          finished: true,
         },
       });
+
+    if (!session) {
+      return NextResponse.json(
+        null
+      );
+    }
 
     return NextResponse.json(session);
   } catch (error) {
@@ -83,58 +107,46 @@ export async function GET(
 }
 
 // =====================================================
-// PATCH — керування активною сесією
+// POST — heartbeat конкретної сесії
 // =====================================================
 
-export async function PATCH(
+export async function POST(
   req: NextRequest,
   { params }: Props
 ) {
   try {
     const { testId } = await params;
 
-    const numericTestId = Number(testId);
-
-    if (
-      !Number.isInteger(numericTestId) ||
-      numericTestId <= 0
-    ) {
-      return NextResponse.json(
-        {
-          error: "Некоректний ID тесту.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
     const body = await req.json();
 
-    const {
-      sessionId,
-      action,
-      reason,
-      minutes,
-    } = body;
-
-    // =================================================
-    // Перевірка sessionId
-    // =================================================
-
-    const numericSessionId =
-      Number(sessionId);
+    const testIdNumber = Number(testId);
+    const sessionId = Number(
+      body.sessionId
+    );
 
     if (
-      !Number.isInteger(
-        numericSessionId
-      ) ||
-      numericSessionId <= 0
+      !Number.isInteger(testIdNumber) ||
+      testIdNumber <= 0
     ) {
       return NextResponse.json(
         {
           error:
-            "Некоректний ID сесії.",
+            "Некоректний id тесту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      !Number.isInteger(sessionId) ||
+      sessionId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Некоректний id сесії.",
         },
         {
           status: 400,
@@ -143,14 +155,14 @@ export async function PATCH(
     }
 
     // =================================================
-    // Знаходимо конкретну сесію
+    // Знаходимо саме цю сесію
     // =================================================
 
     const session =
       await prisma.testSession.findFirst({
         where: {
-          id: numericSessionId,
-          testId: numericTestId,
+          id: sessionId,
+          testId: testIdNumber,
         },
       });
 
@@ -167,156 +179,100 @@ export async function PATCH(
     }
 
     // =================================================
-    // ЗАБЛОКУВАТИ
+    // Якщо heartbeat
     // =================================================
 
-    if (action === "block") {
-      const blockReason =
-        typeof reason === "string" &&
-        reason.trim().length > 0
-          ? reason.trim()
-          : "Тестування заблоковано через порушення правил тестування";
-
+    if (body.heartbeat === true) {
       const updatedSession =
         await prisma.testSession.update({
           where: {
-            id: numericSessionId,
+            id: session.id,
           },
 
           data: {
-            blocked: true,
-
-            blockReason,
-
-            updatedAt:
+            lastActivityAt:
               new Date(),
+          },
+
+          select: {
+            id: true,
+            lastActivityAt: true,
           },
         });
 
-      return NextResponse.json({
-        success: true,
-
-        message:
-          "Тестування заблоковано.",
-
-        session: updatedSession,
-      });
+      return NextResponse.json(
+        updatedSession
+      );
     }
 
     // =================================================
-    // РОЗБЛОКУВАТИ
+    // Якщо потрібно просто оновити сесію
     // =================================================
 
-    if (action === "unblock") {
-      const updatedSession =
-        await prisma.testSession.update({
-          where: {
-            id: numericSessionId,
-          },
+    const updatedSession =
+      await prisma.testSession.update({
+        where: {
+          id: session.id,
+        },
 
-          data: {
-            blocked: false,
+        data: {
+          ...(typeof body.currentQuestion ===
+          "number"
+            ? {
+                currentQuestion:
+                  body.currentQuestion,
+              }
+            : {}),
 
-            blockReason: null,
+          ...(body.savedAnswers !==
+          undefined
+            ? {
+                savedAnswers:
+                  body.savedAnswers,
+              }
+            : {}),
 
-            updatedAt:
-              new Date(),
-          },
-        });
+          ...(typeof body.timeLeft ===
+          "number"
+            ? {
+                timeLeft:
+                  body.timeLeft,
+              }
+            : {}),
 
-      return NextResponse.json({
-        success: true,
+          ...(typeof body.finished ===
+          "boolean"
+            ? {
+                finished:
+                  body.finished,
+              }
+            : {}),
 
-        message:
-          "Тестування розблоковано.",
+          ...(body.finished === true
+            ? {
+                finishedAt:
+                  new Date(),
+              }
+            : {}),
 
-        session: updatedSession,
+          lastActivityAt:
+            new Date(),
+        },
       });
-    }
-
-    // =================================================
-    // ДОДАТИ ЧАС
-    // =================================================
-
-    if (action === "addTime") {
-      const numericMinutes =
-        Number(minutes);
-
-      if (
-        !Number.isFinite(
-          numericMinutes
-        ) ||
-        numericMinutes <= 0
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Некоректна кількість хвилин.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      const secondsToAdd =
-        Math.round(
-          numericMinutes * 60
-        );
-
-      const updatedSession =
-        await prisma.testSession.update({
-          where: {
-            id: numericSessionId,
-          },
-
-          data: {
-            timeLeft:
-              session.timeLeft +
-              secondsToAdd,
-
-            extraTime:
-              session.extraTime +
-              secondsToAdd,
-
-            updatedAt:
-              new Date(),
-          },
-        });
-
-      return NextResponse.json({
-        success: true,
-
-        message:
-          `Додано ${numericMinutes} хв.`,
-
-        session: updatedSession,
-      });
-    }
-
-    // =================================================
-    // НЕВІДОМА ДІЯ
-    // =================================================
 
     return NextResponse.json(
-      {
-        error:
-          "Невідома дія керування сесією.",
-      },
-      {
-        status: 400,
-      }
+      updatedSession
     );
   } catch (error) {
     console.error(
-      "PATCH SESSION ERROR:",
+      "POST SESSION ERROR:",
       error
     );
 
     return NextResponse.json(
       {
         error:
-          "Не вдалося змінити стан сесії.",
+          "Помилка збереження сесії.",
       },
       {
         status: 500,

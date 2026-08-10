@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useTestSession } from "@/app/context/TestSessionContext";
 
 type SessionState = {
+  id: number;
   blocked: boolean;
   blockReason: string | null;
   timeLeft: number;
@@ -15,210 +16,188 @@ type SessionState = {
 export default function SessionMonitor() {
   const {
     test,
+    sessionId,
     timeLeft,
     setTimeLeft,
     stopTimer,
   } = useTestSession();
 
-  const [blocked, setBlocked] =
-    useState(false);
-
+  const [blocked, setBlocked] = useState(false);
   const [blockReason, setBlockReason] =
     useState<string | null>(null);
 
-  const [checking, setChecking] =
-    useState(true);
-const [lastServerTime, setLastServerTime] =
-  useState<number | null>(null);
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
-  if (!test?.id) {
-    return;
-  }
+    if (!test?.id || !sessionId) {
+      setChecking(false);
+      return;
+    }
 
-  const testId = test.id;
+    const testId = test.id;
+    const currentSessionId = sessionId;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  async function checkSession() {
-    try {
-      const response = await fetch(
-        `/api/session/${testId}`,
-        {
-          method: "GET",
-          cache: "no-store",
-        }
-      );
+    // =====================================================
+    // Перевірка стану сесії
+    // =====================================================
 
-      if (!response.ok) {
-        return;
-      }
-
-      const session: SessionState | null =
-        await response.json();
-
-      if (!session || cancelled) {
-        return;
-      }
-
-      // ==========================
-      // Перевірка блокування
-      // ==========================
-
-      if (session.blocked) {
-        setBlocked(true);
-
-        setBlockReason(
-          session.blockReason ||
-            "Тестування заблоковано через порушення правил тестування"
+    async function checkSession() {
+      try {
+        const response = await fetch(
+          `/api/session/${testId}?sessionId=${currentSessionId}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
         );
 
-        stopTimer();
-      } else {
-        setBlocked(false);
-        setBlockReason(null);
-      }
+        if (!response.ok) {
+          return;
+        }
 
-      // ==========================
-      // Синхронізація таймера
-      // ==========================
+        const session: SessionState | null =
+          await response.json();
 
-      if (
-  typeof session.timeLeft ===
-  "number"
-) {
-  setLastServerTime(
-    session.timeLeft
-  );
+        if (!session || cancelled) {
+          return;
+        }
 
-  setTimeLeft(
-    session.timeLeft
-  );
-}
+        // =================================================
+        // Перевірка блокування
+        // =================================================
 
-      // ==========================
-      // Завершення
-      // ==========================
+        if (session.blocked) {
+          setBlocked(true);
 
-      if (session.finished) {
-        stopTimer();
-      }
-    } catch (error) {
-      console.error(
-        "Помилка перевірки сесії:",
-        error
-      );
-    } finally {
-      if (!cancelled) {
-        setChecking(false);
+          setBlockReason(
+            session.blockReason ||
+              "Тестування заблоковано через порушення правил тестування."
+          );
+
+          stopTimer();
+        } else {
+          setBlocked(false);
+          setBlockReason(null);
+        }
+
+        // =================================================
+        // Синхронізація таймера
+        // =================================================
+
+        if (
+          typeof session.timeLeft === "number"
+        ) {
+          setTimeLeft(session.timeLeft);
+        }
+
+        // =================================================
+        // Завершення
+        // =================================================
+
+        if (session.finished) {
+          stopTimer();
+        }
+      } catch (error) {
+        console.error(
+          "Помилка перевірки сесії:",
+          error
+        );
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+        }
       }
     }
-  }
 
-  // Перша перевірка одразу
-  checkSession();
+    // =====================================================
+    // Heartbeat
+    // =====================================================
 
-  // Подальші перевірки кожні 5 секунд
-  const interval = setInterval(
-    checkSession,
-    5000
-  );
+    async function sendHeartbeat() {
+      try {
+        await fetch(`/api/session/${testId}`, {
+          method: "POST",
 
-  return () => {
-    cancelled = true;
-    clearInterval(interval);
-  };
-}, [
-  test,
-  setTimeLeft,
-  stopTimer,
-]);
+          headers: {
+            "Content-Type": "application/json",
+          },
 
-  // ==================================
-  // Поки сесія ще перевіряється
-  // ==================================
+          body: JSON.stringify({
+            sessionId: currentSessionId,
+            heartbeat: true,
+          }),
+        });
+      } catch (error) {
+        console.error(
+          "Помилка heartbeat:",
+          error
+        );
+      }
+    }
+
+    // Перша перевірка одразу
+    checkSession();
+
+    // Перший heartbeat одразу
+    sendHeartbeat();
+
+    // Перевірка стану кожні 5 секунд
+    const checkInterval = setInterval(
+      checkSession,
+      5000
+    );
+
+    // Heartbeat кожні 10 секунд
+    const heartbeatInterval = setInterval(
+      sendHeartbeat,
+      10000
+    );
+
+    return () => {
+      cancelled = true;
+
+      clearInterval(checkInterval);
+      clearInterval(heartbeatInterval);
+    };
+  }, [
+    test,
+    sessionId,
+    setTimeLeft,
+    stopTimer,
+  ]);
+
+  // =====================================================
+  // Поки сесія перевіряється
+  // =====================================================
 
   if (checking) {
     return null;
   }
 
-  // ==================================
+  // =====================================================
   // Тест заблоковано
-  // ==================================
+  // =====================================================
 
   if (blocked) {
     return (
-      <div
-        className="
-          fixed
-          inset-0
-          z-[9999]
-          flex
-          items-center
-          justify-center
-          bg-black/80
-          p-6
-        "
-      >
-        <div
-          className="
-            w-full
-            max-w-xl
-            rounded-2xl
-            bg-white
-            p-8
-            text-center
-            shadow-2xl
-          "
-        >
-          <div
-            className="
-              mx-auto
-              mb-6
-              flex
-              h-20
-              w-20
-              items-center
-              justify-center
-              rounded-full
-              bg-red-100
-              text-4xl
-            "
-          >
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-100 p-6">
+        <div className="w-full max-w-2xl rounded-2xl bg-white p-10 text-center shadow-2xl">
+          <div className="text-6xl">
             🔒
           </div>
 
-          <h1
-            className="
-              text-3xl
-              font-bold
-              text-red-700
-            "
-          >
+          <h1 className="mt-6 text-3xl font-bold text-red-700">
             Тестування заблоковано
           </h1>
 
-          <p
-            className="
-              mt-5
-              text-lg
-              leading-relaxed
-              text-gray-700
-            "
-          >
+          <p className="mt-5 text-lg leading-relaxed text-gray-700">
             {blockReason ||
               "Тестування заблоковано через порушення правил тестування."}
           </p>
 
-          <div
-            className="
-              mt-6
-              rounded-lg
-              bg-gray-100
-              p-4
-              text-sm
-              text-gray-600
-            "
-          >
+          <div className="mt-6 rounded-lg bg-gray-100 p-4 text-sm text-gray-600">
             Подальше виконання завдань
             тимчасово недоступне.
           </div>

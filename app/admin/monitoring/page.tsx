@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
-
+import MonitoringRefresh from "./MonitoringRefresh";
 function formatDate(date: Date | null) {
   if (!date) {
     return "—";
@@ -117,6 +117,7 @@ export default async function MonitoringPage() {
 
   return (
     <main className="min-h-screen bg-gray-100 p-6">
+        <MonitoringRefresh />
       <div className="mx-auto max-w-7xl">
         {/* Заголовок */}
 
