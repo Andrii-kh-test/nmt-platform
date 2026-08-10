@@ -41,11 +41,10 @@ const participantData = JSON.parse(
   // -------------------------------
 
   await finishSession(
-    sessionId,
-    0,
-    answers,
-    timeLeft
-  );
+  sessionId,
+  0,
+  answers
+);
 
   // -------------------------------
   // Розрахунок результату

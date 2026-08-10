@@ -1,17 +1,12 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
-// =======================
-// POST — створення / оновлення сесії
-// =======================
+// =====================================================
+// POST — створення / оновлення сесії учасником
+// =====================================================
 
-export async function POST(
-  req: NextRequest
-) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
@@ -20,43 +15,38 @@ export async function POST(
       testId,
       currentQuestion,
       savedAnswers,
-      timeLeft,
       finished,
     } = body;
 
     const numericSessionId =
-      sessionId !== undefined &&
-      sessionId !== null
+      sessionId !== undefined && sessionId !== null
         ? Number(sessionId)
         : null;
 
     const numericTestId =
-      testId !== undefined &&
-      testId !== null
+      testId !== undefined && testId !== null
         ? Number(testId)
         : null;
 
     // =====================================================
-    // 1. Якщо передано sessionId —
-    //    працюємо саме з цією сесією
+    // 1. Якщо є sessionId — працюємо саме з цією сесією
     // =====================================================
 
     if (
       numericSessionId &&
+      Number.isInteger(numericSessionId) &&
       numericSessionId > 0
     ) {
-      const existingSession =
-        await prisma.testSession.findUnique({
-          where: {
-            id: numericSessionId,
-          },
-        });
+      const session = await prisma.testSession.findUnique({
+        where: {
+          id: numericSessionId,
+        },
+      });
 
-      if (!existingSession) {
+      if (!session) {
         return NextResponse.json(
           {
-            error:
-              "Сесію тестування не знайдено.",
+            error: "Сесію тестування не знайдено.",
           },
           {
             status: 404,
@@ -64,53 +54,61 @@ export async function POST(
         );
       }
 
+      // ---------------------------------------------------
+      // ВАЖЛИВО:
+      // учасник НЕ передає timeLeft.
+      //
+      // timeLeft контролюється сервером та адміністративними
+      // командами.
+      // ---------------------------------------------------
+
       const updatedSession =
         await prisma.testSession.update({
           where: {
-            id: numericSessionId,
+            id: session.id,
           },
 
           data: {
-            currentQuestion:
-              Number(
-                currentQuestion ?? 0
-              ),
+            ...(typeof currentQuestion === "number"
+              ? {
+                  currentQuestion,
+                }
+              : {}),
 
-            savedAnswers:
-              savedAnswers ?? {},
+            ...(savedAnswers !== undefined
+              ? {
+                  savedAnswers,
+                }
+              : {}),
 
-            timeLeft:
-              Number(
-                timeLeft ?? 0
-              ),
+            ...(typeof finished === "boolean"
+              ? {
+                  finished,
+                }
+              : {}),
 
-            finished:
-              Boolean(
-                finished ?? false
-              ),
-
-            ...(finished
+            ...(finished === true
               ? {
                   finishedAt:
-                    existingSession.finishedAt ??
+                    session.finishedAt ??
                     new Date(),
                 }
               : {}),
+
+            lastActivityAt: new Date(),
           },
         });
 
-      return NextResponse.json(
-        updatedSession
-      );
+      return NextResponse.json(updatedSession);
     }
 
     // =====================================================
-    // 2. Якщо sessionId немає —
-    //    використовуємо testId
+    // 2. Якщо sessionId немає — використовуємо testId
     // =====================================================
 
     if (
       !numericTestId ||
+      !Number.isInteger(numericTestId) ||
       numericTestId <= 0
     ) {
       return NextResponse.json(
@@ -125,7 +123,7 @@ export async function POST(
     }
 
     // =====================================================
-    // 3. Шукаємо активну сесію цього тесту
+    // 3. Шукаємо активну сесію
     // =====================================================
 
     let session =
@@ -148,41 +146,37 @@ export async function POST(
       session =
         await prisma.testSession.create({
           data: {
-            testId:
-              numericTestId,
+            testId: numericTestId,
 
             currentQuestion:
-              Number(
-                currentQuestion ?? 0
-              ),
+              typeof currentQuestion === "number"
+                ? currentQuestion
+                : 0,
 
             savedAnswers:
               savedAnswers ?? {},
 
-            timeLeft:
-              Number(
-                timeLeft ?? 0
-              ),
+            timeLeft: 0,
 
             finished:
-              Boolean(
-                finished ?? false
-              ),
+              typeof finished === "boolean"
+                ? finished
+                : false,
 
             finishedAt:
-              finished
+              finished === true
                 ? new Date()
                 : null,
+
+            lastActivityAt: new Date(),
           },
         });
 
-      return NextResponse.json(
-        session
-      );
+      return NextResponse.json(session);
     }
 
     // =====================================================
-    // 5. Оновлюємо знайдену сесію
+    // 5. Оновлюємо сесію
     // =====================================================
 
     session =
@@ -192,37 +186,37 @@ export async function POST(
         },
 
         data: {
-          currentQuestion:
-            Number(
-              currentQuestion ?? 0
-            ),
+          ...(typeof currentQuestion === "number"
+            ? {
+                currentQuestion,
+              }
+            : {}),
 
-          savedAnswers:
-            savedAnswers ?? {},
+          ...(savedAnswers !== undefined
+            ? {
+                savedAnswers,
+              }
+            : {}),
 
-          timeLeft:
-            Number(
-              timeLeft ?? 0
-            ),
+          ...(typeof finished === "boolean"
+            ? {
+                finished,
+              }
+            : {}),
 
-          finished:
-            Boolean(
-              finished ?? false
-            ),
-
-          ...(finished
+          ...(finished === true
             ? {
                 finishedAt:
                   session.finishedAt ??
                   new Date(),
               }
             : {}),
+
+          lastActivityAt: new Date(),
         },
       });
 
-    return NextResponse.json(
-      session
-    );
+    return NextResponse.json(session);
   } catch (error) {
     console.error(
       "SESSION API ERROR:",
@@ -232,7 +226,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Помилка збереження сесії",
+          "Помилка збереження сесії.",
       },
       {
         status: 500,

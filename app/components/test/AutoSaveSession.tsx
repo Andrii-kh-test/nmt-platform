@@ -14,18 +14,27 @@ export default function AutoSaveSession() {
   } = useTestSession();
 
   useEffect(() => {
-    if (!sessionId) {
+    if (
+      sessionId === null ||
+      sessionId <= 0
+    ) {
       return;
     }
 
+    // Фіксуємо ID сесії як number.
+    // Це також усуває помилку TypeScript
+    // у вкладеній async-функції.
     const currentSessionId = sessionId;
 
-    async function autoSave() {
+    async function performSave() {
       try {
         await saveSession({
           sessionId: currentSessionId,
+
           currentQuestion,
+
           savedAnswers,
+
           finished: false,
         });
       } catch (error) {
@@ -36,8 +45,13 @@ export default function AutoSaveSession() {
       }
     }
 
+    // Перше збереження одразу
+    performSave();
+
+    // Подальше автозбереження
+    // кожні 30 секунд
     const interval = setInterval(
-      autoSave,
+      performSave,
       30000
     );
 

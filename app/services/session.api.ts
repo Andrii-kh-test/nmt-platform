@@ -5,17 +5,6 @@ export type SaveSessionDto = {
 
   savedAnswers: Record<number, number[]>;
 
-  /**
-   * Необов'язковий параметр.
-   *
-   * Не передаємо його під час звичайного
-   * автозбереження, щоб не перезаписувати
-   * час, змінений адміністратором.
-   *
-   * Передаємо під час завершення тесту.
-   */
-  timeLeft?: number;
-
   finished: boolean;
 };
 
@@ -37,16 +26,12 @@ export async function saveSession(
   );
 
   if (!response.ok) {
-    const errorText =
+    const error =
       await response.text();
 
-    console.error(
-      "SAVE SESSION ERROR:",
-      errorText
-    );
-
     throw new Error(
-      "Не вдалося зберегти сесію."
+      error ||
+        "Не вдалося зберегти сесію."
     );
   }
 
@@ -57,7 +42,11 @@ export async function loadSession(
   testId: number
 ) {
   const response = await fetch(
-    `/api/session/${testId}`
+    `/api/session/${testId}`,
+    {
+      method: "GET",
+      cache: "no-store",
+    }
   );
 
   if (!response.ok) {
@@ -89,8 +78,12 @@ export async function deleteSession(
   );
 
   if (!response.ok) {
+    const error =
+      await response.text();
+
     throw new Error(
-      "Не вдалося видалити сесію."
+      error ||
+        "Не вдалося видалити сесію."
     );
   }
 }
@@ -101,8 +94,7 @@ export async function finishSession(
   savedAnswers: Record<
     number,
     number[]
-  >,
-  timeLeft: number
+  >
 ) {
   const response = await fetch(
     "/api/session",
@@ -121,24 +113,18 @@ export async function finishSession(
 
         savedAnswers,
 
-        timeLeft,
-
         finished: true,
       }),
     }
   );
 
   if (!response.ok) {
-    const errorText =
+    const error =
       await response.text();
 
-    console.error(
-      "FINISH SESSION ERROR:",
-      errorText
-    );
-
     throw new Error(
-      "Не вдалося завершити сесію."
+      error ||
+        "Не вдалося завершити сесію."
     );
   }
 
