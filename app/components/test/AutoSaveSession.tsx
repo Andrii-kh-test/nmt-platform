@@ -11,7 +11,6 @@ export default function AutoSaveSession() {
     sessionId,
     currentQuestion,
     savedAnswers,
-    timeLeft,
   } = useTestSession();
 
   useEffect(() => {
@@ -19,23 +18,26 @@ export default function AutoSaveSession() {
       return;
     }
 
+    const currentSessionId = sessionId;
+
+    async function autoSave() {
+      try {
+        await saveSession({
+          sessionId: currentSessionId,
+          currentQuestion,
+          savedAnswers,
+          finished: false,
+        });
+      } catch (error) {
+        console.error(
+          "Помилка автозбереження сесії:",
+          error
+        );
+      }
+    }
+
     const interval = setInterval(
-      async () => {
-        try {
-          await saveSession({
-            sessionId,
-            currentQuestion,
-            savedAnswers,
-            timeLeft,
-            finished: false,
-          });
-        } catch (error) {
-          console.error(
-            "Помилка автозбереження сесії:",
-            error
-          );
-        }
-      },
+      autoSave,
       30000
     );
 
@@ -46,7 +48,6 @@ export default function AutoSaveSession() {
     sessionId,
     currentQuestion,
     savedAnswers,
-    timeLeft,
   ]);
 
   return null;

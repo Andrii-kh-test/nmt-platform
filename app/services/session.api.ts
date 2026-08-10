@@ -5,7 +5,16 @@ export type SaveSessionDto = {
 
   savedAnswers: Record<number, number[]>;
 
-  timeLeft: number;
+  /**
+   * Необов'язковий параметр.
+   *
+   * Не передаємо його під час звичайного
+   * автозбереження, щоб не перезаписувати
+   * час, змінений адміністратором.
+   *
+   * Передаємо під час завершення тесту.
+   */
+  timeLeft?: number;
 
   finished: boolean;
 };
@@ -28,6 +37,14 @@ export async function saveSession(
   );
 
   if (!response.ok) {
+    const errorText =
+      await response.text();
+
+    console.error(
+      "SAVE SESSION ERROR:",
+      errorText
+    );
+
     throw new Error(
       "Не вдалося зберегти сесію."
     );
@@ -112,6 +129,14 @@ export async function finishSession(
   );
 
   if (!response.ok) {
+    const errorText =
+      await response.text();
+
+    console.error(
+      "FINISH SESSION ERROR:",
+      errorText
+    );
+
     throw new Error(
       "Не вдалося завершити сесію."
     );
