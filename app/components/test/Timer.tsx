@@ -17,20 +17,25 @@ export default function Timer() {
     return () => {
       stopTimer();
     };
-  }, [startTimer, stopTimer]);
 
-  const hours = Math.floor(timeLeft / 3600);
+    // Запускаємо лише при монтуванні Timer
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const hours = Math.floor(
+    timeLeft / 3600
+  );
 
   const minutes = Math.floor(
     (timeLeft % 3600) / 60
   );
 
-  const seconds = timeLeft % 60;
+  const seconds =
+    timeLeft % 60;
 
   return (
-    <div className="bg-white rounded-xl shadow px-5 py-3">
-
-      <div className="text-sm text-gray-500 mb-1">
+    <div>
+      <div className="mb-1 text-sm text-gray-500">
         Залишилося часу
       </div>
 
@@ -45,7 +50,6 @@ export default function Timer() {
         {String(minutes).padStart(2, "0")}:
         {String(seconds).padStart(2, "0")}
       </div>
-
     </div>
   );
 }

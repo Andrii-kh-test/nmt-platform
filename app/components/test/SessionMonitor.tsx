@@ -11,14 +11,15 @@ type SessionState = {
   timeLeft: number;
   extraTime: number;
   finished: boolean;
+  currentQuestion: number;
 };
 
 export default function SessionMonitor() {
   const {
     test,
     sessionId,
-    timeLeft,
     setTimeLeft,
+    setCurrentQuestion,
     stopTimer,
   } = useTestSession();
 
@@ -39,10 +40,6 @@ export default function SessionMonitor() {
 
     let cancelled = false;
 
-    // =====================================================
-    // Перевірка стану сесії
-    // =====================================================
-
     async function checkSession() {
       try {
         const response = await fetch(
@@ -54,6 +51,11 @@ export default function SessionMonitor() {
         );
 
         if (!response.ok) {
+          console.error(
+            "SessionMonitor HTTP error:",
+            response.status
+          );
+
           return;
         }
 
@@ -64,16 +66,21 @@ export default function SessionMonitor() {
           return;
         }
 
-        // =================================================
-        // Перевірка блокування
-        // =================================================
+        console.log(
+          "SESSION MONITOR:",
+          session
+        );
+
+        // ==========================================
+        // БЛОКУВАННЯ
+        // ==========================================
 
         if (session.blocked) {
           setBlocked(true);
 
           setBlockReason(
             session.blockReason ||
-              "Тестування заблоковано через порушення правил тестування."
+              "Тестування заблоковано адміністратором."
           );
 
           stopTimer();
@@ -82,9 +89,9 @@ export default function SessionMonitor() {
           setBlockReason(null);
         }
 
-        // =================================================
-        // Синхронізація таймера
-        // =================================================
+        // ==========================================
+        // СИНХРОНІЗАЦІЯ ЧАСУ
+        // ==========================================
 
         if (
           typeof session.timeLeft === "number"
@@ -92,9 +99,22 @@ export default function SessionMonitor() {
           setTimeLeft(session.timeLeft);
         }
 
-        // =================================================
-        // Завершення
-        // =================================================
+        // ==========================================
+        // СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
+        // ==========================================
+
+        if (
+          typeof session.currentQuestion ===
+          "number"
+        ) {
+          setCurrentQuestion(
+            session.currentQuestion
+          );
+        }
+
+        // ==========================================
+        // ЗАВЕРШЕННЯ
+        // ==========================================
 
         if (session.finished) {
           stopTimer();
@@ -111,79 +131,44 @@ export default function SessionMonitor() {
       }
     }
 
-    // =====================================================
-    // Heartbeat
-    // =====================================================
-
-    async function sendHeartbeat() {
-      try {
-        await fetch(`/api/session/${testId}`, {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            sessionId: currentSessionId,
-            heartbeat: true,
-          }),
-        });
-      } catch (error) {
-        console.error(
-          "Помилка heartbeat:",
-          error
-        );
-      }
-    }
-
     // Перша перевірка одразу
     checkSession();
 
-    // Перший heartbeat одразу
-    sendHeartbeat();
-
-    // Перевірка стану кожні 5 секунд
-    const checkInterval = setInterval(
+    // Потім кожні 2 секунди
+    const interval = setInterval(
       checkSession,
-      5000
-    );
-
-    // Heartbeat кожні 10 секунд
-    const heartbeatInterval = setInterval(
-      sendHeartbeat,
-      10000
+      2000
     );
 
     return () => {
       cancelled = true;
-
-      clearInterval(checkInterval);
-      clearInterval(heartbeatInterval);
+      clearInterval(interval);
     };
   }, [
-    test,
+    test?.id,
     sessionId,
     setTimeLeft,
+    setCurrentQuestion,
     stopTimer,
   ]);
 
-  // =====================================================
-  // Поки сесія перевіряється
-  // =====================================================
+  // ==========================================
+  // Поки перша перевірка не завершилася
+  // ==========================================
 
   if (checking) {
     return null;
   }
 
-  // =====================================================
-  // Тест заблоковано
-  // =====================================================
+  // ==========================================
+  // ЗАБЛОКОВАНО
+  // ==========================================
 
   if (blocked) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-100 p-6">
-        <div className="w-full max-w-2xl rounded-2xl bg-white p-10 text-center shadow-2xl">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-6">
+        <div className="w-full max-w-lg rounded-2xl bg-white p-8 text-center shadow-2xl">
+
           <div className="text-6xl">
             🔒
           </div>
@@ -194,13 +179,14 @@ export default function SessionMonitor() {
 
           <p className="mt-5 text-lg leading-relaxed text-gray-700">
             {blockReason ||
-              "Тестування заблоковано через порушення правил тестування."}
+              "Тестування заблоковано адміністратором."}
           </p>
 
           <div className="mt-6 rounded-lg bg-gray-100 p-4 text-sm text-gray-600">
             Подальше виконання завдань
-            тимчасово недоступне.
+            недоступне.
           </div>
+
         </div>
       </div>
     );
