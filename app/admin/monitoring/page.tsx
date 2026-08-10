@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
 import MonitoringRefresh from "./MonitoringRefresh";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 function formatDate(date: Date | null) {
   if (!date) {
     return "—";
@@ -94,8 +96,14 @@ export default async function MonitoringPage() {
   const sessions =
     await prisma.testSession.findMany({
       where: {
-        finished: false,
-      },
+  finished: false,
+
+  lastActivityAt: {
+    gte: new Date(
+      Date.now() - 30 * 1000
+    ),
+  },
+},
 
       orderBy: {
         updatedAt: "desc",
