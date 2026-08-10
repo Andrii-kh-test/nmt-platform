@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
-
+import MonitoringControls from "./MonitoringControls";
 type Props = {
   params: Promise<{
     id: string;
@@ -348,36 +348,16 @@ export default async function MonitoringDetailsPage({
         {/* Панель керування */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
-          <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
-            Керування
-          </h2>
+  <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
+    Керування тестуванням
+  </h2>
 
-          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
-            <p className="text-gray-600">
-              Функції керування сесією
-              будуть доступні тут:
-            </p>
-
-            <ul className="mt-4 list-inside list-disc space-y-2 text-gray-700">
-              <li>
-                блокування тестування;
-              </li>
-
-              <li>
-                розблокування тестування;
-              </li>
-
-              <li>
-                додавання додаткового часу;
-              </li>
-
-              <li>
-                керування станом сесії в
-                реальному часі.
-              </li>
-            </ul>
-          </div>
-        </section>
+  <MonitoringControls
+    sessionId={session.id}
+    testId={session.testId}
+    blocked={session.blocked}
+  />
+</section>
 
         {/* Нижня кнопка */}
 
