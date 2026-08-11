@@ -72,13 +72,14 @@ export async function GET(
         },
 
         select: {
-          id: true,
-          blocked: true,
-          blockReason: true,
-          timeLeft: true,
-          extraTime: true,
-          finished: true,
-        },
+  id: true,
+  currentQuestion: true,
+  blocked: true,
+  blockReason: true,
+  timeLeft: true,
+  extraTime: true,
+  finished: true,
+}
       });
 
     if (!session) {

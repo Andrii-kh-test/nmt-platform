@@ -57,7 +57,18 @@ export default function MonitoringControls({
       );
 
       const data = await response.json();
+console.log("ADMIN MANAGE REQUEST:", {
+  sessionId,
+  testId,
+  action,
+  minutes,
+});
 
+console.log("ADMIN MANAGE RESPONSE:", {
+  status: response.status,
+  ok: response.ok,
+  data,
+});
       if (!response.ok) {
         throw new Error(
           data.error ||
