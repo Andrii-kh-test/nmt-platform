@@ -73,7 +73,26 @@ export function TestSessionProvider({
   children: ReactNode;
 }) {
   const [sessionId, setSessionId] =
-    useState<number | null>(null);
+  useState<number | null>(null);
+
+useEffect(() => {
+  const storedSessionId =
+    localStorage.getItem("testSessionId");
+
+  if (!storedSessionId) {
+    return;
+  }
+
+  const numericSessionId =
+    Number(storedSessionId);
+
+  if (
+    Number.isInteger(numericSessionId) &&
+    numericSessionId > 0
+  ) {
+    setSessionId(numericSessionId);
+  }
+}, []);
 
   const [test, setTest] =
     useState<Test | null>(null);
@@ -298,22 +317,26 @@ export function TestSessionProvider({
   // =====================================================
 
   function resetTest() {
-    setSessionId(null);
+  setSessionId(null);
 
-    setTest(null);
+  localStorage.removeItem(
+    "testSessionId"
+  );
 
-    setCurrentQuestion(0);
+  setTest(null);
 
-    setSelectedAnswers({});
+  setCurrentQuestion(0);
 
-    setSavedAnswers({});
+  setSelectedAnswers({});
 
-    setTimeLeftState(0);
+  setSavedAnswers({});
 
-    setTimerRunning(false);
+  setTimeLeftState(0);
 
-    setOnTimeExpired(null);
-  }
+  setTimerRunning(false);
+
+  setOnTimeExpired(null);
+}
 
   return (
     <TestSessionContext.Provider

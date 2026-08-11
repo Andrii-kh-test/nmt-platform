@@ -16,34 +16,54 @@ export default function TestLoader({
 }: Props) {
   const {
     loadTest,
-    startTimer,
     test: currentTest,
   } = useTestSession();
 
-  const initialized = useRef(false);
+  const initialized =
+    useRef(false);
 
   useEffect(() => {
-    if (initialized.current) return;
+    // --------------------------------------------------
+    // Не запускаємо ініціалізацію повторно
+    // --------------------------------------------------
 
-    // якщо тест уже був відновлений із сесії —
+    if (initialized.current) {
+      return;
+    }
+
+    // --------------------------------------------------
+    // Якщо тест уже був відновлений із сесії —
     // нічого не перезавантажуємо
+    // --------------------------------------------------
+
     if (currentTest) {
       initialized.current = true;
       return;
     }
 
-    // Створюємо випадковий порядок питань та відповідей
-    const shuffled = shuffleTest(test);
+    // --------------------------------------------------
+    // Створюємо випадковий порядок питань
+    // --------------------------------------------------
+
+    const shuffled =
+      shuffleTest(test);
+
+    // --------------------------------------------------
+    // Завантажуємо тест у Context
+    //
+    // ВАЖЛИВО:
+    // TestLoader НЕ запускає таймер.
+    //
+    // Час буде отримано з серверної сесії
+    // через RestoreSession.
+    // --------------------------------------------------
 
     loadTest(shuffled);
-
-    startTimer();
 
     initialized.current = true;
   }, [
     currentTest,
     loadTest,
-    startTimer,
     test,
   ]);
 
