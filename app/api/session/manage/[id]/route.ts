@@ -84,8 +84,7 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Не вдалося отримати сесію.",
+        error: "Не вдалося отримати сесію.",
       },
       {
         status: 500,
@@ -135,6 +134,14 @@ export async function POST(
         where: {
           id: sessionId,
         },
+
+        include: {
+          test: {
+            select: {
+              duration: true,
+            },
+          },
+        },
       });
 
     if (!existingSession) {
@@ -167,8 +174,9 @@ export async function POST(
               body.reason ??
               "Тестування заблоковано через порушення правил тестування.",
 
-            lastActivityAt:
-              new Date(),
+            blockedAt: new Date(),
+
+            lastActivityAt: new Date(),
           },
 
           include: {
@@ -206,9 +214,9 @@ export async function POST(
           data: {
             blocked: false,
             blockReason: null,
+            blockedAt: null,
 
-            lastActivityAt:
-              new Date(),
+            lastActivityAt: new Date(),
           },
 
           include: {
@@ -234,6 +242,21 @@ export async function POST(
 
     // =================================================
     // ДОДАВАННЯ ЧАСУ
+    //
+    // ВАЖЛИВО:
+    //
+    // Не використовуємо existingSession.timeLeft,
+    // оскільки воно може бути старішим за локальний
+    // таймер учасника.
+    //
+    // Реальний залишок визначаємо через:
+    //
+    // startedAt
+    // + тривалість тесту
+    // + уже доданий extraTime
+    // - час, що минув
+    //
+    // Після цього додаємо нові хвилини.
     // =================================================
 
     if (action === "addTime") {
@@ -257,30 +280,97 @@ export async function POST(
         );
       }
 
-      const secondsToAdd =
-        Math.floor(minutes * 60);
+      const secondsToAdd = Math.floor(
+        minutes * 60
+      );
 
-      /*
-       * КРИТИЧНО:
-       *
-       * Не беремо timeLeft із браузера.
-       *
-       * Зчитуємо актуальний timeLeft
-       * із БД і додаємо до нього час
-       * безпосередньо на сервері.
-       */
+      // =================================================
+      // Перевіряємо дату початку тестування
+      // =================================================
+
+      if (!existingSession.startedAt) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "У сесії відсутній час початку тестування.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      // =================================================
+      // Тривалість основного тесту
+      // duration з БД зберігається у хвилинах.
+      // =================================================
+
+      const baseTime =
+        Math.max(
+          0,
+          Math.floor(
+            existingSession.test.duration * 60
+          )
+        );
+
+      // =================================================
+      // Уже доданий додатковий час
+      // extraTime зберігається у секундах.
+      // =================================================
+
+      const previousExtraTime =
+        Math.max(
+          0,
+          Math.floor(
+            existingSession.extraTime
+          )
+        );
+
+      // =================================================
+      // Скільки секунд минуло від початку тесту
+      // =================================================
+
+      const startedAt =
+        existingSession.startedAt.getTime();
+
+      const now = Date.now();
+
+      const elapsedSeconds =
+        Math.max(
+          0,
+          Math.floor(
+            (now - startedAt) / 1000
+          )
+        );
+
+      // =================================================
+      // Фактичний час, який мав би залишитися
+      // =================================================
+
+      const calculatedTimeLeft =
+        Math.max(
+          0,
+          baseTime +
+            previousExtraTime -
+            elapsedSeconds
+        );
+
+      // =================================================
+      // Додаємо новий час
+      // =================================================
 
       const newTimeLeft =
-        Math.max(
-          0,
-          existingSession.timeLeft
-        ) + secondsToAdd;
+        calculatedTimeLeft +
+        secondsToAdd;
 
       const newExtraTime =
-        Math.max(
-          0,
-          existingSession.extraTime
-        ) + secondsToAdd;
+        previousExtraTime +
+        secondsToAdd;
+
+      // =================================================
+      // Оновлюємо БД
+      // =================================================
 
       const session =
         await prisma.testSession.update({
@@ -289,14 +379,11 @@ export async function POST(
           },
 
           data: {
-            timeLeft:
-              newTimeLeft,
+            timeLeft: newTimeLeft,
 
-            extraTime:
-              newExtraTime,
+            extraTime: newExtraTime,
 
-            lastActivityAt:
-              new Date(),
+            lastActivityAt: new Date(),
           },
 
           include: {
@@ -315,19 +402,18 @@ export async function POST(
 
       return NextResponse.json({
         success: true,
+
         action: "addTime",
 
-        addedMinutes:
-          minutes,
+        addedMinutes: minutes,
 
-        addedSeconds:
-          secondsToAdd,
+        addedSeconds: secondsToAdd,
 
-        timeLeft:
-          session.timeLeft,
+        calculatedTimeLeft,
 
-        extraTime:
-          session.extraTime,
+        timeLeft: session.timeLeft,
+
+        extraTime: session.extraTime,
 
         session,
       });
@@ -356,8 +442,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error:
-          "Не вдалося змінити сесію.",
+        error: "Не вдалося змінити сесію.",
       },
       {
         status: 500,
