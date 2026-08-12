@@ -8,7 +8,7 @@ export function mapPrismaTest(test: any): Test {
     title: test.title,
 
     subject: test.subject,
-
+examType: test.examType,
     description: test.description ?? "",
 
     duration: test.duration,

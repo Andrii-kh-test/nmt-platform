@@ -5,6 +5,9 @@ export interface Test {
 
   title: string;
 
+  // Тип іспиту
+  examType: "НМТ" | "ЄВІ" | "ЄФВВ";
+
   subject: string;
 
   description: string;
@@ -15,7 +18,6 @@ export interface Test {
 
   maxPoints: number;
 
-  // Нові поля
   isPublished: boolean;
 
   codeRequired: boolean;

@@ -1,0 +1,2 @@
+ALTER TABLE "Test"
+ADD COLUMN "examType" TEXT NOT NULL DEFAULT 'НМТ';

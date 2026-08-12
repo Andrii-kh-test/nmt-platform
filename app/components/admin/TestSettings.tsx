@@ -35,7 +35,37 @@ export default function TestSettings() {
       </h2>
 
       <div className="space-y-5">
+        <div>
+          <label className="block font-medium mb-2">
+            Тип іспиту
+          </label>
 
+          <select
+            value={test.examType}
+            onChange={(e) =>
+              updateTest(
+                "examType",
+                e.target.value as
+                  | "НМТ"
+                  | "ЄВІ"
+                  | "ЄФВВ"
+              )
+            }
+            className="w-full border rounded-lg p-3"
+          >
+            <option value="НМТ">
+              НМТ
+            </option>
+
+            <option value="ЄВІ">
+              ЄВІ
+            </option>
+
+            <option value="ЄФВВ">
+              ЄФВВ
+            </option>
+          </select>
+        </div>
         <div>
           <label className="block font-medium mb-2">
             Назва тесту
