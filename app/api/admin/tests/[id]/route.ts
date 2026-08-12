@@ -126,6 +126,12 @@ export async function PUT(
     data: {
       title: body.title,
 
+      // ==========================
+      // ТИП ІСПИТУ
+      // ==========================
+
+      examType: body.examType ?? "НМТ",
+
       subject: body.subject,
 
       description: body.description,
@@ -136,14 +142,26 @@ export async function PUT(
 
       maxPoints: body.maxPoints,
 
+      // ==========================
+      // ПУБЛІКАЦІЯ
+      // ==========================
+
       isPublished:
         body.isPublished ?? false,
+
+      // ==========================
+      // КОД ДОСТУПУ
+      // ==========================
 
       codeRequired:
         body.codeRequired ?? true,
 
       accessCode:
         body.accessCode || null,
+
+      // ==========================
+      // ПИТАННЯ
+      // ==========================
 
       questions: {
         create: (body.questions ?? []).map(
@@ -294,7 +312,9 @@ export async function PUT(
     },
   });
 
-  return NextResponse.json(updatedTest);
+  return NextResponse.json(
+    updatedTest
+  );
 }
 
 // =======================

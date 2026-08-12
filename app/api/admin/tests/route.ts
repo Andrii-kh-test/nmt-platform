@@ -8,6 +8,10 @@ export async function POST(request: Request) {
     const test = await prisma.test.create({
       data: {
         title: body.title,
+
+        // Тип іспиту
+        examType: body.examType ?? "НМТ",
+
         subject: body.subject,
         description: body.description,
         schoolYear: body.schoolYear,
@@ -39,17 +43,13 @@ export async function POST(request: Request) {
                   (option: any, optionIndex: number) => ({
                     order: optionIndex + 1,
                     text: option.text ?? "",
-                    isCorrect:
-                      option.isCorrect ?? false,
+                    isCorrect: option.isCorrect ?? false,
                   })
                 );
               }
 
               /*
                * Завдання на встановлення відповідності.
-               *
-               * Зберігаємо Matching через вже існуючу
-               * таблицю AnswerOption.
                *
                * L|id|текст|correctRightId
                * R|id|текст
@@ -106,8 +106,7 @@ export async function POST(request: Request) {
 
                 // Чи дозволено перемішувати питання
                 shuffleQuestion:
-                  question.shuffleQuestion ??
-                  true,
+                  question.shuffleQuestion ?? true,
 
                 options: {
                   create: options,
