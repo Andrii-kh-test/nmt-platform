@@ -192,12 +192,33 @@ const ShapeNode = Node.create({
   },
 
   parseHTML() {
-    return [
-      {
-        tag: "span[data-shape]",
+  return [
+    {
+      tag: "span[data-shape]",
+      getAttrs: (element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+
+        const shape = element.getAttribute("data-shape");
+
+        if (
+          shape === "triangle" ||
+          shape === "trapezoid" ||
+          shape === "circle" ||
+          shape === "square" ||
+          shape === "diamond"
+        ) {
+          return {
+            shape,
+          };
+        }
+
+        return false;
       },
-    ];
-  },
+    },
+  ];
+},
 
   renderHTML({ node }) {
     return [
