@@ -735,7 +735,34 @@ export default function RichTextEditor({
   editor={editor}
   className="rich-text-editor min-h-[220px] p-5 prose max-w-none"
 />
+<style jsx global>{`
+  .rich-text-editor .ProseMirror [data-shape] {
+    display: inline-block !important;
+    vertical-align: middle !important;
+    line-height: 1 !important;
+    min-width: 32px !important;
+    min-height: 24px !important;
+  }
 
+  .rich-text-editor .ProseMirror [data-shape] svg {
+    display: inline-block !important;
+    width: 32px !important;
+    height: 24px !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    vertical-align: middle !important;
+  }
+
+  .rich-text-editor .ProseMirror [data-shape] polygon,
+  .rich-text-editor .ProseMirror [data-shape] circle,
+  .rich-text-editor .ProseMirror [data-shape] rect {
+    fill: none !important;
+    stroke: #111827 !important;
+    stroke-width: 2.5 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+`}</style>
     </div>
   );
 }
