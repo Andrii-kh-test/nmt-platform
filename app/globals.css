@@ -24,88 +24,111 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
 html {
-    scroll-behavior: smooth;
+  scroll-behavior: smooth;
 }
+
 /* =========================================================
-   Фігури у RichTextEditor
+   ФІГУРИ У РЕДАКТОРІ RichTextEditor
    ========================================================= */
 
-.rich-text-editor .editor-shape {
-  display: inline-block;
-  vertical-align: middle;
-  margin: 8px 4px;
+/*
+ * Контейнер фігури
+ */
+.rich-text-editor .ProseMirror [data-shape] {
+  display: inline-block !important;
+  vertical-align: middle !important;
+  line-height: 1 !important;
+  margin: 2px 4px !important;
+  min-width: 32px !important;
+  min-height: 24px !important;
+  cursor: pointer;
 }
 
-/* Трапеція */
-
-.rich-text-editor .editor-shape-trapezoid {
-  width: 120px;
-  height: 80px;
-  display: inline-block;
-  position: relative;
+/*
+ * SVG фігури
+ */
+.rich-text-editor .ProseMirror [data-shape] svg {
+  display: inline-block !important;
+  vertical-align: middle !important;
+  width: 32px !important;
+  height: 24px !important;
+  overflow: visible !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-.rich-text-editor .editor-shape-trapezoid::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  border: 2px solid #111827;
-  clip-path: polygon(
-    25% 0%,
-    75% 0%,
-    100% 100%,
-    0% 100%
-  );
+/*
+ * Контури фігур
+ */
+.rich-text-editor .ProseMirror [data-shape] polygon,
+.rich-text-editor .ProseMirror [data-shape] circle,
+.rich-text-editor .ProseMirror [data-shape] rect {
+  fill: none !important;
+  stroke: #111827 !important;
+  stroke-width: 2.5 !important;
+  stroke-linejoin: round !important;
+  stroke-linecap: round !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-/* Трикутник */
+/* =========================================================
+   ВИДІЛЕННЯ ФІГУРИ
+   ========================================================= */
 
-.rich-text-editor .editor-shape-triangle {
-  width: 100px;
-  height: 80px;
-  display: inline-block;
-  position: relative;
+/*
+ * Оскільки ShapeNode має selectable: true,
+ * ProseMirror додає клас .ProseMirror-selectednode
+ * до вибраної фігури.
+ */
+.rich-text-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid #7a1f2b !important;
+  outline-offset: 3px !important;
+  border-radius: 3px;
 }
 
-.rich-text-editor .editor-shape-triangle::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  border: 2px solid #111827;
-  clip-path: polygon(
-    50% 0%,
-    100% 100%,
-    0% 100%
-  );
+/* =========================================================
+   ФІГУРИ ПІД ЧАС РЕДАГУВАННЯ
+   ========================================================= */
+
+/*
+ * Трикутник
+ */
+.rich-text-editor .ProseMirror [data-shape="triangle"] {
+  width: 32px !important;
+  height: 24px !important;
 }
 
-/* Прямокутник */
-
-.rich-text-editor .editor-shape-rectangle {
-  width: 120px;
-  height: 70px;
-  display: inline-block;
-  border: 2px solid #111827;
+/*
+ * Трапеція
+ */
+.rich-text-editor .ProseMirror [data-shape="trapezoid"] {
+  width: 32px !important;
+  height: 24px !important;
 }
 
-/* Квадрат */
-
-.rich-text-editor .editor-shape-square {
-  width: 75px;
-  height: 75px;
-  display: inline-block;
-  border: 2px solid #111827;
+/*
+ * Коло
+ */
+.rich-text-editor .ProseMirror [data-shape="circle"] {
+  width: 32px !important;
+  height: 24px !important;
 }
 
-/* Коло */
+/*
+ * Квадрат
+ */
+.rich-text-editor .ProseMirror [data-shape="square"] {
+  width: 32px !important;
+  height: 24px !important;
+}
 
-.rich-text-editor .editor-shape-circle {
-  width: 75px;
-  height: 75px;
-  display: inline-block;
-  border: 2px solid #111827;
-  border-radius: 50%;
+/*
+ * Ромб
+ */
+.rich-text-editor .ProseMirror [data-shape="diamond"] {
+  width: 32px !important;
+  height: 24px !important;
 }
