@@ -297,13 +297,6 @@ export default function Matching({
 
       <div className="space-y-8">
 
-        <HtmlContent
-
-          html={question.text}
-
-          className="text-lg"
-
-        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
