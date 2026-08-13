@@ -732,9 +732,9 @@ export default function RichTextEditor({
           ====================================================== */}
 
       <EditorContent
-        editor={editor}
-        className="min-h-[220px] p-5 prose max-w-none"
-      />
+  editor={editor}
+  className="rich-text-editor min-h-[220px] p-5 prose max-w-none"
+/>
 
     </div>
   );

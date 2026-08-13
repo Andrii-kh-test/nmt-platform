@@ -27,3 +27,85 @@ body {
 html {
     scroll-behavior: smooth;
 }
+/* =========================================================
+   Фігури у RichTextEditor
+   ========================================================= */
+
+.rich-text-editor .editor-shape {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 8px 4px;
+}
+
+/* Трапеція */
+
+.rich-text-editor .editor-shape-trapezoid {
+  width: 120px;
+  height: 80px;
+  display: inline-block;
+  position: relative;
+}
+
+.rich-text-editor .editor-shape-trapezoid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border: 2px solid #111827;
+  clip-path: polygon(
+    25% 0%,
+    75% 0%,
+    100% 100%,
+    0% 100%
+  );
+}
+
+/* Трикутник */
+
+.rich-text-editor .editor-shape-triangle {
+  width: 100px;
+  height: 80px;
+  display: inline-block;
+  position: relative;
+}
+
+.rich-text-editor .editor-shape-triangle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border: 2px solid #111827;
+  clip-path: polygon(
+    50% 0%,
+    100% 100%,
+    0% 100%
+  );
+}
+
+/* Прямокутник */
+
+.rich-text-editor .editor-shape-rectangle {
+  width: 120px;
+  height: 70px;
+  display: inline-block;
+  border: 2px solid #111827;
+}
+
+/* Квадрат */
+
+.rich-text-editor .editor-shape-square {
+  width: 75px;
+  height: 75px;
+  display: inline-block;
+  border: 2px solid #111827;
+}
+
+/* Коло */
+
+.rich-text-editor .editor-shape-circle {
+  width: 75px;
+  height: 75px;
+  display: inline-block;
+  border: 2px solid #111827;
+  border-radius: 50%;
+}
