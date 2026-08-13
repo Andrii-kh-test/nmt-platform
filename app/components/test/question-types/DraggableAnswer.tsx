@@ -3,6 +3,8 @@
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
+import HtmlContent from "@/app/components/common/HtmlContent";
+
 type Props = {
   id: number;
   letter: string;
@@ -54,7 +56,16 @@ export default function DraggableAnswer({
         select-none
       "
     >
-      {text}
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 font-bold text-[#7A1F2B]">
+          {letter}
+        </div>
+
+        <HtmlContent
+          html={text}
+          className="flex-1"
+        />
+      </div>
     </div>
   );
 }
