@@ -354,8 +354,12 @@ export default function RichTextEditor({
     immediatelyRender: false,
 
     onUpdate({ editor }) {
-      onChange(editor.getHTML());
-    },
+  const html = editor.getHTML();
+
+  console.log("EDITOR HTML:", html);
+
+  onChange(html);
+},
   });
 
   /*
