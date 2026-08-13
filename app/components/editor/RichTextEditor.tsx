@@ -29,6 +29,147 @@ type ShapeType =
   | "square"
   | "diamond";
 
+/*
+ * Створення SVG для фігури
+ */
+function createShapeSvg(shape: ShapeType): SVGSVGElement {
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  const svg = document.createElementNS(svgNS, "svg");
+
+  svg.setAttribute("width", "32");
+  svg.setAttribute("height", "24");
+  svg.setAttribute("viewBox", "0 0 32 24");
+  svg.setAttribute("xmlns", svgNS);
+
+  svg.style.display = "inline-block";
+  svg.style.width = "32px";
+  svg.style.height = "24px";
+  svg.style.verticalAlign = "middle";
+  svg.style.overflow = "visible";
+
+  /*
+   * ТРИКУТНИК
+   */
+  if (shape === "triangle") {
+    const polygon = document.createElementNS(
+      svgNS,
+      "polygon"
+    );
+
+    polygon.setAttribute(
+      "points",
+      "16,3 29,21 3,21"
+    );
+
+    svg.appendChild(polygon);
+  }
+
+  /*
+   * ТРАПЕЦІЯ
+   *
+   * ВАЖЛИВО:
+   * довга основа зверху,
+   * коротка основа знизу.
+   */
+  if (shape === "trapezoid") {
+    const polygon = document.createElementNS(
+      svgNS,
+      "polygon"
+    );
+
+    polygon.setAttribute(
+      "points",
+      "3,3 29,3 24,21 8,21"
+    );
+
+    svg.appendChild(polygon);
+  }
+
+  /*
+   * КОЛО
+   */
+  if (shape === "circle") {
+    const circle = document.createElementNS(
+      svgNS,
+      "circle"
+    );
+
+    circle.setAttribute("cx", "16");
+    circle.setAttribute("cy", "12");
+    circle.setAttribute("r", "9");
+
+    svg.appendChild(circle);
+  }
+
+  /*
+   * КВАДРАТ
+   */
+  if (shape === "square") {
+    const rect = document.createElementNS(
+      svgNS,
+      "rect"
+    );
+
+    rect.setAttribute("x", "7");
+    rect.setAttribute("y", "3");
+    rect.setAttribute("width", "18");
+    rect.setAttribute("height", "18");
+
+    svg.appendChild(rect);
+  }
+
+  /*
+   * РОМБ
+   */
+  if (shape === "diamond") {
+    const polygon = document.createElementNS(
+      svgNS,
+      "polygon"
+    );
+
+    polygon.setAttribute(
+      "points",
+      "16,2 29,12 16,22 3,12"
+    );
+
+    svg.appendChild(polygon);
+  }
+
+  /*
+   * Загальний стиль ліній.
+   */
+  svg.querySelectorAll(
+    "polygon, circle, rect"
+  ).forEach((element) => {
+    element.setAttribute("fill", "none");
+    element.setAttribute(
+      "stroke",
+      "#111827"
+    );
+    element.setAttribute(
+      "stroke-width",
+      "2.5"
+    );
+    element.setAttribute(
+      "stroke-linejoin",
+      "round"
+    );
+    element.setAttribute(
+      "stroke-linecap",
+      "round"
+    );
+  });
+
+  return svg;
+}
+
+/*
+ * ============================================================
+ * TIPTAP NODE ДЛЯ ФІГУРИ
+ * ============================================================
+ */
+
 const ShapeNode = Node.create({
   name: "shape",
 
@@ -53,181 +194,123 @@ const ShapeNode = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'span[data-shape]',
+        tag: "span[data-shape]",
       },
     ];
   },
 
   renderHTML({ node }) {
-    const shape = node.attrs.shape as ShapeType;
+    return [
+      "span",
+      {
+        "data-shape": node.attrs.shape,
+      },
+    ];
+  },
 
-    const commonSvgAttributes = {
-      width: "32",
-      height: "24",
-      viewBox: "0 0 32 24",
-      xmlns: "http://www.w3.org/2000/svg",
-      style:
-        "display:inline-block;vertical-align:middle;margin:0 3px;",
+  /*
+   * ==========================================================
+   * NODE VIEW
+   *
+   * Саме тут фігура реально малюється в редакторі.
+   * ==========================================================
+   */
+
+  addNodeView() {
+    return ({ node }) => {
+      const wrapper = document.createElement(
+        "span"
+      );
+
+      wrapper.setAttribute(
+        "data-shape",
+        node.attrs.shape
+      );
+
+      wrapper.className =
+        "editor-shape-node";
+
+      wrapper.style.display =
+        "inline-flex";
+
+      wrapper.style.alignItems =
+        "center";
+
+      wrapper.style.justifyContent =
+        "center";
+
+      wrapper.style.width = "36px";
+
+      wrapper.style.height = "28px";
+
+      wrapper.style.margin =
+        "0 3px";
+
+      wrapper.style.verticalAlign =
+        "middle";
+
+      wrapper.style.cursor =
+        "pointer";
+
+      wrapper.style.lineHeight =
+        "1";
+
+      const svg = createShapeSvg(
+        node.attrs.shape as ShapeType
+      );
+
+      wrapper.appendChild(svg);
+
+      return {
+        dom: wrapper,
+
+        /*
+         * При зміні атрибутів вузла
+         * перемальовуємо SVG.
+         */
+        update(updatedNode) {
+          if (
+            updatedNode.type !== node.type
+          ) {
+            return false;
+          }
+
+          const newShape =
+            updatedNode.attrs
+              .shape as ShapeType;
+
+          wrapper.setAttribute(
+            "data-shape",
+            newShape
+          );
+
+          wrapper.innerHTML = "";
+
+          wrapper.appendChild(
+            createShapeSvg(newShape)
+          );
+
+          return true;
+        },
+
+        /*
+         * Коли фігура виділена Tiptap-ом,
+         * додаємо клас для візуального
+         * позначення.
+         */
+        selectNode() {
+          wrapper.classList.add(
+            "ProseMirror-selectednode"
+          );
+        },
+
+        deselectNode() {
+          wrapper.classList.remove(
+            "ProseMirror-selectednode"
+          );
+        },
+      };
     };
-
-    const strokeAttributes = {
-      fill: "none",
-      stroke: "#111827",
-      "stroke-width": "2.5",
-      "stroke-linejoin": "round",
-      "stroke-linecap": "round",
-    };
-
-    switch (shape) {
-      /*
-       * ТРИКУТНИК
-       */
-      case "triangle":
-        return [
-          "span",
-          {
-            "data-shape": "triangle",
-            style:
-              "display:inline-block;vertical-align:middle;",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "polygon",
-              {
-                ...strokeAttributes,
-                points: "16,3 29,21 3,21",
-              },
-            ],
-          ],
-        ];
-
-      /*
-       * ТРАПЕЦІЯ
-       *
-       * Саме така форма, як на скриншоті:
-       * верхня основа коротша,
-       * нижня — довша,
-       * бокові сторони нахилені.
-       */
-      case "trapezoid":
-        return [
-          "span",
-          {
-            "data-shape": "trapezoid",
-            style:
-              "display:inline-block;vertical-align:middle;",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "polygon",
-              {
-                ...strokeAttributes,
-                points: "8,3 24,3 29,21 3,21",
-              },
-            ],
-          ],
-        ];
-
-      /*
-       * КОЛО
-       */
-      case "circle":
-        return [
-          "span",
-          {
-            "data-shape": "circle",
-            style:
-              "display:inline-block;vertical-align:middle;",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "circle",
-              {
-                ...strokeAttributes,
-                cx: "16",
-                cy: "12",
-                r: "9",
-              },
-            ],
-          ],
-        ];
-
-      /*
-       * КВАДРАТ
-       */
-      case "square":
-        return [
-          "span",
-          {
-            "data-shape": "square",
-            style:
-              "display:inline-block;vertical-align:middle;",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "rect",
-              {
-                ...strokeAttributes,
-                x: "7",
-                y: "3",
-                width: "18",
-                height: "18",
-              },
-            ],
-          ],
-        ];
-
-      /*
-       * РОМБ
-       */
-      case "diamond":
-        return [
-          "span",
-          {
-            "data-shape": "diamond",
-            style:
-              "display:inline-block;vertical-align:middle;",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "polygon",
-              {
-                ...strokeAttributes,
-                points: "16,2 29,12 16,22 3,12",
-              },
-            ],
-          ],
-        ];
-
-      default:
-        return [
-          "span",
-          {
-            "data-shape": "triangle",
-          },
-          [
-            "svg",
-            commonSvgAttributes,
-            [
-              "polygon",
-              {
-                ...strokeAttributes,
-                points: "16,3 29,21 3,21",
-              },
-            ],
-          ],
-        ];
-    }
   },
 });
 
@@ -257,7 +340,10 @@ export default function RichTextEditor({
       Image,
 
       TextAlign.configure({
-        types: ["heading", "paragraph"],
+        types: [
+          "heading",
+          "paragraph",
+        ],
       }),
 
       ShapeNode,
@@ -280,17 +366,22 @@ export default function RichTextEditor({
 
   async function uploadImage(file: File) {
     try {
-      const formData = new FormData();
+      const formData =
+        new FormData();
 
-      formData.append("file", file);
-
-      const response = await fetch(
-        "/api/upload",
-        {
-          method: "POST",
-          body: formData,
-        }
+      formData.append(
+        "file",
+        file
       );
+
+      const response =
+        await fetch(
+          "/api/upload",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
 
       const result =
         await response.json();
@@ -325,22 +416,25 @@ export default function RichTextEditor({
    * ==========================================================
    */
 
-  function insertShape(shape: ShapeType) {
-  if (!editor) {
-    return;
-  }
+  function insertShape(
+    shape: ShapeType
+  ) {
+    if (!editor) {
+      return;
+    }
 
-  editor
-    .chain()
-    .focus()
-    .insertContent({
-      type: "shape",
-      attrs: {
-        shape,
-      },
-    })
-    .run();
-}
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "shape",
+
+        attrs: {
+          shape,
+        },
+      })
+      .run();
+  }
 
   if (!editor) {
     return null;
@@ -409,7 +503,9 @@ export default function RichTextEditor({
               .run()
           }
           className={`px-3 py-1 border rounded ${
-            editor.isActive("underline")
+            editor.isActive(
+              "underline"
+            )
               ? "bg-[#7A1F2B] text-white"
               : ""
           }`}
@@ -456,8 +552,6 @@ export default function RichTextEditor({
             ВИРІВНЮВАННЯ
             ================================================== */}
 
-        {/* ЛІВОРУЧ */}
-
         <button
           type="button"
           onClick={() =>
@@ -479,8 +573,6 @@ export default function RichTextEditor({
           ⬅
         </button>
 
-        {/* ПО ЦЕНТРУ */}
-
         <button
           type="button"
           onClick={() =>
@@ -501,8 +593,6 @@ export default function RichTextEditor({
         >
           ☰
         </button>
-
-        {/* ПРАВОРУЧ */}
 
         <button
           type="button"
@@ -563,7 +653,9 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() =>
-              insertShape("triangle")
+              insertShape(
+                "triangle"
+              )
             }
             className="px-2 py-1 border rounded bg-white hover:bg-gray-100"
             title="Вставити трикутник"
@@ -589,7 +681,9 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() =>
-              insertShape("trapezoid")
+              insertShape(
+                "trapezoid"
+              )
             }
             className="px-2 py-1 border rounded bg-white hover:bg-gray-100"
             title="Вставити трапецію"
@@ -601,7 +695,11 @@ export default function RichTextEditor({
               xmlns="http://www.w3.org/2000/svg"
             >
               <polygon
-                points="8,3 24,3 29,21 3,21"
+                /*
+                 * Довга основа зверху,
+                 * коротка — знизу.
+                 */
+                points="3,3 29,3 24,21 8,21"
                 fill="none"
                 stroke="#111827"
                 strokeWidth="2.5"
@@ -670,7 +768,9 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() =>
-              insertShape("diamond")
+              insertShape(
+                "diamond"
+              )
             }
             className="px-2 py-1 border rounded bg-white hover:bg-gray-100"
             title="Вставити ромб"
@@ -732,37 +832,93 @@ export default function RichTextEditor({
           ====================================================== */}
 
       <EditorContent
-  editor={editor}
-  className="rich-text-editor min-h-[220px] p-5 prose max-w-none"
-/>
-<style jsx global>{`
-  .rich-text-editor .ProseMirror [data-shape] {
-    display: inline-block !important;
-    vertical-align: middle !important;
-    line-height: 1 !important;
-    min-width: 32px !important;
-    min-height: 24px !important;
-  }
+        editor={editor}
+        className="rich-text-editor min-h-[220px] p-5 prose max-w-none"
+      />
 
-  .rich-text-editor .ProseMirror [data-shape] svg {
-    display: inline-block !important;
-    width: 32px !important;
-    height: 24px !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    vertical-align: middle !important;
-  }
+      {/* ======================================================
+          СТИЛІ ФІГУР
+          ====================================================== */}
 
-  .rich-text-editor .ProseMirror [data-shape] polygon,
-  .rich-text-editor .ProseMirror [data-shape] circle,
-  .rich-text-editor .ProseMirror [data-shape] rect {
-    fill: none !important;
-    stroke: #111827 !important;
-    stroke-width: 2.5 !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-`}</style>
+      <style jsx global>{`
+        .rich-text-editor .ProseMirror {
+          min-height: 220px;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          vertical-align: middle !important;
+
+          width: 36px !important;
+          height: 28px !important;
+
+          margin: 0 3px !important;
+
+          line-height: 1 !important;
+
+          cursor: pointer !important;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node
+          svg {
+          display: inline-block !important;
+
+          width: 32px !important;
+          height: 24px !important;
+
+          overflow: visible !important;
+
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node
+          polygon,
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node
+          circle,
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node
+          rect {
+          fill: none !important;
+
+          stroke: #111827 !important;
+
+          stroke-width: 2.5 !important;
+
+          stroke-linejoin: round !important;
+
+          stroke-linecap: round !important;
+        }
+
+        /*
+         * Виділена фігура.
+         *
+         * Tiptap додає цей клас автоматично,
+         * коли атомарний вузол виділений.
+         */
+
+        .rich-text-editor
+          .ProseMirror
+          .editor-shape-node.ProseMirror-selectednode {
+          outline: 2px solid #7A1F2B !important;
+
+          outline-offset: 2px !important;
+
+          border-radius: 4px !important;
+        }
+      `}</style>
+
     </div>
   );
 }
