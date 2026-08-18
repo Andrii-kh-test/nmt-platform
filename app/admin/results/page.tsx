@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
+import DeleteResultButton from "@/app/components/admin/DeleteResultButton";
 export const dynamic = "force-dynamic";
 function formatDate(date: Date | null) {
   if (!date) {
@@ -178,8 +179,8 @@ export default async function AdminResultsPage() {
                   </th>
 
                   <th className="whitespace-nowrap p-4 text-center">
-                    Деталі
-                  </th>
+  Дії
+</th>
                 </tr>
               </thead>
 
@@ -310,24 +311,34 @@ export default async function AdminResultsPage() {
                         </td>
 
                         {/* Деталі */}
-                        <td className="p-4 text-center">
-                          <Link
-                            href={`/result/${result.id}`}
-                            className="
-                              inline-block
-                              rounded-lg
-                              bg-[#7A1F2B]
-                              px-4
-                              py-2
-                              font-semibold
-                              text-white
-                              transition
-                              hover:bg-[#651923]
-                            "
-                          >
-                            Переглянути
-                          </Link>
-                        </td>
+                        {/* Дії */}
+<td className="p-4">
+  <div className="flex items-center justify-center gap-2">
+    <Link
+      href={`/result/${result.id}`}
+      className="
+        inline-block
+        rounded-lg
+        bg-[#7A1F2B]
+        px-4
+        py-2
+        font-semibold
+        text-white
+        transition
+        hover:bg-[#651923]
+      "
+    >
+      Переглянути
+    </Link>
+
+    <DeleteResultButton
+      resultId={result.id}
+      participantName={getParticipantName(
+        result
+      )}
+    />
+  </div>
+</td>
                       </tr>
                     );
                   })
