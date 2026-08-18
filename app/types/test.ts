@@ -18,6 +18,10 @@ export interface Test {
 
   maxPoints: number;
 
+  // Номер розташування тесту
+  // на головній сторінці
+  displayOrder: number;
+
   isPublished: boolean;
 
   codeRequired: boolean;

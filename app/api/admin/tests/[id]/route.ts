@@ -21,9 +21,22 @@ export async function GET(
 ) {
   const { id } = await params;
 
+  const testId = Number(id);
+
+  if (!testId || testId <= 0) {
+    return NextResponse.json(
+      {
+        error: "Некоректний id тесту",
+      },
+      {
+        status: 400,
+      }
+    );
+  }
+
   const test = await prisma.test.findUnique({
     where: {
-      id: Number(id),
+      id: testId,
     },
 
     include: {
@@ -71,250 +84,389 @@ export async function PUT(
     }>;
   }
 ) {
-  const { id } = await params;
+  try {
+    const { id } = await params;
 
-  const testId = Number(id);
+    const testId = Number(id);
 
-  if (!testId || testId <= 0) {
-    return NextResponse.json(
-      {
-        error: "Некоректний id тесту",
+    if (!testId || testId <= 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Некоректний id тесту",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // =======================
+    // ПЕРЕВІРКА ІСНУВАННЯ
+    // =======================
+
+    const existing = await prisma.test.findUnique({
+      where: {
+        id: testId,
       },
-      {
-        status: 400,
-      }
+    });
+
+    if (!existing) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Тест не знайдено",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const body = await request.json();
+
+    // =======================
+    // НОМЕР РОЗТАШУВАННЯ
+    // =======================
+
+    const displayOrder = Number(
+      body.displayOrder
     );
-  }
 
-  const existing = await prisma.test.findUnique({
-    where: {
-      id: testId,
-    },
-  });
+    if (
+      !Number.isInteger(displayOrder) ||
+      displayOrder < 1
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Номер розташування тесту повинен бути цілим числом більше 0",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-  if (!existing) {
-    return NextResponse.json(
-      {
-        error: "Тест не знайдено",
+    // =======================
+    // ПЕРЕВІРКА УНІКАЛЬНОСТІ
+    // =======================
+
+    const existingOrder =
+      await prisma.test.findFirst({
+        where: {
+          displayOrder,
+          NOT: {
+            id: testId,
+          },
+        },
+
+        select: {
+          id: true,
+          title: true,
+        },
+      });
+
+    if (existingOrder) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            `Номер ${displayOrder} уже використовується тестом "${existingOrder.title}"`,
+        },
+        {
+          status: 409,
+        }
+      );
+    }
+
+    // =======================
+    // ВИДАЛЕННЯ СТАРИХ ПИТАНЬ
+    // =======================
+
+    /*
+     * У schema.prisma для Question -> AnswerOption
+     * встановлено onDelete: Cascade.
+     *
+     * Тому старі AnswerOption також будуть
+     * автоматично видалені.
+     */
+
+    await prisma.question.deleteMany({
+      where: {
+        testId,
       },
-      {
-        status: 404,
-      }
-    );
-  }
+    });
 
-  const body = await request.json();
+    // =======================
+    // ОНОВЛЕННЯ ТЕСТУ
+    // =======================
 
-  /*
-   * Видаляємо старі питання.
-   *
-   * У schema.prisma для Question -> AnswerOption
-   * встановлено onDelete: Cascade, тому старі
-   * AnswerOption також будуть видалені.
-   */
-  await prisma.question.deleteMany({
-    where: {
-      testId,
-    },
-  });
+    const updatedTest =
+      await prisma.test.update({
+        where: {
+          id: testId,
+        },
 
-  const updatedTest = await prisma.test.update({
-    where: {
-      id: testId,
-    },
+        data: {
+          title: body.title,
 
-    data: {
-      title: body.title,
+          // ==========================
+          // НОМЕР РОЗТАШУВАННЯ
+          // ==========================
 
-      // ==========================
-      // ТИП ІСПИТУ
-      // ==========================
+          displayOrder,
 
-      examType: body.examType ?? "НМТ",
+          // ==========================
+          // ТИП ІСПИТУ
+          // ==========================
 
-      subject: body.subject,
+          examType:
+            body.examType ?? "НМТ",
 
-      description: body.description,
+          subject:
+            body.subject,
 
-      duration: body.duration,
+          description:
+            body.description,
 
-      schoolYear: body.schoolYear,
+          duration:
+            body.duration,
 
-      maxPoints: body.maxPoints,
+          schoolYear:
+            body.schoolYear,
 
-      // ==========================
-      // ПУБЛІКАЦІЯ
-      // ==========================
+          maxPoints:
+            body.maxPoints,
 
-      isPublished:
-        body.isPublished ?? false,
+          // ==========================
+          // ПУБЛІКАЦІЯ
+          // ==========================
 
-      // ==========================
-      // КОД ДОСТУПУ
-      // ==========================
+          isPublished:
+            body.isPublished ?? false,
 
-      codeRequired:
-        body.codeRequired ?? true,
+          // ==========================
+          // КОД ДОСТУПУ
+          // ==========================
 
-      accessCode:
-        body.accessCode || null,
+          codeRequired:
+            body.codeRequired ?? true,
 
-      // ==========================
-      // ПИТАННЯ
-      // ==========================
+          accessCode:
+            body.accessCode || null,
 
-      questions: {
-        create: (body.questions ?? []).map(
-          (
-            question: any,
-            index: number
-          ) => {
-            let options: {
-              order: number;
-              text: string;
-              isCorrect: boolean;
-            }[] = [];
+          // ==========================
+          // ПИТАННЯ
+          // ==========================
 
-            // ==========================
-            // ЗВИЧАЙНІ ПИТАННЯ
-            // ==========================
-
-            if (
-              question.type !==
-              "matching"
-            ) {
-              options = (
-                question.options ?? []
+          questions: {
+            create:
+              (
+                body.questions ?? []
               ).map(
                 (
-                  option: any,
-                  optionIndex: number
-                ) => ({
-                  order:
-                    optionIndex + 1,
+                  question: any,
+                  index: number
+                ) => {
+                  let options: {
+                    order: number;
+                    text: string;
+                    isCorrect: boolean;
+                  }[] = [];
 
-                  text:
-                    option.text ?? "",
+                  // ==========================
+                  // ЗВИЧАЙНІ ПИТАННЯ
+                  // ==========================
 
-                  isCorrect:
-                    option.isCorrect ??
-                    false,
-                })
-              );
-            }
+                  if (
+                    question.type !==
+                    "matching"
+                  ) {
+                    options = (
+                      question.options ??
+                      []
+                    ).map(
+                      (
+                        option: any,
+                        optionIndex: number
+                      ) => ({
+                        order:
+                          optionIndex +
+                          1,
 
-            // ==========================
-            // MATCHING
-            // ==========================
+                        text:
+                          option.text ??
+                          "",
 
-            if (
-              question.type ===
-              "matching"
-            ) {
-              const leftItems =
-                question.matchingLeftItems ??
-                [];
+                        isCorrect:
+                          option.isCorrect ??
+                          false,
+                      })
+                    );
+                  }
 
-              const rightItems =
-                question.matchingRightItems ??
-                [];
+                  // ==========================
+                  // MATCHING
+                  // ==========================
 
-              /*
-               * Ліва частина:
-               *
-               * L|id|text|correctRightId
-               */
+                  if (
+                    question.type ===
+                    "matching"
+                  ) {
+                    const leftItems =
+                      question.matchingLeftItems ??
+                      [];
 
-              const leftOptions =
-                leftItems.map(
-                  (
-                    item: any,
-                    itemIndex: number
-                  ) => ({
+                    const rightItems =
+                      question.matchingRightItems ??
+                      [];
+
+                    /*
+                     * Ліва частина:
+                     *
+                     * L|id|text|correctRightId
+                     */
+
+                    const leftOptions =
+                      leftItems.map(
+                        (
+                          item: any,
+                          itemIndex: number
+                        ) => ({
+                          order:
+                            itemIndex +
+                            1,
+
+                          text:
+                            `L|${item.id}|${item.text ?? ""}|${item.correctRightId}`,
+
+                          isCorrect:
+                            false,
+                        })
+                      );
+
+                    /*
+                     * Права частина:
+                     *
+                     * R|id|text
+                     */
+
+                    const rightOptions =
+                      rightItems.map(
+                        (
+                          item: any,
+                          itemIndex: number
+                        ) => ({
+                          order:
+                            leftItems.length +
+                            itemIndex +
+                            1,
+
+                          text:
+                            `R|${item.id}|${item.text ?? ""}`,
+
+                          isCorrect:
+                            false,
+                        })
+                      );
+
+                    options = [
+                      ...leftOptions,
+                      ...rightOptions,
+                    ];
+                  }
+
+                  return {
                     order:
-                      itemIndex + 1,
+                      index + 1,
+
+                    type:
+                      question.type,
 
                     text:
-                      `L|${item.id}|${item.text ?? ""}|${item.correctRightId}`,
+                      question.text ??
+                      "",
 
-                    isCorrect: false,
-                  })
-                );
-
-              /*
-               * Права частина:
-               *
-               * R|id|text
-               */
-
-              const rightOptions =
-                rightItems.map(
-                  (
-                    item: any,
-                    itemIndex: number
-                  ) => ({
-                    order:
-                      leftItems.length +
-                      itemIndex +
+                    points:
+                      question.points ??
                       1,
 
-                    text:
-                      `R|${item.id}|${item.text ?? ""}`,
+                    shuffleQuestion:
+                      question.shuffleQuestion ??
+                      true,
 
-                    isCorrect: false,
-                  })
-                );
+                    options: {
+                      create:
+                        options,
+                    },
+                  };
+                }
+              ),
+          },
+        },
 
-              options = [
-                ...leftOptions,
-                ...rightOptions,
-              ];
-            }
-
-            return {
-              order: index + 1,
-
-              type: question.type,
-
-              text:
-                question.text ?? "",
-
-              points:
-                question.points ?? 1,
-
-              shuffleQuestion:
-                question.shuffleQuestion ??
-                true,
-
-              options: {
-                create: options,
-              },
-            };
-          }
-        ),
-      },
-    },
-
-    include: {
-      questions: {
         include: {
-          options: {
+          questions: {
+            include: {
+              options: {
+                orderBy: {
+                  order: "asc",
+                },
+              },
+            },
+
             orderBy: {
               order: "asc",
             },
           },
         },
+      });
 
-        orderBy: {
-          order: "asc",
+    return NextResponse.json(
+      {
+        success: true,
+        test: updatedTest,
+      }
+    );
+  } catch (error: any) {
+    console.error(
+      "UPDATE TEST ERROR:",
+      error
+    );
+
+    /*
+     * Додатково обробляємо помилку
+     * унікальності Prisma.
+     */
+    if (
+      error?.code ===
+      "P2002"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Такий номер розташування вже використовується іншим тестом",
         },
-      },
-    },
-  });
+        {
+          status: 409,
+        }
+      );
+    }
 
-  return NextResponse.json(
-    updatedTest
-  );
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Не вдалося оновити тест",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
 }
 
 // =======================
@@ -331,28 +483,64 @@ export async function DELETE(
     }>;
   }
 ) {
-  const { id } = await params;
+  try {
+    const { id } = await params;
 
-  const testId = Number(id);
+    const testId = Number(id);
 
-  if (!testId || testId <= 0) {
+    if (!testId || testId <= 0) {
+      return NextResponse.json(
+        {
+          error: "Некоректний id",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const existing =
+      await prisma.test.findUnique({
+        where: {
+          id: testId,
+        },
+      });
+
+    if (!existing) {
+      return NextResponse.json(
+        {
+          error: "Тест не знайдено",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    await prisma.test.delete({
+      where: {
+        id: testId,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+    });
+  } catch (error) {
+    console.error(
+      "DELETE TEST ERROR:",
+      error
+    );
+
     return NextResponse.json(
       {
-        error: "Некоректний id",
+        success: false,
+        error:
+          "Не вдалося видалити тест",
       },
       {
-        status: 400,
+        status: 500,
       }
     );
   }
-
-  await prisma.test.delete({
-    where: {
-      id: testId,
-    },
-  });
-
-  return NextResponse.json({
-    success: true,
-  });
 }

@@ -13,8 +13,8 @@ export default async function YefvvPage() {
     },
 
     orderBy: {
-      id: "desc",
-    },
+  displayOrder: "asc",
+},
 
     include: {
       questions: true,

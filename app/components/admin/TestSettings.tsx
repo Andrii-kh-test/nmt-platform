@@ -3,29 +3,47 @@
 import { saveTest } from "@/app/api/saveTest";
 import { useTestConstructor } from "@/app/context/TestConstructorContext";
 import { generateAccessCode } from "@/app/utils/generateAccessCode";
+
 export default function TestSettings() {
   const { test, updateTest } = useTestConstructor();
 
   async function handleSave() {
-    console.log("========== SAVE ==========");
-    console.log(test);
+  console.log("========== SAVE ==========");
+  console.log(test);
 
-    try {
-      const result = await saveTest(test);
+  // Перевірка номера розташування
+  if (
+    !Number.isInteger(test.displayOrder) ||
+    test.displayOrder < 1
+  ) {
+    alert(
+      "Вкажіть номер розташування тесту на головній сторінці."
+    );
 
-      console.log(result);
-
-      alert(
-        test.id
-          ? "Тест успішно оновлено!"
-          : "Тест успішно створено!"
-      );
-    } catch (error) {
-      console.error(error);
-
-      alert("Помилка під час збереження тесту.");
-    }
+    return;
   }
+
+  try {
+    const result = await saveTest(test);
+
+    console.log(result);
+
+    alert(
+      test.id
+        ? "Тест успішно оновлено!"
+        : "Тест успішно створено!"
+    );
+  } catch (error) {
+    console.error(error);
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Помилка під час збереження тесту.";
+
+    alert(message);
+  }
+}
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -35,6 +53,11 @@ export default function TestSettings() {
       </h2>
 
       <div className="space-y-5">
+
+        {/* ==========================
+            ТИП ІСПИТУ
+        ========================== */}
+
         <div>
           <label className="block font-medium mb-2">
             Тип іспиту
@@ -66,6 +89,11 @@ export default function TestSettings() {
             </option>
           </select>
         </div>
+
+        {/* ==========================
+            НАЗВА
+        ========================== */}
+
         <div>
           <label className="block font-medium mb-2">
             Назва тесту
@@ -75,11 +103,18 @@ export default function TestSettings() {
             type="text"
             value={test.title}
             onChange={(e) =>
-              updateTest("title", e.target.value)
+              updateTest(
+                "title",
+                e.target.value
+              )
             }
             className="w-full border rounded-lg p-3"
           />
         </div>
+
+        {/* ==========================
+            ПРЕДМЕТ
+        ========================== */}
 
         <div>
           <label className="block font-medium mb-2">
@@ -89,7 +124,10 @@ export default function TestSettings() {
           <select
             value={test.subject}
             onChange={(e) =>
-              updateTest("subject", e.target.value)
+              updateTest(
+                "subject",
+                e.target.value
+              )
             }
             className="w-full border rounded-lg p-3"
           >
@@ -115,6 +153,10 @@ export default function TestSettings() {
           </select>
         </div>
 
+        {/* ==========================
+            ОПИС
+        ========================== */}
+
         <div>
           <label className="block font-medium mb-2">
             Опис тесту
@@ -124,11 +166,18 @@ export default function TestSettings() {
             rows={4}
             value={test.description}
             onChange={(e) =>
-              updateTest("description", e.target.value)
+              updateTest(
+                "description",
+                e.target.value
+              )
             }
             className="w-full border rounded-lg p-3"
           />
         </div>
+
+        {/* ==========================
+            НАВЧАЛЬНИЙ РІК
+        ========================== */}
 
         <div>
           <label className="block font-medium mb-2">
@@ -139,11 +188,18 @@ export default function TestSettings() {
             type="text"
             value={test.schoolYear}
             onChange={(e) =>
-              updateTest("schoolYear", e.target.value)
+              updateTest(
+                "schoolYear",
+                e.target.value
+              )
             }
             className="w-full border rounded-lg p-3"
           />
         </div>
+
+        {/* ==========================
+            ТРИВАЛІСТЬ
+        ========================== */}
 
         <div>
           <label className="block font-medium mb-2">
@@ -164,6 +220,10 @@ export default function TestSettings() {
           />
         </div>
 
+        {/* ==========================
+            МАКСИМАЛЬНА КІЛЬКІСТЬ БАЛІВ
+        ========================== */}
+
         <div>
           <label className="block font-medium mb-2">
             Максимальна кількість балів
@@ -183,11 +243,51 @@ export default function TestSettings() {
           />
         </div>
 
+        {/* ==========================
+            ПОРЯДОК НА ГОЛОВНІЙ
+        ========================== */}
+
+        <div>
+          <label className="block font-medium mb-2">
+            Порядок на головній сторінці
+          </label>
+
+          <input
+  type="number"
+  min={1}
+  step={1}
+  value={test.displayOrder || ""}
+  onChange={(e) =>
+    updateTest(
+      "displayOrder",
+      e.target.value === ""
+        ? 0
+        : Number(e.target.value)
+    )
+  }
+  className="w-full border rounded-lg p-3"
+  placeholder="Наприклад: 4"
+/>
+
+          <p className="text-sm text-gray-500 mt-2">
+            Визначає порядок розташування
+            опублікованого тесту на головній
+            сторінці. Наприклад: 1 — перший,
+            2 — другий, 3 — третій.
+          </p>
+        </div>
+
         <hr className="my-6" />
+
+        {/* ==========================
+            ДОСТУП ДО ТЕСТУ
+        ========================== */}
 
         <h3 className="text-xl font-semibold text-[#7A1F2B]">
           Доступ до тесту
         </h3>
+
+        {/* ПУБЛІКАЦІЯ */}
 
         <label className="flex items-center gap-3">
 
@@ -209,6 +309,8 @@ export default function TestSettings() {
 
         </label>
 
+        {/* КОД */}
+
         <label className="flex items-center gap-3">
 
           <input
@@ -229,52 +331,59 @@ export default function TestSettings() {
 
         </label>
 
+        {/* ==========================
+            КОД ДОСТУПУ
+        ========================== */}
+
         {test.codeRequired && (
+          <div>
 
-  <div>
+            <label className="block font-medium mb-2">
+              Код доступу
+            </label>
 
-    <label className="block font-medium mb-2">
-      Код доступу
-    </label>
+            <div className="flex gap-3">
 
-    <div className="flex gap-3">
+              <input
+                type="text"
+                value={test.accessCode}
+                onChange={(e) =>
+                  updateTest(
+                    "accessCode",
+                    e.target.value.toUpperCase()
+                  )
+                }
+                className="flex-1 border rounded-lg p-3 font-mono text-lg tracking-wider"
+                placeholder="Q7RM8X"
+              />
 
-      <input
-        type="text"
-        value={test.accessCode}
-        onChange={(e) =>
-          updateTest(
-            "accessCode",
-            e.target.value.toUpperCase()
-          )
-        }
-        className="flex-1 border rounded-lg p-3 font-mono text-lg tracking-wider"
-        placeholder="Q7RM8X"
-      />
+              <button
+                type="button"
+                onClick={() =>
+                  updateTest(
+                    "accessCode",
+                    generateAccessCode()
+                  )
+                }
+                className="bg-[#7A1F2B] hover:bg-[#651923] text-white px-4 rounded-lg"
+                title="Згенерувати випадковий код"
+              >
+                🔄
+              </button>
 
-      <button
-        type="button"
-        onClick={() =>
-          updateTest(
-            "accessCode",
-            generateAccessCode()
-          )
-        }
-        className="bg-[#7A1F2B] hover:bg-[#651923] text-white px-4 rounded-lg"
-        title="Згенерувати випадковий код"
-      >
-        🔄
-      </button>
+            </div>
 
-    </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Натисніть 🔄 для автоматичної
+              генерації коду.
+            </p>
 
-    <p className="text-sm text-gray-500 mt-2">
-      Натисніть 🔄 для автоматичної генерації коду.
-    </p>
+          </div>
+        )}
 
-  </div>
-
-)}
+        {/* ==========================
+            ЗБЕРЕЖЕННЯ
+        ========================== */}
 
         <button
           type="button"
@@ -287,7 +396,6 @@ export default function TestSettings() {
         </button>
 
       </div>
-
     </div>
   );
 }

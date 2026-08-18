@@ -13,8 +13,8 @@ export default async function NmtPage() {
     },
 
     orderBy: {
-      id: "desc",
-    },
+  displayOrder: "asc",
+},
 
     include: {
       questions: true,

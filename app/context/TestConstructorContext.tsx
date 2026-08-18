@@ -34,34 +34,55 @@ type TestConstructorContextType = {
   clearTest: () => void;
 };
 
-// Новий тест НЕ має id
-const initialTest: Test = {
-  title: "",
+// ========================================
+// Створення початкового тесту
+// ========================================
+
+function createInitialTest(): Test {
+  return {
+    title: "",
+
     examType: "НМТ",
-  subject: "Українська мова",
 
-  description: "",
+    subject: "Українська мова",
 
+    description: "",
 
-  duration: 180,
+    duration: 180,
 
-  schoolYear: "2026",
+    schoolYear: "2026",
 
-  maxPoints: 45,
+    maxPoints: 45,
 
-  isPublished: false,
+    // Номер на головній сторінці.
+    // 0 означає, що адміністратор
+    // ще не вказав номер.
+    displayOrder: 0,
 
-  codeRequired: true,
+    isPublished: false,
 
-  accessCode: "",
+    codeRequired: true,
 
-  questions: [createQuestion(1)],
-};
+    accessCode: "",
+
+    questions: [
+      createQuestion(1),
+    ],
+  };
+}
+
+// ========================================
+// CONTEXT
+// ========================================
 
 const TestConstructorContext =
   createContext<TestConstructorContextType | null>(
     null
   );
+
+// ========================================
+// PROVIDER
+// ========================================
 
 export function TestConstructorProvider({
   children,
@@ -69,11 +90,21 @@ export function TestConstructorProvider({
   children: ReactNode;
 }) {
   const [test, setTestState] =
-    useState<Test>(initialTest);
+    useState<Test>(
+      createInitialTest()
+    );
+
+  // ========================================
+  // SET TEST
+  // ========================================
 
   function setTest(test: Test) {
     setTestState(test);
   }
+
+  // ========================================
+  // UPDATE TEST
+  // ========================================
 
   function updateTest<K extends keyof Test>(
     field: K,
@@ -85,9 +116,14 @@ export function TestConstructorProvider({
     }));
   }
 
+  // ========================================
+  // ADD QUESTION
+  // ========================================
+
   function addQuestion() {
     setTestState((prev) => ({
       ...prev,
+
       questions: [
         ...prev.questions,
         createQuestion(Date.now()),
@@ -95,37 +131,63 @@ export function TestConstructorProvider({
     }));
   }
 
-  function updateQuestion(question: Question) {
+  // ========================================
+  // UPDATE QUESTION
+  // ========================================
+
+  function updateQuestion(
+    question: Question
+  ) {
     setTestState((prev) => ({
       ...prev,
-      questions: prev.questions.map((q) =>
-        q.id === question.id ? question : q
-      ),
+
+      questions:
+        prev.questions.map((q) =>
+          q.id === question.id
+            ? question
+            : q
+        ),
     }));
   }
+
+  // ========================================
+  // DELETE QUESTION
+  // ========================================
 
   function deleteQuestion(id: number) {
     setTestState((prev) => ({
       ...prev,
-      questions: prev.questions.filter(
-        (q) => q.id !== id
-      ),
+
+      questions:
+        prev.questions.filter(
+          (q) => q.id !== id
+        ),
     }));
   }
 
+  // ========================================
+  // MOVE QUESTION UP
+  // ========================================
+
   function moveQuestionUp(id: number) {
     setTestState((prev) => {
-      const questions = [...prev.questions];
+      const questions = [
+        ...prev.questions,
+      ];
 
-      const index = questions.findIndex(
-        (q) => q.id === id
-      );
+      const index =
+        questions.findIndex(
+          (q) => q.id === id
+        );
 
       if (index <= 0) {
         return prev;
       }
 
-      [questions[index - 1], questions[index]] = [
+      [
+        questions[index - 1],
+        questions[index],
+      ] = [
         questions[index],
         questions[index - 1],
       ];
@@ -137,13 +199,20 @@ export function TestConstructorProvider({
     });
   }
 
+  // ========================================
+  // MOVE QUESTION DOWN
+  // ========================================
+
   function moveQuestionDown(id: number) {
     setTestState((prev) => {
-      const questions = [...prev.questions];
+      const questions = [
+        ...prev.questions,
+      ];
 
-      const index = questions.findIndex(
-        (q) => q.id === id
-      );
+      const index =
+        questions.findIndex(
+          (q) => q.id === id
+        );
 
       if (
         index === -1 ||
@@ -152,7 +221,10 @@ export function TestConstructorProvider({
         return prev;
       }
 
-      [questions[index], questions[index + 1]] = [
+      [
+        questions[index],
+        questions[index + 1],
+      ] = [
         questions[index + 1],
         questions[index],
       ];
@@ -164,21 +236,39 @@ export function TestConstructorProvider({
     });
   }
 
+  // ========================================
+  // CLEAR TEST
+  // ========================================
+
   function clearTest() {
-    setTestState(initialTest);
+    setTestState(
+      createInitialTest()
+    );
   }
+
+  // ========================================
+  // PROVIDER
+  // ========================================
 
   return (
     <TestConstructorContext.Provider
       value={{
         test,
+
         updateTest,
+
         setTest,
+
         addQuestion,
+
         updateQuestion,
+
         deleteQuestion,
+
         moveQuestionUp,
+
         moveQuestionDown,
+
         clearTest,
       }}
     >
@@ -186,6 +276,10 @@ export function TestConstructorProvider({
     </TestConstructorContext.Provider>
   );
 }
+
+// ========================================
+// HOOK
+// ========================================
 
 export function useTestConstructor() {
   const context = useContext(

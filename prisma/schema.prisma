@@ -15,12 +15,14 @@ model Test {
   schoolYear   String
   duration     Int
   maxPoints    Int
+  displayOrder Int @unique
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   accessCode   String?
   codeRequired Boolean       @default(true)
   isPublished  Boolean       @default(false)
   examType     String        @default("НМТ")
+
   questions    Question[]
   results      TestResult[]
   sessions     TestSession[]
@@ -34,6 +36,7 @@ model Question {
   points          Int
   testId          Int
   shuffleQuestion Boolean        @default(true)
+
   options         AnswerOption[]
   test            Test           @relation(fields: [testId], references: [id], onDelete: Cascade)
 }
@@ -44,6 +47,7 @@ model AnswerOption {
   text       String
   isCorrect  Boolean
   questionId Int
+
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
@@ -53,28 +57,30 @@ model Participant {
   firstName  String
   middleName String?
   createdAt  DateTime      @default(now())
+
   sessions   TestSession[]
 }
 
 model TestSession {
-  id              Int          @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   testId          Int
-  currentQuestion Int          @default(0)
+  currentQuestion Int           @default(0)
   savedAnswers    Json
   timeLeft        Int
-  finished        Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  finished        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   participantId   Int?
   blockReason     String?
-  blocked         Boolean      @default(false)
-  extraTime       Int          @default(0)
+  blocked         Boolean       @default(false)
+  extraTime       Int           @default(0)
   finishedAt      DateTime?
-  startedAt       DateTime     @default(now())
+  startedAt       DateTime      @default(now())
   blockedAt       DateTime?
-  lastActivityAt  DateTime     @default(now())
-  participant     Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  test            Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  lastActivityAt  DateTime      @default(now())
+
+  participant     Participant?  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  test            Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
 }
 
 model TestResult {
@@ -96,5 +102,6 @@ model TestResult {
   accessCode   String?
   finishedAt   DateTime?
   startedAt    DateTime?
+
   test         Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
 }

@@ -13,8 +13,8 @@ export default async function YeviPage() {
     },
 
     orderBy: {
-      id: "desc",
-    },
+  displayOrder: "asc",
+},
 
     include: {
       questions: true,
