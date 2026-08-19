@@ -11,7 +11,10 @@ export default async function AnalyticsPage({
 }: PageProps) {
   const params = await searchParams;
 
-  const testId = params.testId ?? "";
+  const testId =
+    typeof params.testId === "string"
+      ? params.testId
+      : "";
 
   return (
     <AnalyticsClient testId={testId} />
