@@ -1,5 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type Props = {
   children: ReactNode;
@@ -56,6 +59,17 @@ const menu = [
 export default function AdminLayout({
   children,
 }: Props) {
+  const pathname = usePathname();
+
+  // Сторінка входу має власний дизайн
+  if (pathname === "/admin/login") {
+    return (
+      <div className="min-h-screen">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* ===================================================== */}
@@ -63,18 +77,43 @@ export default function AdminLayout({
       {/* ===================================================== */}
 
       <header className="h-20 border-b bg-white shadow-sm">
-        <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-8">
-          <div>
-            <h1 className="text-3xl font-bold text-[#7A1F2B]">
-              Адміністративна панель
-            </h1>
+  <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-8">
+    <div>
+      <h1 className="text-3xl font-bold text-[#7A1F2B]">
+        Адміністративна панель
+      </h1>
 
-            <p className="text-gray-500">
-              Платформа тестування
-            </p>
-          </div>
-        </div>
-      </header>
+      <p className="text-gray-500">
+        Платформа тестування
+      </p>
+    </div>
+
+    <a
+      href="/admin/logout"
+      className="
+        inline-flex
+        items-center
+        gap-2
+        rounded-lg
+        border
+        border-gray-200
+        bg-white
+        px-4
+        py-2
+        font-semibold
+        text-gray-700
+        shadow-sm
+        transition
+        hover:border-red-200
+        hover:bg-red-50
+        hover:text-red-700
+      "
+    >
+      <span>🚪</span>
+      <span>Вийти</span>
+    </a>
+  </div>
+</header>
 
       {/* ===================================================== */}
       {/* Основна область */}
