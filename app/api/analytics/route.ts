@@ -5,48 +5,38 @@ import { prisma } from "@/app/lib/prisma";
 // =====================================================
 // СКЛАДНІСТЬ
 // =====================================================
-//
-// > 80 %   — 🟢 Дуже легке
-// 60–79 %  — 🟢 Легке
-// 40–59 %  — 🟡 Оптимальне
-// 21–39 %  — 🟠 Складне
-// ≤ 20 %   — 🔴 Дуже складне
-//
-// =====================================================
 
-function getDifficulty(
-  correctPercent: number
-) {
+function getDifficulty(correctPercent: number) {
   if (correctPercent > 80) {
     return {
-      label: "🟢 Дуже легке",
+      label: "Дуже легке",
       color: "green",
     };
   }
 
   if (correctPercent >= 60) {
     return {
-      label: "🟢 Легке",
+      label: "Легке",
       color: "green",
     };
   }
 
   if (correctPercent >= 40) {
     return {
-      label: "🟡 Оптимальне",
+      label: "Оптимальне",
       color: "yellow",
     };
   }
 
   if (correctPercent >= 21) {
     return {
-      label: "🟠 Складне",
+      label: "Складне",
       color: "orange",
     };
   }
 
   return {
-    label: "🔴 Дуже складне",
+    label: "Дуже складне",
     color: "red",
   };
 }
@@ -54,38 +44,22 @@ function getDifficulty(
 // =====================================================
 // ОТРИМАННЯ ID ВІДПОВІДЕЙ
 // =====================================================
-//
-// Підтримує:
-//
-// [3671]
-// [4, 3, 1, 5]
-//
-// а також JSON-рядок:
-// "[3671]"
-// =====================================================
 
-function getAnswerIds(
-  value: unknown
-): number[] {
+function getAnswerIds(value: unknown): number[] {
   if (Array.isArray(value)) {
     return value
       .map((item) => Number(item))
-      .filter((item) =>
-        Number.isInteger(item)
-      );
+      .filter((item) => Number.isInteger(item));
   }
 
   if (typeof value === "string") {
     try {
-      const parsed =
-        JSON.parse(value);
+      const parsed = JSON.parse(value);
 
       if (Array.isArray(parsed)) {
         return parsed
           .map((item) => Number(item))
-          .filter((item) =>
-            Number.isInteger(item)
-          );
+          .filter((item) => Number.isInteger(item));
       }
     } catch {
       return [];
@@ -96,40 +70,24 @@ function getAnswerIds(
 }
 
 // =====================================================
-// ПОРІВНЯННЯ ЗВИЧАЙНИХ ВІДПОВІДЕЙ
+// ПОРІВНЯННЯ ВІДПОВІДЕЙ
 // =====================================================
 
 function isSameAnswers(
   userAnswer: number[],
   correctAnswers: number[]
 ) {
-  if (
-    userAnswer.length !==
-    correctAnswers.length
-  ) {
+  if (userAnswer.length !== correctAnswers.length) {
     return false;
   }
 
-  return correctAnswers.every(
-    (id) =>
-      userAnswer.includes(id)
+  return correctAnswers.every((id) =>
+    userAnswer.includes(id)
   );
 }
 
 // =====================================================
-// ОТРИМАННЯ MATCHING-ПАР
-// =====================================================
-//
-// У поточній структурі matching-дані
-// зберігаються у text AnswerOption
-// у форматі:
-//
-// L|1|текст|5
-//
-// де:
-// 1 — ID лівого елемента
-// 5 — правильний ID правого елемента
-//
+// MATCHING
 // =====================================================
 
 function getMatchingLeftItems(
@@ -145,45 +103,21 @@ function getMatchingLeftItems(
       option.text?.startsWith("L|")
     )
     .map((option) => {
-      const parts =
-        option.text.split("|");
+      const parts = option.text.split("|");
 
       return {
         id: Number(parts[1]),
         text: parts[2] ?? "",
-        correctRightId: Number(
-          parts[3]
-        ),
+        correctRightId: Number(parts[3]),
       };
     })
     .filter(
       (item) =>
         Number.isInteger(item.id) &&
-        Number.isInteger(
-          item.correctRightId
-        )
+        Number.isInteger(item.correctRightId)
     )
-    .sort(
-      (a, b) => a.id - b.id
-    );
+    .sort((a, b) => a.id - b.id);
 }
-
-// =====================================================
-// ПЕРЕВІРКА MATCHING
-// =====================================================
-//
-// userAnswer:
-//
-// [2, 1, 4, 3]
-//
-// означає:
-//
-// перший left → right 2
-// другий left → right 1
-// третій left → right 4
-// четвертий left → right 3
-//
-// =====================================================
 
 function isMatchingCorrect(
   userAnswer: number[],
@@ -193,16 +127,11 @@ function isMatchingCorrect(
     correctRightId: number;
   }>
 ) {
-  if (
-    leftItems.length === 0
-  ) {
+  if (leftItems.length === 0) {
     return false;
   }
 
-  if (
-    userAnswer.length !==
-    leftItems.length
-  ) {
+  if (userAnswer.length !== leftItems.length) {
     return false;
   }
 
@@ -214,12 +143,199 @@ function isMatchingCorrect(
 }
 
 // =====================================================
+// ОТРИМАННЯ ВІДПОВІДІ З РЕЗУЛЬТАТУ
+// =====================================================
+//
+// Новий формат:
+//
+// {
+//   "629": [2962]
+// }
+//
+// Старий формат:
+//
+// {
+//   "781": [3671]
+// }
+//
+// Для старого формату визначаємо питання
+// за його позицією в тесті.
+//
+// =====================================================
+
+function getRawAnswer(
+  answers: Record<string, unknown>,
+  questionId: number,
+  questionOrder: number,
+  allQuestions: Array<{
+    id: number;
+    order: number;
+  }>
+): {
+  value: unknown;
+  source: "id" | "order" | "position" | "none";
+} {
+  // ---------------------------------------------------
+  // 1. Сучасний формат: ID питання
+  // ---------------------------------------------------
+
+  const idKey = String(questionId);
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      answers,
+      idKey
+    )
+  ) {
+    return {
+      value: answers[idKey],
+      source: "id",
+    };
+  }
+
+  // ---------------------------------------------------
+  // 2. Формат за order
+  // ---------------------------------------------------
+
+  const orderKey = String(questionOrder);
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      answers,
+      orderKey
+    )
+  ) {
+    return {
+      value: answers[orderKey],
+      source: "order",
+    };
+  }
+
+  // ---------------------------------------------------
+  // 3. Старий формат
+  //
+  // Наприклад:
+  //
+  // 781 -> питання 1
+  // 782 -> питання 2
+  // 783 -> питання 3
+  //
+  // Object.keys() зберігає порядок
+  // властивостей JSON.
+  // ---------------------------------------------------
+
+  const questionIndex =
+    allQuestions.findIndex(
+      (item) => item.id === questionId
+    );
+
+  if (questionIndex >= 0) {
+    const answerKeys =
+      Object.keys(answers);
+
+    const oldKey =
+      answerKeys[questionIndex];
+
+    if (oldKey !== undefined) {
+      return {
+        value: answers[oldKey],
+        source: "position",
+      };
+    }
+  }
+
+  return {
+    value: undefined,
+    source: "none",
+  };
+}
+
+// =====================================================
+// ПЕРЕТВОРЕННЯ СТАРИХ ID ВАРІАНТІВ
+// =====================================================
+//
+// Якщо результат був створений до зміни ID,
+// у ньому можуть бути старі AnswerOption.id.
+//
+// Ми не можемо математично встановити,
+// який саме старий ID відповідає новому.
+//
+// Тому для старого формату використовуємо
+// позицію варіанта.
+//
+// =====================================================
+
+function convertAnswerIdsByOrder(
+  userAnswer: number[],
+  options: Array<{
+    id: number;
+    order: number;
+  }>,
+  source:
+    | "id"
+    | "order"
+    | "position"
+    | "none"
+): number[] {
+  // Новий формат — ID вже актуальні.
+  if (source === "id") {
+    return userAnswer;
+  }
+
+  // Якщо відповіді відсутні.
+  if (userAnswer.length === 0) {
+    return [];
+  }
+
+  // Для старого формату:
+  //
+  // Беремо порядковий номер старого
+  // варіанта за позицією ID у масиві.
+  //
+  // Це працює лише тоді, коли порядок
+  // варіантів не змінювався.
+  const sortedOptions = [...options].sort(
+    (a, b) => a.order - b.order
+  );
+
+  const result: number[] = [];
+
+  for (const oldId of userAnswer) {
+    const numericId = Number(oldId);
+
+    // Якщо ID уже є серед поточних —
+    // залишаємо його.
+    const existing = sortedOptions.find(
+      (option) => option.id === numericId
+    );
+
+    if (existing) {
+      result.push(existing.id);
+      continue;
+    }
+
+    // -------------------------------------------------
+    // ВАЖЛИВО:
+    //
+    // Старий ID не дає можливості визначити
+    // позицію варіанта без старої структури.
+    //
+    // Тому нижче залишаємо ID як є.
+    //
+    // Це дозволяє не вигадувати відповідність.
+    // -------------------------------------------------
+
+    result.push(numericId);
+  }
+
+  return result;
+}
+
+// =====================================================
 // GET
 // =====================================================
 
-export async function GET(
-  request: Request
-) {
+export async function GET(request: Request) {
   try {
     const { searchParams } =
       new URL(request.url);
@@ -243,8 +359,7 @@ export async function GET(
       );
     }
 
-    const testId =
-      Number(testIdParam);
+    const testId = Number(testIdParam);
 
     if (
       !Number.isInteger(testId) ||
@@ -262,21 +377,11 @@ export async function GET(
     }
 
     // =================================================
-    // ВИБРАНІ УЧАСНИКИ
-    // =================================================
-    //
-    // participantIds — це ID TestResult.
-    //
-    // Наприклад:
-    //
-    // ?participants=[15,16,17]
-    //
+    // PARTICIPANTS
     // =================================================
 
     const participantsParam =
-      searchParams.get(
-        "participants"
-      );
+      searchParams.get("participants");
 
     let participantIds:
       | number[]
@@ -285,13 +390,9 @@ export async function GET(
     if (participantsParam) {
       try {
         const parsed =
-          JSON.parse(
-            participantsParam
-          );
+          JSON.parse(participantsParam);
 
-        if (
-          !Array.isArray(parsed)
-        ) {
+        if (!Array.isArray(parsed)) {
           return NextResponse.json(
             {
               message:
@@ -305,14 +406,11 @@ export async function GET(
 
         participantIds =
           parsed
-            .map((id) =>
-              Number(id)
-            )
+            .map((id) => Number(id))
             .filter(
               (id) =>
-                Number.isInteger(
-                  id
-                ) && id > 0
+                Number.isInteger(id) &&
+                id > 0
             );
       } catch {
         return NextResponse.json(
@@ -328,7 +426,7 @@ export async function GET(
     }
 
     // =================================================
-    // ЗАВАНТАЖЕННЯ ТЕСТУ
+    // TEST
     // =================================================
 
     const test =
@@ -336,13 +434,11 @@ export async function GET(
         where: {
           id: testId,
         },
-
         include: {
           questions: {
             orderBy: {
               order: "asc",
             },
-
             include: {
               options: {
                 orderBy: {
@@ -367,7 +463,7 @@ export async function GET(
     }
 
     // =================================================
-    // РЕЗУЛЬТАТИ
+    // RESULTS
     // =================================================
 
     const results =
@@ -375,7 +471,8 @@ export async function GET(
         where: {
           testId,
 
-          ...(participantIds !== null
+          ...(participantIds &&
+          participantIds.length > 0
             ? {
                 id: {
                   in: participantIds,
@@ -390,7 +487,7 @@ export async function GET(
       });
 
     // =================================================
-    // УЧАСНИКИ
+    // PARTICIPANTS
     // =================================================
 
     const participantResults =
@@ -418,53 +515,46 @@ export async function GET(
       results.length;
 
     // =================================================
-    // СТАТИСТИКА ЗАВДАНЬ
+    // QUESTION STATISTICS
     // =================================================
 
     const questionStatistics =
       test.questions.map(
         (question) => {
           let correct = 0;
-
           let incorrect = 0;
-
           let skipped = 0;
 
-          // ---------------------------------------------
-          // Правильні відповіді для SINGLE / MULTIPLE
-          // ---------------------------------------------
+          // -------------------------------------------
+          // CORRECT ANSWERS
+          // -------------------------------------------
 
           const correctAnswers =
             question.options
               .filter(
                 (option) =>
-                  option.isCorrect ===
-                  true
+                  option.isCorrect === true
               )
               .map(
                 (option) =>
                   option.id
               );
 
-          // ---------------------------------------------
-          // Matching
-          // ---------------------------------------------
+          // -------------------------------------------
+          // MATCHING
+          // -------------------------------------------
 
           const matchingLeftItems =
             getMatchingLeftItems(
               question.options
             );
 
-          // ---------------------------------------------
-          // Перевіряємо кожного учасника
-          // ---------------------------------------------
+          // -------------------------------------------
+          // PARTICIPANTS
+          // -------------------------------------------
 
           results.forEach(
             (result) => {
-              // -----------------------------------------
-              // Відповіді результату
-              // -----------------------------------------
-
               let answers:
                 Record<
                   string,
@@ -486,75 +576,51 @@ export async function GET(
                   >;
               }
 
-              // -----------------------------------------
-              // Ключ питання
-              // -----------------------------------------
+              // ---------------------------------------
+              // ЗНАХОДИМО ВІДПОВІДЬ
+              // ---------------------------------------
 
-              // -----------------------------------------
-// Визначаємо відповідь учасника
-//
-// Основний ключ:
-//   ID питання.
-//
-// Для старих результатів, де відповіді
-// могли бути збережені за порядковим
-// номером питання, використовуємо
-// question.order як резервний ключ.
-// -----------------------------------------
+              const raw =
+                getRawAnswer(
+                  answers,
+                  question.id,
+                  question.order,
+                  test.questions
+                );
 
-const questionIdKey =
-  String(question.id);
+              const rawAnswer =
+                raw.value;
 
-const questionOrderKey =
-  String(question.order);
+              // ---------------------------------------
+              // ПЕРЕТВОРЮЄМО
+              // ---------------------------------------
 
-let rawAnswer: unknown;
-
-if (
-  Object.prototype.hasOwnProperty.call(
-    answers,
-    questionIdKey
-  )
-) {
-  rawAnswer =
-    answers[questionIdKey];
-} else if (
-  Object.prototype.hasOwnProperty.call(
-    answers,
-    questionOrderKey
-  )
-) {
-  rawAnswer =
-    answers[questionOrderKey];
-} else {
-  rawAnswer =
-    undefined;
-}
-
-              // -----------------------------------------
-              // Перетворюємо відповідь
-              // -----------------------------------------
-
-              const userAnswer =
+              let userAnswer =
                 getAnswerIds(
                   rawAnswer
                 );
 
-              // -----------------------------------------
-              // Немає відповіді
-              // -----------------------------------------
+              userAnswer =
+                convertAnswerIdsByOrder(
+                  userAnswer,
+                  question.options,
+                  raw.source
+                );
+
+              // ---------------------------------------
+              // ПРОПУЩЕНО
+              // ---------------------------------------
 
               if (
-                userAnswer.length ===
-                0
+                userAnswer.length === 0
               ) {
                 skipped++;
                 return;
               }
 
-              // -----------------------------------------
+              // ---------------------------------------
               // MATCHING
-              // -----------------------------------------
+              // ---------------------------------------
 
               if (
                 question.type ===
@@ -577,9 +643,9 @@ if (
                 return;
               }
 
-              // -----------------------------------------
+              // ---------------------------------------
               // SINGLE / MULTIPLE
-              // -----------------------------------------
+              // ---------------------------------------
 
               const answerIsCorrect =
                 isSameAnswers(
@@ -597,13 +663,12 @@ if (
             }
           );
 
-          // =================================================
-          // ВІДСОТКИ
-          // =================================================
+          // -------------------------------------------
+          // PERCENTAGES
+          // -------------------------------------------
 
           const correctPercent =
-            totalParticipants >
-            0
+            totalParticipants > 0
               ? Math.round(
                   (correct /
                     totalParticipants) *
@@ -612,8 +677,7 @@ if (
               : 0;
 
           const incorrectPercent =
-            totalParticipants >
-            0
+            totalParticipants > 0
               ? Math.round(
                   (incorrect /
                     totalParticipants) *
@@ -622,8 +686,7 @@ if (
               : 0;
 
           const skippedPercent =
-            totalParticipants >
-            0
+            totalParticipants > 0
               ? Math.round(
                   (skipped /
                     totalParticipants) *
@@ -631,57 +694,38 @@ if (
                 )
               : 0;
 
-          // =================================================
-          // ПОВНА ІНФОРМАЦІЯ ПРО ВАРІАНТИ
-          // =================================================
-
-          const options =
-            question.options.map(
-              (option) => ({
-                id: option.id,
-
-                order:
-                  option.order,
-
-                text:
-                  option.text,
-
-                isCorrect:
-                  option.isCorrect,
-              })
-            );
-
-          // =================================================
-          // ПОВЕРТАЄМО ПИТАННЯ
-          // =================================================
+          // -------------------------------------------
+          // FULL QUESTION DATA
+          // -------------------------------------------
 
           return {
             id: question.id,
 
-            order:
-              question.order,
+            order: question.order,
 
-            type:
-              question.type,
+            type: question.type,
 
-            text:
-              question.text,
+            text: question.text,
 
-            points:
-              question.points,
+            points: question.points,
 
-            options,
+            options:
+              question.options.map(
+                (option) => ({
+                  id: option.id,
+                  order: option.order,
+                  text: option.text,
+                  isCorrect:
+                    option.isCorrect,
+                })
+              ),
 
             correct,
-
             incorrect,
-
             skipped,
 
             correctPercent,
-
             incorrectPercent,
-
             skippedPercent,
 
             difficulty:
@@ -692,9 +736,9 @@ if (
         }
       );
 
-    // =====================================================
-    // ЗАГАЛЬНА СТАТИСТИКА
-    // =====================================================
+    // =================================================
+    // SCORES
+    // =================================================
 
     const scores =
       results.map(
@@ -702,27 +746,15 @@ if (
           result.earnedPoints
       );
 
-    // =====================================================
-    // НАЙВИЩИЙ ФАКТИЧНИЙ РЕЗУЛЬТАТ
-    // =====================================================
-
     const maxScore =
       scores.length > 0
         ? Math.max(...scores)
         : 0;
 
-    // =====================================================
-    // НАЙНИЖЧИЙ ФАКТИЧНИЙ РЕЗУЛЬТАТ
-    // =====================================================
-
     const minScore =
       scores.length > 0
         ? Math.min(...scores)
         : 0;
-
-    // =====================================================
-    // СЕРЕДНІЙ РЕЗУЛЬТАТ
-    // =====================================================
 
     const averageScore =
       scores.length > 0
@@ -737,17 +769,12 @@ if (
           ) / 100
         : 0;
 
-    // =====================================================
-    // СЕРЕДНІЙ ВІДСОТОК
-    // =====================================================
-
     const averagePercent =
       results.length > 0
         ? Math.round(
             (results.reduce(
               (sum, result) =>
-                sum +
-                result.percent,
+                sum + result.percent,
               0
             ) /
               results.length) *
@@ -755,19 +782,17 @@ if (
           ) / 100
         : 0;
 
-    // =====================================================
-    // ВІДПОВІДЬ API
-    // =====================================================
+    // =================================================
+    // RESPONSE
+    // =================================================
 
     return NextResponse.json({
       test: {
         id: test.id,
 
-        title:
-          test.title,
+        title: test.title,
 
-        subject:
-          test.subject,
+        subject: test.subject,
 
         maxPoints:
           test.maxPoints,
@@ -780,12 +805,8 @@ if (
         participants:
           totalParticipants,
 
-        // Максимум, який реально
-        // набрав один із учасників
         maxScore,
 
-        // Мінімум, який реально
-        // набрав один із учасників
         minScore,
 
         averageScore,
