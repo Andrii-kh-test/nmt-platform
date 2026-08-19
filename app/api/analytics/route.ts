@@ -46,48 +46,80 @@ function getDifficulty(correctPercent: number) {
 // =====================================================
 
 function getAnswerIds(value: unknown): number[] {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => Number(item))
-      .filter((item) => Number.isInteger(item));
-  }
+  let source = value;
 
-  if (typeof value === "string") {
+  // Якщо JSON збережений як рядок
+  if (typeof source === "string") {
     try {
-      const parsed = JSON.parse(value);
-
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => Number(item))
-          .filter((item) => Number.isInteger(item));
-      }
+      source = JSON.parse(source);
     } catch {
       return [];
     }
   }
 
-  return [];
+  // Очікуємо масив ID
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source
+    .map((item) => Number(item))
+    .filter(
+      (item) =>
+        Number.isInteger(item) &&
+        item > 0
+    );
 }
 
 // =====================================================
 // ПОРІВНЯННЯ SINGLE / MULTIPLE
+//
+// Порядок вибраних відповідей не має значення.
+// Наприклад:
+//
+// [1, 3, 5]
+// [5, 1, 3]
+//
+// вважаються однаковою відповіддю.
 // =====================================================
 
 function isSameAnswers(
   userAnswer: number[],
   correctAnswers: number[]
 ) {
-  if (userAnswer.length !== correctAnswers.length) {
+  const normalizedUserAnswer =
+    [...userAnswer].sort(
+      (a, b) => a - b
+    );
+
+  const normalizedCorrectAnswers =
+    [...correctAnswers].sort(
+      (a, b) => a - b
+    );
+
+  if (
+    normalizedUserAnswer.length !==
+    normalizedCorrectAnswers.length
+  ) {
     return false;
   }
 
-  return correctAnswers.every((id) =>
-    userAnswer.includes(id)
+  return normalizedCorrectAnswers.every(
+    (id, index) =>
+      normalizedUserAnswer[index] === id
   );
 }
 
 // =====================================================
 // MATCHING
+//
+// Формат спеціальних options для matching:
+//
+// L|1|Текст лівого елемента|25
+//
+// де:
+// 1  — ID лівого елемента
+// 25 — ID правильної правої відповіді
 // =====================================================
 
 function getMatchingLeftItems(
@@ -103,7 +135,8 @@ function getMatchingLeftItems(
       option.text?.startsWith("L|")
     )
     .map((option) => {
-      const parts = option.text.split("|");
+      const parts =
+        option.text.split("|");
 
       return {
         id: Number(parts[1]),
@@ -114,10 +147,24 @@ function getMatchingLeftItems(
     .filter(
       (item) =>
         Number.isInteger(item.id) &&
-        Number.isInteger(item.correctRightId)
+        Number.isInteger(
+          item.correctRightId
+        )
     )
-    .sort((a, b) => a.id - b.id);
+    .sort(
+      (a, b) => a.id - b.id
+    );
 }
+
+// =====================================================
+// ПЕРЕВІРКА MATCHING
+//
+// Для matching порядок масиву має значення:
+//
+// userAnswer[0] → відповідь для leftItems[0]
+// userAnswer[1] → відповідь для leftItems[1]
+// і т. д.
+// =====================================================
 
 function isMatchingCorrect(
   userAnswer: number[],
@@ -131,21 +178,30 @@ function isMatchingCorrect(
     return false;
   }
 
-  if (userAnswer.length !== leftItems.length) {
+  if (
+    userAnswer.length !==
+    leftItems.length
+  ) {
     return false;
   }
 
   return leftItems.every(
     (leftItem, index) =>
-      userAnswer[index] === leftItem.correctRightId
+      userAnswer[index] ===
+      leftItem.correctRightId
   );
 }
 
 // =====================================================
 // GET
+//
+// /api/analytics?testId=1
+// /api/analytics?testId=1&participantIds=1,2,3
 // =====================================================
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request
+) {
   try {
     const { searchParams } =
       new URL(request.url);
@@ -160,7 +216,8 @@ export async function GET(request: Request) {
     if (!testIdParam) {
       return NextResponse.json(
         {
-          message: "Не вказано ID тесту.",
+          message:
+            "Не вказано ID тесту.",
         },
         {
           status: 400,
@@ -168,7 +225,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const testId = Number(testIdParam);
+    const testId =
+      Number(testIdParam);
 
     if (
       !Number.isInteger(testId) ||
@@ -176,7 +234,8 @@ export async function GET(request: Request) {
     ) {
       return NextResponse.json(
         {
-          message: "Некоректний ID тесту.",
+          message:
+            "Некоректний ID тесту.",
         },
         {
           status: 400,
@@ -185,20 +244,52 @@ export async function GET(request: Request) {
     }
 
     // =================================================
-    // УЧАСНИКИ
+    // СПИСОК УЧАСНИКІВ
+    //
+    // Підтримуються:
+    //
+    // ?participantIds=1,2,3
+    //
+    // та
+    //
+    // ?participantIds=[1,2,3]
     // =================================================
 
-    const participantsParam =
-      searchParams.get("participants");
+    const participantIdsParam =
+      searchParams.get(
+        "participantIds"
+      );
 
     let participantIds:
       | number[]
-      | null = null;
+      | undefined;
 
-    if (participantsParam) {
+    if (participantIdsParam) {
       try {
-        const parsed =
-          JSON.parse(participantsParam);
+        let parsed: unknown;
+
+        // JSON-масив
+        if (
+          participantIdsParam.startsWith(
+            "["
+          )
+        ) {
+          parsed =
+            JSON.parse(
+              participantIdsParam
+            );
+        } else {
+          // Список через кому
+          parsed =
+            participantIdsParam
+              .split(",")
+              .map(
+                (id) =>
+                  Number(
+                    id.trim()
+                  )
+              );
+        }
 
         if (!Array.isArray(parsed)) {
           return NextResponse.json(
@@ -212,13 +303,30 @@ export async function GET(request: Request) {
           );
         }
 
-        participantIds = parsed
-          .map((id) => Number(id))
-          .filter(
-            (id) =>
-              Number.isInteger(id) &&
-              id > 0
+        participantIds =
+          parsed
+            .map((id) =>
+              Number(id)
+            )
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            );
+
+        if (
+          participantIds.length === 0
+        ) {
+          return NextResponse.json(
+            {
+              message:
+                "Некоректний список учасників.",
+            },
+            {
+              status: 400,
+            }
           );
+        }
       } catch {
         return NextResponse.json(
           {
@@ -234,10 +342,6 @@ export async function GET(request: Request) {
 
     // =================================================
     // ЗАВАНТАЖЕННЯ ТЕСТУ
-    //
-    // ВАЖЛИВО:
-    // варіанти потрібні серверу для розрахунку
-    // статистики, але НЕ повертаються клієнту.
     // =================================================
 
     const test =
@@ -284,7 +388,8 @@ export async function GET(request: Request) {
     if (!test) {
       return NextResponse.json(
         {
-          message: "Тест не знайдено.",
+          message:
+            "Тест не знайдено.",
         },
         {
           status: 404,
@@ -294,8 +399,6 @@ export async function GET(request: Request) {
 
     // =================================================
     // РЕЗУЛЬТАТИ
-    //
-    // Витягуємо тільки ті поля, які реально потрібні.
     // =================================================
 
     const results =
@@ -315,12 +418,21 @@ export async function GET(request: Request) {
 
         select: {
           id: true,
+
           earnedPoints: true,
+          maxPoints: true,
           percent: true,
+
+          correct: true,
+          incorrect: true,
+          skipped: true,
+
           answers: true,
+
           firstName: true,
           lastName: true,
           middleName: true,
+
           createdAt: true,
         },
 
@@ -337,21 +449,35 @@ export async function GET(request: Request) {
       results.map((result) => ({
         id: result.id,
 
-        name:
-          [
-            result.lastName,
-            result.firstName,
-            result.middleName,
-          ]
-            .filter(Boolean)
-            .join(" ") ||
-          "Не вказано",
+        lastName:
+          result.lastName,
+
+        firstName:
+          result.firstName,
+
+        middleName:
+          result.middleName,
 
         earnedPoints:
           result.earnedPoints,
 
+        maxPoints:
+          result.maxPoints,
+
         percent:
           result.percent,
+
+        correct:
+          result.correct,
+
+        incorrect:
+          result.incorrect,
+
+        skipped:
+          result.skipped,
+
+        createdAt:
+          result.createdAt,
       }));
 
     const totalParticipants =
@@ -369,14 +495,15 @@ export async function GET(request: Request) {
           let skipped = 0;
 
           // -------------------------------------------
-          // Правильні відповіді
+          // ПРАВИЛЬНІ ВІДПОВІДІ
           // -------------------------------------------
 
           const correctAnswers =
             question.options
               .filter(
                 (option) =>
-                  option.isCorrect === true
+                  option.isCorrect ===
+                  true
               )
               .map(
                 (option) =>
@@ -384,7 +511,7 @@ export async function GET(request: Request) {
               );
 
           // -------------------------------------------
-          // Matching
+          // MATCHING
           // -------------------------------------------
 
           const matchingLeftItems =
@@ -393,7 +520,7 @@ export async function GET(request: Request) {
             );
 
           // -------------------------------------------
-          // Перевіряємо учасників
+          // ПЕРЕВІРЯЄМО КОЖНОГО УЧАСНИКА
           // -------------------------------------------
 
           results.forEach(
@@ -403,6 +530,10 @@ export async function GET(request: Request) {
                   string,
                   unknown
                 > = {};
+
+              // ---------------------------------------
+              // Отримуємо answers
+              // ---------------------------------------
 
               if (
                 result.answers &&
@@ -420,24 +551,27 @@ export async function GET(request: Request) {
               }
 
               // ---------------------------------------
-              // КЛЮЧ ПИТАННЯ
+              // ВАЖЛИВО:
               //
-              // Важливо:
-              // використовуємо question.id,
-              // а НЕ question.order.
+              // Використовуємо QUESTION.ID,
+              // а НЕ QUESTION.ORDER.
               // ---------------------------------------
 
               const answerKey =
-                String(question.id);
+                String(
+                  question.id
+                );
 
               const rawAnswer =
                 answers[answerKey];
 
               const userAnswer =
-                getAnswerIds(rawAnswer);
+                getAnswerIds(
+                  rawAnswer
+                );
 
               // ---------------------------------------
-              // Пропущене
+              // ПРОПУЩЕНЕ
               // ---------------------------------------
 
               if (
@@ -474,13 +608,19 @@ export async function GET(request: Request) {
 
               // ---------------------------------------
               // SINGLE / MULTIPLE
+              //
+              // Порядок відповідей
+              // НЕ має значення.
               // ---------------------------------------
 
-              if (
+              const answerIsCorrect =
                 isSameAnswers(
                   userAnswer,
                   correctAnswers
-                )
+                );
+
+              if (
+                answerIsCorrect
               ) {
                 correct++;
               } else {
@@ -490,7 +630,10 @@ export async function GET(request: Request) {
           );
 
           // -------------------------------------------
-          // ВІДСОТКИ
+          // ВІДСОТОК ПРАВИЛЬНИХ
+          //
+          // Саме ця величина визначає складність
+          // завдання в аналітиці.
           // -------------------------------------------
 
           const correctPercent =
@@ -498,27 +641,14 @@ export async function GET(request: Request) {
               ? Math.round(
                   (correct /
                     totalParticipants) *
-                    100
-                )
+                    10000
+                ) / 100
               : 0;
 
-          const incorrectPercent =
-            totalParticipants > 0
-              ? Math.round(
-                  (incorrect /
-                    totalParticipants) *
-                    100
-                )
-              : 0;
-
-          const skippedPercent =
-            totalParticipants > 0
-              ? Math.round(
-                  (skipped /
-                    totalParticipants) *
-                    100
-                )
-              : 0;
+          const difficulty =
+            getDifficulty(
+              correctPercent
+            );
 
           return {
             id: question.id,
@@ -541,16 +671,16 @@ export async function GET(request: Request) {
 
             skipped,
 
+            total:
+              totalParticipants,
+
             correctPercent,
 
-            incorrectPercent,
-
-            skippedPercent,
-
             difficulty:
-              getDifficulty(
-                correctPercent
-              ),
+              difficulty.label,
+
+            difficultyColor:
+              difficulty.color,
           };
         }
       );
@@ -593,7 +723,8 @@ export async function GET(request: Request) {
         ? Math.round(
             (results.reduce(
               (sum, result) =>
-                sum + result.percent,
+                sum +
+                result.percent,
               0
             ) /
               results.length) *
@@ -603,15 +734,18 @@ export async function GET(request: Request) {
 
     // =================================================
     // ВІДПОВІДЬ
-    //
-    // Тут більше НЕ передаємо options.
     // =================================================
 
     return NextResponse.json({
       test: {
         id: test.id,
-        title: test.title,
-        subject: test.subject,
+
+        title:
+          test.title,
+
+        subject:
+          test.subject,
+
         maxPoints:
           test.maxPoints,
 
