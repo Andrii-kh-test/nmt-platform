@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
-// =====================================================
-// РІВЕНЬ СКЛАДНОСТІ
-// =====================================================
+/* =========================================================
+   СКЛАДНІСТЬ
+========================================================= */
 
-function getDifficulty(
-  correctPercent: number
-) {
+function getDifficulty(correctPercent: number) {
   if (correctPercent > 80) {
     return {
       label: "Дуже легке",
@@ -43,27 +41,115 @@ function getDifficulty(
   };
 }
 
-// =====================================================
-// ОТРИМАННЯ ID ВІДПОВІДЕЙ
-// =====================================================
+/* =========================================================
+   НОРМАЛІЗАЦІЯ ВІДПОВІДІ
+========================================================= */
 
-function getAnswerIds(
-  value: unknown
-): number[] {
-  if (!Array.isArray(value)) {
-    return [];
+function getAnswerIds(value: unknown): number[] {
+  /*
+   * Основний формат:
+   *
+   * [1, 2]
+   */
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => Number(item))
+      .filter((item) => Number.isInteger(item));
   }
 
-  return value
-    .map((item) => Number(item))
-    .filter((item) =>
-      Number.isInteger(item)
-    );
+  /*
+   * На випадок, якщо відповідь збережена
+   * одним числом.
+   */
+
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value)
+  ) {
+    return [value];
+  }
+
+  /*
+   * На випадок, якщо JSON збережений
+   * як текст.
+   */
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => Number(item))
+          .filter((item) =>
+            Number.isInteger(item)
+          );
+      }
+
+      if (
+        typeof parsed === "number" &&
+        Number.isInteger(parsed)
+      ) {
+        return [parsed];
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
 }
 
-// =====================================================
-// ПОРІВНЯННЯ ВІДПОВІДЕЙ
-// =====================================================
+/* =========================================================
+   ОТРИМАННЯ ANSWERS
+========================================================= */
+
+function normalizeAnswers(
+  value: unknown
+): Record<string, unknown> {
+  /*
+   * Prisma Json зазвичай повертає об'єкт.
+   */
+
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<string, unknown>;
+  }
+
+  /*
+   * Додаткова підтримка випадку,
+   * якщо JSON збережений рядком.
+   */
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed as Record<
+          string,
+          unknown
+        >;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+/* =========================================================
+   ПОРІВНЯННЯ ВІДПОВІДЕЙ
+========================================================= */
 
 function isSameAnswers(
   userAnswer: number[],
@@ -76,14 +162,36 @@ function isSameAnswers(
     return false;
   }
 
+  /*
+   * Порівнюємо множини ID,
+   * а не порядок.
+   */
+
   return correctAnswers.every((id) =>
     userAnswer.includes(id)
   );
 }
 
-// =====================================================
-// GET
-// =====================================================
+/* =========================================================
+   ОТРИМАННЯ ТЕКСТУ ВАРІАНТА
+========================================================= */
+
+function getOptionText(
+  option: {
+    id: number;
+    text: string;
+  }
+) {
+  /*
+   * Для звичайних питань просто повертаємо text.
+   */
+
+  return option.text;
+}
+
+/* =========================================================
+   GET
+========================================================= */
 
 export async function GET(
   request: Request
@@ -92,9 +200,9 @@ export async function GET(
     const { searchParams } =
       new URL(request.url);
 
-    // =================================================
-    // ID ТЕСТУ
-    // =================================================
+    /* =====================================================
+       TEST ID
+    ===================================================== */
 
     const testIdParam =
       searchParams.get("testId");
@@ -111,8 +219,7 @@ export async function GET(
       );
     }
 
-    const testId =
-      Number(testIdParam);
+    const testId = Number(testIdParam);
 
     if (
       !Number.isInteger(testId) ||
@@ -129,14 +236,12 @@ export async function GET(
       );
     }
 
-    // =================================================
-    // ВИБРАНІ УЧАСНИКИ
-    // =================================================
+    /* =====================================================
+       УЧАСНИКИ
+    ===================================================== */
 
     const participantsParam =
-      searchParams.get(
-        "participants"
-      );
+      searchParams.get("participants");
 
     let participantIds:
       | number[]
@@ -161,14 +266,13 @@ export async function GET(
           );
         }
 
-        participantIds =
-          parsed
-            .map((id) => Number(id))
-            .filter(
-              (id) =>
-                Number.isInteger(id) &&
-                id > 0
-            );
+        participantIds = parsed
+          .map((id) => Number(id))
+          .filter(
+            (id) =>
+              Number.isInteger(id) &&
+              id > 0
+          );
       } catch {
         return NextResponse.json(
           {
@@ -182,9 +286,9 @@ export async function GET(
       }
     }
 
-    // =================================================
-    // ТЕСТ
-    // =================================================
+    /* =====================================================
+       ТЕСТ
+    ===================================================== */
 
     const test =
       await prisma.test.findUnique({
@@ -221,14 +325,15 @@ export async function GET(
       );
     }
 
-    // =================================================
-    // РЕЗУЛЬТАТИ
-    // =================================================
+    /* =====================================================
+       РЕЗУЛЬТАТИ
+    ===================================================== */
 
     const results =
       await prisma.testResult.findMany({
         where: {
           testId,
+
           ...(participantIds !== null
             ? {
                 id: {
@@ -243,9 +348,9 @@ export async function GET(
         },
       });
 
-    // =================================================
-    // УЧАСНИКИ
-    // =================================================
+    /* =====================================================
+       УЧАСНИКИ
+    ===================================================== */
 
     const participantResults =
       results.map((result) => ({
@@ -271,9 +376,9 @@ export async function GET(
     const totalParticipants =
       results.length;
 
-    // =================================================
-    // СТАТИСТИКА ПИТАНЬ
-    // =================================================
+    /* =====================================================
+       СТАТИСТИКА ПИТАНЬ
+    ===================================================== */
 
     const questionStatistics =
       test.questions.map(
@@ -282,9 +387,9 @@ export async function GET(
           let incorrect = 0;
           let skipped = 0;
 
-          // -------------------------------------------
-          // Правильні відповіді
-          // -------------------------------------------
+          /* ---------------------------------------------
+             Правильні відповіді
+          --------------------------------------------- */
 
           const correctAnswers =
             question.options
@@ -297,140 +402,165 @@ export async function GET(
                   option.id
               );
 
-          // -------------------------------------------
-          // Результати учасників
-          // -------------------------------------------
+          /* ---------------------------------------------
+             Аналіз кожного результату
+          --------------------------------------------- */
 
-          results.forEach(
-            (result) => {
-              const answers =
-                result.answers as Record<
-                  string,
-                  unknown
-                >;
+          results.forEach((result) => {
+            const answers =
+              normalizeAnswers(
+                result.answers
+              );
 
-              const rawAnswer =
+            /*
+             * Основний ключ.
+             */
+
+            let rawAnswer =
+              answers[
+                String(question.id)
+              ];
+
+            /*
+             * Додатковий варіант:
+             * якщо ключ випадково був числом.
+             */
+
+            if (
+              rawAnswer === undefined
+            ) {
+              rawAnswer =
                 answers[
-                  String(question.id)
+                  question.id as unknown as string
                 ];
+            }
 
-              const userAnswer =
-                getAnswerIds(
-                  rawAnswer
-                );
+            const userAnswer =
+              getAnswerIds(
+                rawAnswer
+              );
 
-              // ---------------------------------------
-              // ПРОПУЩЕНО
-              // ---------------------------------------
+            /* -------------------------------------------
+               ПРОПУЩЕНО
+            ------------------------------------------- */
+
+            if (
+              userAnswer.length === 0
+            ) {
+              skipped++;
+              return;
+            }
+
+            /* -------------------------------------------
+               MATCHING
+            ------------------------------------------- */
+
+            if (
+              question.type ===
+              "matching"
+            ) {
+              /*
+               * Для matching поки що використовуємо
+               * формат, який застосовується у тесті.
+               *
+               * Якщо matching зберігає відповідності
+               * окремою структурою, нижче буде легко
+               * адаптувати цей блок.
+               */
+
+              const leftItems =
+                question.options
+                  .filter(
+                    (option) =>
+                      option.text?.startsWith(
+                        "L|"
+                      )
+                  )
+                  .map((option) => {
+                    const parts =
+                      option.text.split(
+                        "|"
+                      );
+
+                    return {
+                      id: Number(
+                        parts[1]
+                      ),
+
+                      correctRightId:
+                        Number(
+                          parts[3]
+                        ),
+                    };
+                  })
+                  .filter(
+                    (item) =>
+                      Number.isInteger(
+                        item.id
+                      ) &&
+                      Number.isInteger(
+                        item.correctRightId
+                      )
+                  )
+                  .sort(
+                    (a, b) =>
+                      a.id - b.id
+                  );
 
               if (
-                userAnswer.length === 0
+                leftItems.length === 0
               ) {
-                skipped++;
+                incorrect++;
                 return;
               }
 
-              // ---------------------------------------
-              // MATCHING
-              // ---------------------------------------
+              let correctPairs = 0;
 
-              if (
-                question.type ===
-                "matching"
-              ) {
-                const leftItems =
-                  question.options
-                    .filter(
-                      (option) =>
-                        option.text?.startsWith(
-                          "L|"
-                        )
-                    )
-                    .map(
-                      (option) => {
-                        const parts =
-                          option.text.split(
-                            "|"
-                          );
-
-                        return {
-                          id: Number(
-                            parts[1]
-                          ),
-
-                          correctRightId:
-                            Number(
-                              parts[3]
-                            ),
-                        };
-                      }
-                    )
-                    .sort(
-                      (a, b) =>
-                        a.id - b.id
-                    );
-
-                if (
-                  leftItems.length === 0
-                ) {
-                  incorrect++;
-                  return;
-                }
-
-                let correctPairs =
-                  0;
-
-                leftItems.forEach(
-                  (
-                    leftItem,
-                    index
-                  ) => {
-                    const userRightId =
-                      userAnswer[
-                        index
-                      ];
-
-                    if (
-                      userRightId ===
-                      leftItem.correctRightId
-                    ) {
-                      correctPairs++;
-                    }
+              leftItems.forEach(
+                (
+                  leftItem,
+                  index
+                ) => {
+                  if (
+                    userAnswer[index] ===
+                    leftItem.correctRightId
+                  ) {
+                    correctPairs++;
                   }
-                );
-
-                if (
-                  correctPairs ===
-                  leftItems.length
-                ) {
-                  correct++;
-                } else {
-                  incorrect++;
                 }
-
-                return;
-              }
-
-              // ---------------------------------------
-              // SINGLE / MULTIPLE
-              // ---------------------------------------
+              );
 
               if (
-                isSameAnswers(
-                  userAnswer,
-                  correctAnswers
-                )
+                correctPairs ===
+                leftItems.length
               ) {
                 correct++;
               } else {
                 incorrect++;
               }
-            }
-          );
 
-          // -------------------------------------------
-          // ВІДСОТКИ
-          // -------------------------------------------
+              return;
+            }
+
+            /* -------------------------------------------
+               SINGLE / MULTIPLE
+            ------------------------------------------- */
+
+            if (
+              isSameAnswers(
+                userAnswer,
+                correctAnswers
+              )
+            ) {
+              correct++;
+            } else {
+              incorrect++;
+            }
+          });
+
+          /* ---------------------------------------------
+             ВІДСОТКИ
+          --------------------------------------------- */
 
           const correctPercent =
             totalParticipants > 0
@@ -459,9 +589,29 @@ export async function GET(
                 )
               : 0;
 
-          // -------------------------------------------
-          // РЕЗУЛЬТАТ ПИТАННЯ
-          // -------------------------------------------
+          /* ---------------------------------------------
+             ВАРІАНТИ ВІДПОВІДЕЙ
+          --------------------------------------------- */
+
+          const options =
+            question.options.map(
+              (option) => ({
+                id: option.id,
+
+                text:
+                  getOptionText(
+                    option
+                  ),
+
+                isCorrect:
+                  option.isCorrect ===
+                  true,
+              })
+            );
+
+          /* ---------------------------------------------
+             РЕЗУЛЬТАТ
+          --------------------------------------------- */
 
           return {
             id: question.id,
@@ -469,6 +619,8 @@ export async function GET(
             order: question.order,
 
             text: question.text,
+
+            type: question.type,
 
             points: question.points,
 
@@ -488,13 +640,15 @@ export async function GET(
               getDifficulty(
                 correctPercent
               ),
+
+            options,
           };
         }
       );
 
-    // =================================================
-    // ЗАГАЛЬНА СТАТИСТИКА
-    // =================================================
+    /* =====================================================
+       ЗАГАЛЬНА СТАТИСТИКА
+    ===================================================== */
 
     const scores =
       results.map(
@@ -502,27 +656,28 @@ export async function GET(
           result.earnedPoints
       );
 
-    // =================================================
-    // МАКСИМАЛЬНИЙ ФАКТИЧНИЙ БАЛ
-    // =================================================
+    /*
+     * Максимальний результат,
+     * який реально набрав учасник.
+     */
 
     const maxScore =
       scores.length > 0
         ? Math.max(...scores)
         : 0;
 
-    // =================================================
-    // МІНІМАЛЬНИЙ ФАКТИЧНИЙ БАЛ
-    // =================================================
+    /*
+     * Мінімальний результат.
+     */
 
     const minScore =
       scores.length > 0
         ? Math.min(...scores)
         : 0;
 
-    // =================================================
-    // СЕРЕДНІЙ БАЛ
-    // =================================================
+    /*
+     * Середній результат.
+     */
 
     const averageScore =
       scores.length > 0
@@ -537,9 +692,9 @@ export async function GET(
           ) / 100
         : 0;
 
-    // =================================================
-    // СЕРЕДНІЙ ВІДСОТОК
-    // =================================================
+    /*
+     * Середній відсоток.
+     */
 
     const averagePercent =
       results.length > 0
@@ -554,9 +709,9 @@ export async function GET(
           ) / 100
         : 0;
 
-    // =================================================
-    // РЕЗУЛЬТАТ
-    // =================================================
+    /* =====================================================
+       ВІДПОВІДЬ
+    ===================================================== */
 
     return NextResponse.json({
       test: {
@@ -575,6 +730,11 @@ export async function GET(
       summary: {
         participants:
           totalParticipants,
+
+        /*
+         * Саме максимальний бал,
+         * який реально набрав учасник.
+         */
 
         maxScore,
 
