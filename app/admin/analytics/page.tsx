@@ -2,34 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 
-// =====================================================
-// TYPES
-// =====================================================
-
-type Test = {
+type AnswerOption = {
   id: number;
-  title: string;
-  subject: string;
-  examType: string;
-};
-
-type Participant = {
-  id: number;
-  name: string;
-  earnedPoints: number;
-  percent: number;
-};
-
-type Difficulty = {
-  label: string;
-  color: string;
+  order: number;
+  text: string;
+  isCorrect: boolean;
 };
 
 type QuestionStatistic = {
   id: number;
   order: number;
   text: string;
+  type: string;
   points: number;
 
   correct: number;
@@ -40,14 +26,26 @@ type QuestionStatistic = {
   incorrectPercent: number;
   skippedPercent: number;
 
-  difficulty: Difficulty;
+  difficulty: {
+    label: string;
+    color: string;
+  };
+
+  options?: AnswerOption[];
+};
+
+type Participant = {
+  id: number;
+  name: string;
+  earnedPoints: number;
+  percent: number;
 };
 
 type AnalyticsData = {
   test: {
     id: number;
     title: string;
-    subject: string;
+    subject?: string | null;
     maxPoints: number;
     questionCount: number;
   };
@@ -65,1216 +63,1129 @@ type AnalyticsData = {
   questions: QuestionStatistic[];
 };
 
-// =====================================================
-// DIFFICULTY
-// =====================================================
-
-function getDifficultyClasses(
-  color: string
-) {
+function getDifficultyClasses(color: string) {
   switch (color) {
     case "green":
-      return "bg-green-100 text-green-800";
+      return "bg-green-100 text-green-700 border-green-200";
 
     case "yellow":
-      return "bg-yellow-100 text-yellow-800";
+      return "bg-yellow-100 text-yellow-700 border-yellow-200";
 
     case "orange":
-      return "bg-orange-100 text-orange-800";
+      return "bg-orange-100 text-orange-700 border-orange-200";
 
     case "red":
-      return "bg-red-100 text-red-800";
+      return "bg-red-100 text-red-700 border-red-200";
 
     default:
-      return "bg-gray-100 text-gray-800";
+      return "bg-gray-100 text-gray-700 border-gray-200";
   }
 }
 
-// =====================================================
-// PAGE
-// =====================================================
+function getQuestionTypeLabel(type: string) {
+  switch (type) {
+    case "single":
+      return "Одна правильна відповідь";
 
-export default function AdminAnalyticsPage() {
-  const [tests, setTests] = useState<Test[]>([]);
+    case "multiple":
+      return "Кілька правильних відповідей";
 
-  const [selectedTestId, setSelectedTestId] =
-    useState("");
+    case "matching":
+      return "Встановлення відповідності";
 
-  const [analytics, setAnalytics] =
+    case "text":
+      return "Відкрита відповідь";
+
+    default:
+      return type || "Завдання";
+  }
+}
+
+function getPercentColor(percent: number) {
+  if (percent >= 80) {
+    return "text-green-600";
+  }
+
+  if (percent >= 60) {
+    return "text-green-500";
+  }
+
+  if (percent >= 40) {
+    return "text-yellow-600";
+  }
+
+  if (percent >= 21) {
+    return "text-orange-600";
+  }
+
+  return "text-red-600";
+}
+
+function cleanMatchingText(text: string) {
+  if (!text) {
+    return "";
+  }
+
+  if (text.startsWith("L|")) {
+    const parts = text.split("|");
+    return parts[2] ?? text;
+  }
+
+  if (text.startsWith("R|")) {
+    const parts = text.split("|");
+    return parts[2] ?? text;
+  }
+
+  return text;
+}
+
+function isMatchingLeft(text: string) {
+  return text.startsWith("L|");
+}
+
+function isMatchingRight(text: string) {
+  return text.startsWith("R|");
+}
+
+export default function AnalyticsPage() {
+  const params = useParams();
+  const router = useRouter();
+
+  const testId = params?.id;
+
+  const [data, setData] =
     useState<AnalyticsData | null>(null);
 
-  // ===================================================
-  // Вибрані учасники
-  // ===================================================
-
-  const [
-    selectedParticipants,
-    setSelectedParticipants,
-  ] = useState<number[]>([]);
-
-  const [
-    useAllParticipants,
-    setUseAllParticipants,
-  ] = useState(true);
-
-  // ===================================================
-  // Розгорнуті питання
-  // ===================================================
-
-  const [
-    expandedQuestions,
-    setExpandedQuestions,
-  ] = useState<number[]>([]);
-
-  // ===================================================
-  // Loading / errors
-  // ===================================================
-
-  const [loadingTests, setLoadingTests] =
+  const [loading, setLoading] =
     useState(true);
 
-  const [
-    loadingAnalytics,
-    setLoadingAnalytics,
-  ] = useState(false);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  const [error, setError] = useState("");
+  const [expandedQuestions, setExpandedQuestions] =
+    useState<Set<number>>(
+      new Set()
+    );
 
-  // =====================================================
-  // Завантаження тестів
-  // =====================================================
+  const [showParticipants, setShowParticipants] =
+    useState(false);
+
+  const [search, setSearch] =
+    useState("");
 
   useEffect(() => {
-    async function loadTests() {
+    if (!testId) {
+      return;
+    }
+
+    async function loadAnalytics() {
       try {
-        setLoadingTests(true);
-        setError("");
+        setLoading(true);
+        setError(null);
 
         const response = await fetch(
-          "/api/tests"
+          `/api/analytics?testId=${testId}`,
+          {
+            cache: "no-store",
+          }
         );
+
+        const result = await response.json();
 
         if (!response.ok) {
           throw new Error(
-            "Не вдалося отримати список тестів."
+            result?.message ||
+              "Не вдалося завантажити аналітику."
           );
         }
 
-        const data = await response.json();
-
-        const normalizedTests: Test[] =
-          Array.isArray(data)
-            ? data
-                .filter(
-                  (test: any) =>
-                    test &&
-                    Number.isInteger(
-                      Number(test.id)
-                    )
-                )
-                .map((test: any) => ({
-                  id: Number(test.id),
-
-                  title:
-                    test.title ?? "Без назви",
-
-                  subject:
-                    test.subject ?? "",
-
-                  examType:
-                    test.examType ?? "",
-                }))
-            : [];
-
-        setTests(normalizedTests);
+        setData(result);
       } catch (err) {
         console.error(
-          "LOAD TESTS ERROR:",
+          "ANALYTICS PAGE ERROR:",
           err
         );
 
         setError(
-          "Не вдалося завантажити список тестів."
+          err instanceof Error
+            ? err.message
+            : "Не вдалося завантажити аналітику."
         );
       } finally {
-        setLoadingTests(false);
+        setLoading(false);
       }
     }
 
-    loadTests();
-  }, []);
+    loadAnalytics();
+  }, [testId]);
 
-  // =====================================================
-  // Завантаження аналітики
-  // =====================================================
-
-  async function loadAnalytics(
-    testId: number,
-    participantIds?: number[]
-  ) {
-    try {
-      setLoadingAnalytics(true);
-      setError("");
-
-      let url =
-        `/api/analytics?testId=${encodeURIComponent(
-          testId
-        )}`;
-
-      // Якщо передано конкретних учасників
-      if (
-        participantIds &&
-        participantIds.length > 0
-      ) {
-        url +=
-          `&participants=${encodeURIComponent(
-            JSON.stringify(
-              participantIds
-            )
-          )}`;
-      }
-
-      const response = await fetch(url, {
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        const message =
-          await response.text();
-
-        console.error(
-          "ANALYTICS RESPONSE:",
-          message
-        );
-
-        throw new Error(
-          "Не вдалося завантажити аналітику."
-        );
-      }
-
-      const data =
-        (await response.json()) as AnalyticsData;
-
-      setAnalytics(data);
-
-      // Якщо режим "усі учасники",
-      // синхронізуємо чекбокси з отриманими
-      // результатами.
-      if (useAllParticipants) {
-        setSelectedParticipants(
-          data.participants.map(
-            (participant) =>
-              participant.id
-          )
-        );
-      }
-    } catch (err) {
-      console.error(
-        "LOAD ANALYTICS ERROR:",
-        err
-      );
-
-      setAnalytics(null);
-
-      setError(
-        "Не вдалося сформувати аналітику."
-      );
-    } finally {
-      setLoadingAnalytics(false);
-    }
-  }
-
-  // =====================================================
-  // Вибір тесту
-  // =====================================================
-
-  function handleTestChange(
-    value: string
-  ) {
-    setSelectedTestId(value);
-
-    setAnalytics(null);
-
-    setSelectedParticipants([]);
-
-    setUseAllParticipants(true);
-
-    setExpandedQuestions([]);
-
-    setError("");
-
-    if (value) {
-      loadAnalytics(
-        Number(value)
-      );
-    }
-  }
-
-  // =====================================================
-  // Вибір усіх учасників
-  // =====================================================
-
-  function handleAllParticipantsChange() {
-    if (!analytics) {
-      return;
+  const filteredQuestions = useMemo(() => {
+    if (!data) {
+      return [];
     }
 
-    setUseAllParticipants(true);
+    const normalizedSearch =
+      search.trim().toLowerCase();
 
-    const allIds =
-      analytics.participants.map(
-        (participant) =>
-          participant.id
-      );
+    if (!normalizedSearch) {
+      return data.questions;
+    }
 
-    setSelectedParticipants(allIds);
-
-    // Одразу повертаємо аналітику
-    // до всіх результатів.
-    loadAnalytics(
-      analytics.test.id
+    return data.questions.filter(
+      (question) =>
+        question.text
+          .toLowerCase()
+          .includes(normalizedSearch) ||
+        String(question.order).includes(
+          normalizedSearch
+        )
     );
-  }
-
-  // =====================================================
-  // Вибір конкретного учасника
-  // =====================================================
-
-  function toggleParticipant(
-    participantId: number
-  ) {
-    setUseAllParticipants(false);
-
-    setSelectedParticipants(
-      (previous) => {
-        if (
-          previous.includes(
-            participantId
-          )
-        ) {
-          return previous.filter(
-            (id) =>
-              id !== participantId
-          );
-        }
-
-        return [
-          ...previous,
-          participantId,
-        ];
-      }
-    );
-  }
-
-  // =====================================================
-  // Застосувати вибір учасників
-  // =====================================================
-
-  function applyParticipants() {
-    if (!analytics) {
-      return;
-    }
-
-    if (
-      !useAllParticipants &&
-      selectedParticipants.length === 0
-    ) {
-      setError(
-        "Оберіть хоча б одного учасника."
-      );
-
-      return;
-    }
-
-    setError("");
-
-    loadAnalytics(
-      analytics.test.id,
-      useAllParticipants
-        ? undefined
-        : selectedParticipants
-    );
-  }
-
-  // =====================================================
-  // Розгортання питання
-  // =====================================================
+  }, [data, search]);
 
   function toggleQuestion(
     questionId: number
   ) {
-    setExpandedQuestions(
-      (previous) => {
-        if (
-          previous.includes(
-            questionId
-          )
-        ) {
-          return previous.filter(
-            (id) =>
-              id !== questionId
-          );
-        }
+    setExpandedQuestions((previous) => {
+      const next = new Set(previous);
 
-        return [
-          ...previous,
-          questionId,
-        ];
+      if (next.has(questionId)) {
+        next.delete(questionId);
+      } else {
+        next.add(questionId);
       }
+
+      return next;
+    });
+  }
+
+  function expandAll() {
+    if (!data) {
+      return;
+    }
+
+    setExpandedQuestions(
+      new Set(
+        data.questions.map(
+          (question) => question.id
+        )
+      )
     );
   }
 
-  // =====================================================
-  // Вибрані об'єкти учасників
-  // =====================================================
+  function collapseAll() {
+    setExpandedQuestions(new Set());
+  }
 
-  const selectedParticipantObjects =
-    useMemo(() => {
-      if (!analytics) {
-        return [];
-      }
+  if (loading) {
+    return (
+      <div className="min-h-[500px]">
+        <div className="flex min-h-[500px] items-center justify-center">
+          <div className="text-center">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
-      return analytics.participants.filter(
-        (participant) =>
-          selectedParticipants.includes(
-            participant.id
-          )
-      );
-    }, [
-      analytics,
-      selectedParticipants,
-    ]);
+            <p className="text-lg text-gray-600">
+              Завантаження аналітики...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  // =====================================================
-  // RENDER
-  // =====================================================
+  if (error) {
+    return (
+      <div>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h2 className="text-4xl font-bold text-[#7A1F2B]">
+              Аналітика
+            </h2>
 
-  return (
-    <main className="min-h-screen bg-gray-100 p-6">
-      <div className="mx-auto max-w-[1800px]">
+            <p className="mt-2 text-gray-600">
+              Аналіз результатів тестування
+            </p>
+          </div>
 
-        {/* ================================================= */}
-        {/* ЗАГОЛОВОК */}
-        {/* ================================================= */}
-
-        <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-  <div>
-    <h1 className="text-4xl font-bold text-[#7A1F2B]">
-      Аналітика тестування
-    </h1>
-
-    <p className="mt-2 text-lg text-gray-600">
-      Аналіз результатів учасників
-      та статистика виконання
-      окремих завдань.
-    </p>
-  </div>
-
-  <Link
-    href="/admin"
-    className="
-      inline-flex
-      items-center
-      justify-center
-      gap-2
-      rounded-xl
-      border
-      border-[#7A1F2B]
-      bg-white
-      px-5
-      py-3
-      font-semibold
-      text-[#7A1F2B]
-      shadow-sm
-      transition
-      hover:bg-[#7A1F2B]
-      hover:text-white
-      hover:shadow-md
-    "
-  >
-    <span className="text-lg">
-      ←
-    </span>
-
-    <span>
-      Повернутися до адміністративної панелі
-    </span>
-  </Link>
-</div>
-
-        {/* ================================================= */}
-        {/* ВИБІР ТЕСТУ */}
-        {/* ================================================= */}
-
-        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <label className="block text-sm font-semibold text-gray-700">
-            Оберіть тест
-          </label>
-
-          <select
-            value={selectedTestId}
-            onChange={(event) =>
-              handleTestChange(
-                event.target.value
-              )
-            }
-            disabled={loadingTests}
-            className="
-              mt-2
-              w-full
-              max-w-3xl
-              rounded-lg
-              border
-              border-gray-300
-              bg-white
-              px-4
-              py-3
-              text-gray-800
-              outline-none
-              transition
-              focus:border-[#7A1F2B]
-              focus:ring-2
-              focus:ring-[#7A1F2B]/20
-            "
+          <Link
+            href="/admin"
+            className="rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923] hover:shadow-md"
           >
-            <option value="">
-              {loadingTests
-                ? "Завантаження тестів..."
-                : "Оберіть тест"}
-            </option>
-
-            {tests.map((test) => (
-              <option
-                key={test.id}
-                value={test.id}
-              >
-                {test.examType
-                  ? `${test.examType} — `
-                  : ""}
-                {test.title}
-                {test.subject
-                  ? ` — ${test.subject}`
-                  : ""}
-              </option>
-            ))}
-          </select>
+            ← Повернутися до адміністративної панелі
+          </Link>
         </div>
 
-        {/* ================================================= */}
-        {/* ПОМИЛКА */}
-        {/* ================================================= */}
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+          <h3 className="text-xl font-bold text-red-700">
+            Помилка
+          </h3>
 
-        {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+          <p className="mt-2 text-red-600">
             {error}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.refresh()
+            }
+            className="mt-5 rounded-lg bg-red-600 px-5 py-2.5 font-semibold text-white transition hover:bg-red-700"
+          >
+            Спробувати ще раз
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-10 text-center">
+        <p className="text-lg text-gray-600">
+          Дані аналітики відсутні.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* =====================================================
+          ЗАГОЛОВОК
+      ===================================================== */}
+
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-3">
+            <span className="rounded-lg bg-[#F3E8EA] px-3 py-1.5 text-sm font-semibold text-[#7A1F2B]">
+              Аналітика
+            </span>
+
+            <span className="text-sm text-gray-500">
+              Тест №{data.test.id}
+            </span>
+          </div>
+
+          <h2 className="text-4xl font-bold text-[#7A1F2B]">
+            {data.test.title}
+          </h2>
+
+          {data.test.subject && (
+            <p className="mt-2 text-lg text-gray-600">
+              Предмет:{" "}
+              <span className="font-semibold">
+                {data.test.subject}
+              </span>
+            </p>
+          )}
+        </div>
+
+        <Link
+          href="/admin"
+          className="inline-flex items-center justify-center rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923] hover:shadow-md"
+        >
+          ← Повернутися до адміністративної панелі
+        </Link>
+      </div>
+
+      {/* =====================================================
+          ЗАГАЛЬНА СТАТИСТИКА
+      ===================================================== */}
+
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-gray-500">
+            Учасників
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
+            {data.summary.participants}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-gray-500">
+            Середній результат
+          </p>
+
+          <p
+            className={`mt-2 text-3xl font-bold ${getPercentColor(
+              data.summary.averagePercent
+            )}`}
+          >
+            {data.summary.averagePercent}%
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-gray-500">
+            Середній бал
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
+            {data.summary.averageScore}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-400">
+            із {data.test.maxPoints}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-gray-500">
+            Найкращий результат
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-green-600">
+            {data.summary.maxScore}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-400">
+            балів
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-gray-500">
+            Найнижчий результат
+          </p>
+
+          <p className="mt-2 text-3xl font-bold text-red-600">
+            {data.summary.minScore}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-400">
+            балів
+          </p>
+        </div>
+      </div>
+
+      {/* =====================================================
+          УЧАСНИКИ
+      ===================================================== */}
+
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() =>
+            setShowParticipants(
+              (previous) => !previous
+            )
+          }
+          className="flex w-full items-center justify-between px-6 py-5 text-left"
+        >
+          <div>
+            <h3 className="text-xl font-bold text-[#7A1F2B]">
+              Результати учасників
+            </h3>
+
+            <p className="mt-1 text-sm text-gray-500">
+              Натисніть, щоб переглянути список
+              учасників
+            </p>
+          </div>
+
+          <span className="text-2xl text-[#7A1F2B]">
+            {showParticipants ? "−" : "+"}
+          </span>
+        </button>
+
+        {showParticipants && (
+          <div className="border-t border-gray-200">
+            {data.participants.length ===
+            0 ? (
+              <div className="p-6 text-center text-gray-500">
+                Учасників ще немає.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                        №
+                      </th>
+
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                        Учасник
+                      </th>
+
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">
+                        Бал
+                      </th>
+
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-600">
+                        Результат
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {data.participants.map(
+                      (
+                        participant,
+                        index
+                      ) => (
+                        <tr
+                          key={
+                            participant.id
+                          }
+                          className="hover:bg-gray-50"
+                        >
+                          <td className="px-6 py-4 text-gray-500">
+                            {index + 1}
+                          </td>
+
+                          <td className="px-6 py-4 font-medium text-gray-800">
+                            {
+                              participant.name
+                            }
+                          </td>
+
+                          <td className="px-6 py-4 text-center font-semibold text-gray-700">
+                            {
+                              participant.earnedPoints
+                            }
+                          </td>
+
+                          <td
+                            className={`px-6 py-4 text-center font-bold ${getPercentColor(
+                              participant.percent
+                            )}`}
+                          >
+                            {
+                              participant.percent
+                            }
+                            %
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
+      </section>
 
-        {/* ================================================= */}
-        {/* LOADING */}
-        {/* ================================================= */}
+      {/* =====================================================
+          ЗАГОЛОВОК СТАТИСТИКИ ПИТАНЬ
+      ===================================================== */}
 
-        {loadingAnalytics && (
-          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500 shadow-sm">
-            Формування аналітики...
-          </div>
-        )}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 className="text-2xl font-bold text-[#7A1F2B]">
+            Аналіз завдань
+          </h3>
 
-        {/* ================================================= */}
-        {/* АНАЛІТИКА */}
-        {/* ================================================= */}
+          <p className="mt-1 text-gray-600">
+            Натисніть на завдання, щоб переглянути
+            його повний зміст та варіанти відповідей.
+          </p>
+        </div>
 
-        {analytics &&
-          !loadingAnalytics && (
-            <>
-              {/* ================================================= */}
-              {/* ІНФОРМАЦІЯ ПРО ТЕСТ */}
-              {/* ================================================= */}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <input
+            type="text"
+            value={search}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
+            placeholder="Пошук завдання..."
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-[#7A1F2B] focus:ring-2 focus:ring-[#7A1F2B]/10"
+          />
 
-              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">
-                      {analytics.test.title}
-                    </h2>
+          <button
+            type="button"
+            onClick={expandAll}
+            className="rounded-lg border border-[#7A1F2B] bg-white px-4 py-2.5 text-sm font-semibold text-[#7A1F2B] transition hover:bg-[#F3E8EA]"
+          >
+            Розгорнути всі
+          </button>
 
-                    <p className="mt-1 text-gray-500">
-                      {analytics.test.subject}
-                    </p>
-                  </div>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+          >
+            Згорнути всі
+          </button>
+        </div>
+      </div>
 
-                  <div className="rounded-lg bg-gray-50 px-5 py-3 text-right">
-                    <div className="text-sm text-gray-500">
-                      Завдань
-                    </div>
+      {/* =====================================================
+          ТАБЛИЦЯ ЗАВДАНЬ
+      ===================================================== */}
 
-                    <div className="text-2xl font-bold text-[#7A1F2B]">
-                      {
-                        analytics.test
-                          .questionCount
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1000px]">
+            <thead className="bg-[#F8F5F6]">
+              <tr>
+                <th className="w-16 px-4 py-4 text-center text-sm font-bold text-gray-600">
+                  №
+                </th>
+
+                <th className="px-5 py-4 text-left text-sm font-bold text-gray-600">
+                  Завдання
+                </th>
+
+                <th className="w-32 px-4 py-4 text-center text-sm font-bold text-gray-600">
+                  Правильно
+                </th>
+
+                <th className="w-32 px-4 py-4 text-center text-sm font-bold text-gray-600">
+                  Неправильно
+                </th>
+
+                <th className="w-32 px-4 py-4 text-center text-sm font-bold text-gray-600">
+                  Пропущено
+                </th>
+
+                <th className="w-32 px-4 py-4 text-center text-sm font-bold text-gray-600">
+                  Складність
+                </th>
+
+                <th className="w-16 px-4 py-4" />
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-gray-100">
+              {filteredQuestions.map(
+                (question) => {
+                  const expanded =
+                    expandedQuestions.has(
+                      question.id
+                    );
+
+                  return (
+                    <QuestionRow
+                      key={question.id}
+                      question={question}
+                      expanded={expanded}
+                      onToggle={() =>
+                        toggleQuestion(
+                          question.id
+                        )
                       }
-                    </div>
-                  </div>
+                    />
+                  );
+                }
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredQuestions.length ===
+          0 && (
+          <div className="p-10 text-center text-gray-500">
+            За вашим запитом завдань не знайдено.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   РЯДОК ПИТАННЯ
+========================================================= */
+
+function QuestionRow({
+  question,
+  expanded,
+  onToggle,
+}: {
+  question: QuestionStatistic;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const options =
+    question.options ?? [];
+
+  const matchingLeft =
+    options.filter((option) =>
+      isMatchingLeft(option.text)
+    );
+
+  const matchingRight =
+    options.filter((option) =>
+      isMatchingRight(option.text)
+    );
+
+  return (
+    <>
+      {/* -----------------------------------------------------
+          ОСНОВНИЙ РЯДОК
+      ----------------------------------------------------- */}
+
+      <tr
+        onClick={onToggle}
+        className={`cursor-pointer transition ${
+          expanded
+            ? "bg-[#F3E8EA]"
+            : "hover:bg-gray-50"
+        }`}
+      >
+        <td className="px-4 py-5 text-center">
+          <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-[#7A1F2B] font-bold text-white">
+            {question.order}
+          </div>
+        </td>
+
+        <td className="px-5 py-5">
+          <div className="max-w-[600px]">
+            <p className="line-clamp-2 font-semibold text-gray-800">
+              {question.text}
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                {getQuestionTypeLabel(
+                  question.type
+                )}
+              </span>
+
+              <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                {question.points}{" "}
+                {question.points === 1
+                  ? "бал"
+                  : "бали"}
+              </span>
+            </div>
+          </div>
+        </td>
+
+        <td className="px-4 py-5 text-center">
+          <div className="font-bold text-green-600">
+            {question.correct}
+          </div>
+
+          <div className="text-xs text-green-600">
+            {question.correctPercent}%
+          </div>
+        </td>
+
+        <td className="px-4 py-5 text-center">
+          <div className="font-bold text-red-600">
+            {question.incorrect}
+          </div>
+
+          <div className="text-xs text-red-600">
+            {question.incorrectPercent}%
+          </div>
+        </td>
+
+        <td className="px-4 py-5 text-center">
+          <div className="font-bold text-gray-500">
+            {question.skipped}
+          </div>
+
+          <div className="text-xs text-gray-500">
+            {question.skippedPercent}%
+          </div>
+        </td>
+
+        <td className="px-4 py-5 text-center">
+          <span
+            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
+              question.difficulty.color
+            )}`}
+          >
+            {question.difficulty.label}
+          </span>
+        </td>
+
+        <td className="px-4 py-5 text-center">
+          <span
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg font-bold text-[#7A1F2B] shadow-sm transition ${
+              expanded
+                ? "rotate-180"
+                : ""
+            }`}
+          >
+            ↓
+          </span>
+        </td>
+      </tr>
+
+      {/* -----------------------------------------------------
+          РОЗГОРНУТИЙ БЛОК
+      ----------------------------------------------------- */}
+
+      {expanded && (
+        <tr>
+          <td
+            colSpan={7}
+            className="bg-gray-50 px-6 py-6"
+          >
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              {/* Заголовок */}
+
+              <div className="border-b border-gray-200 px-6 py-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-lg bg-[#7A1F2B] px-3 py-1.5 text-sm font-bold text-white">
+                    Завдання{" "}
+                    {question.order}
+                  </span>
+
+                  <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                    ID: {question.id}
+                  </span>
+
+                  <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                    {getQuestionTypeLabel(
+                      question.type
+                    )}
+                  </span>
+
+                  <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                    {question.points}{" "}
+                    {question.points === 1
+                      ? "бал"
+                      : "бали"}
+                  </span>
                 </div>
               </div>
 
-              {/* ================================================= */}
-              {/* ВИБІР УЧАСНИКІВ */}
-              {/* ================================================= */}
+              {/* Умова */}
 
-              <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-800">
-                      Учасники
-                    </h2>
+              <div className="px-6 py-6">
+                <h4 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">
+                  Умова завдання
+                </h4>
 
-                    <p className="mt-1 text-sm text-gray-500">
-                      За замовчуванням
-                      враховуються всі
-                      результати тестування.
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={
-                      applyParticipants
-                    }
-                    disabled={
-                      loadingAnalytics
-                    }
-                    className="
-                      rounded-lg
-                      bg-[#7A1F2B]
-                      px-5
-                      py-2.5
-                      font-semibold
-                      text-white
-                      transition
-                      hover:bg-[#651923]
-                      disabled:cursor-not-allowed
-                      disabled:opacity-50
-                    "
-                  >
-                    Застосувати
-                  </button>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-5">
+                  <p className="whitespace-pre-wrap text-lg leading-8 text-gray-800">
+                    {question.text}
+                  </p>
                 </div>
+              </div>
 
-                {/* ================================================= */}
-                {/* УСІ УЧАСНИКИ */}
-                {/* ================================================= */}
+              {/* Варіанти */}
 
-                <label
-                  className="
-                    flex
-                    cursor-pointer
-                    items-center
-                    gap-3
-                    rounded-lg
-                    border
-                    border-gray-200
-                    p-4
-                    transition
-                    hover:bg-gray-50
-                  "
-                >
-                  <input
-                    type="radio"
-                    checked={
-                      useAllParticipants
+              <div className="px-6 pb-6">
+                <h4 className="mb-4 text-sm font-bold uppercase tracking-wide text-gray-500">
+                  {question.type ===
+                  "matching"
+                    ? "Елементи завдання"
+                    : "Варіанти відповідей"}
+                </h4>
+
+                {options.length ===
+                0 ? (
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-5 text-yellow-800">
+                    Варіанти відповідей не
+                    передані API.
+                  </div>
+                ) : question.type ===
+                  "matching" ? (
+                  <MatchingOptions
+                    leftItems={
+                      matchingLeft
                     }
-                    onChange={
-                      handleAllParticipantsChange
+                    rightItems={
+                      matchingRight
                     }
-                    className="h-4 w-4 accent-[#7A1F2B]"
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {options
+                      .filter(
+                        (option) =>
+                          !option.text.startsWith(
+                            "L|"
+                          ) &&
+                          !option.text.startsWith(
+                            "R|"
+                          )
+                      )
+                      .map(
+                        (
+                          option,
+                          index
+                        ) => (
+                          <div
+                            key={
+                              option.id
+                            }
+                            className={`flex items-start gap-4 rounded-lg border p-4 ${
+                              option.isCorrect
+                                ? "border-green-300 bg-green-50"
+                                : "border-gray-200 bg-white"
+                            }`}
+                          >
+                            <div
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-bold ${
+                                option.isCorrect
+                                  ? "bg-green-600 text-white"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}
+                            >
+                              {String.fromCharCode(
+                                65 +
+                                  index
+                              )}
+                            </div>
+
+                            <div className="flex-1 pt-1">
+                              <p
+                                className={`whitespace-pre-wrap leading-6 ${
+                                  option.isCorrect
+                                    ? "font-semibold text-green-800"
+                                    : "text-gray-700"
+                                }`}
+                              >
+                                {
+                                  option.text
+                                }
+                              </p>
+                            </div>
+
+                            {option.isCorrect && (
+                              <span className="shrink-0 rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white">
+                                ✓ Правильна
+                              </span>
+                            )}
+                          </div>
+                        )
+                      )}
+                  </div>
+                )}
+              </div>
+
+              {/* Статистика */}
+
+              <div className="border-t border-gray-200 bg-gray-50 px-6 py-6">
+                <h4 className="mb-4 text-sm font-bold uppercase tracking-wide text-gray-500">
+                  Статистика завдання
+                </h4>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <StatisticCard
+                    title="Правильні відповіді"
+                    count={
+                      question.correct
+                    }
+                    percent={
+                      question.correctPercent
+                    }
+                    type="correct"
                   />
 
-                  <span className="font-semibold text-gray-800">
-                    Усі учасники
-                  </span>
-
-                  <span className="text-sm text-gray-500">
-                    (
-                    {
-                      analytics
-                        .participants
-                        .length
+                  <StatisticCard
+                    title="Неправильні відповіді"
+                    count={
+                      question.incorrect
                     }
-                    )
-                  </span>
-                </label>
+                    percent={
+                      question.incorrectPercent
+                    }
+                    type="incorrect"
+                  />
 
-                {/* ================================================= */}
-                {/* КОНКРЕТНІ УЧАСНИКИ */}
-                {/* ================================================= */}
+                  <StatisticCard
+                    title="Пропущені"
+                    count={
+                      question.skipped
+                    }
+                    percent={
+                      question.skippedPercent
+                    }
+                    type="skipped"
+                  />
+                </div>
 
-                <div className="mt-5">
-                  <div className="mb-2 text-sm font-semibold text-gray-700">
-                    Або оберіть конкретних
-                    учасників:
+                {/* Шкала */}
+
+                <div className="mt-6">
+                  <div className="mb-2 flex justify-between text-sm">
+                    <span className="font-medium text-gray-600">
+                      Розподіл відповідей
+                    </span>
+
+                    <span className="text-gray-500">
+                      Учасників:{" "}
+                      {question.correct +
+                        question.incorrect +
+                        question.skipped}
+                    </span>
                   </div>
 
-                  <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200">
-                    {analytics.participants
-                      .length === 0 ? (
-                      <div className="p-6 text-center text-gray-500">
-                        Результатів цього
-                        тесту поки немає.
-                      </div>
-                    ) : (
-                      analytics.participants.map(
-                        (participant) => (
-                          <label
-                            key={
-                              participant.id
-                            }
-                            className="
-                              flex
-                              cursor-pointer
-                              items-center
-                              justify-between
-                              gap-4
-                              border-b
-                              border-gray-100
-                              px-4
-                              py-3
-                              last:border-b-0
-                              hover:bg-gray-50
-                            "
-                          >
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedParticipants.includes(
-                                  participant.id
-                                )}
-                                onChange={() =>
-                                  toggleParticipant(
-                                    participant.id
-                                  )
-                                }
-                                className="h-4 w-4 accent-[#7A1F2B]"
-                              />
+                  <div className="flex h-4 overflow-hidden rounded-full bg-gray-200">
+                    {question.correctPercent >
+                      0 && (
+                      <div
+                        className="bg-green-500 transition-all"
+                        style={{
+                          width: `${question.correctPercent}%`,
+                        }}
+                        title={`Правильно: ${question.correctPercent}%`}
+                      />
+                    )}
 
-                              <span className="font-medium text-gray-800">
-                                {
-                                  participant.name
-                                }
-                              </span>
-                            </div>
+                    {question.incorrectPercent >
+                      0 && (
+                      <div
+                        className="bg-red-500 transition-all"
+                        style={{
+                          width: `${question.incorrectPercent}%`,
+                        }}
+                        title={`Неправильно: ${question.incorrectPercent}%`}
+                      />
+                    )}
 
-                            <div className="whitespace-nowrap text-sm text-gray-500">
-                              {
-                                participant.earnedPoints
-                              }{" "}
-                              б. (
-                              {
-                                participant.percent
-                              }
-                              %)
-                            </div>
-                          </label>
-                        )
-                      )
+                    {question.skippedPercent >
+                      0 && (
+                      <div
+                        className="bg-gray-400 transition-all"
+                        style={{
+                          width: `${question.skippedPercent}%`,
+                        }}
+                        title={`Пропущено: ${question.skippedPercent}%`}
+                      />
                     )}
                   </div>
                 </div>
-
-                {/* ================================================= */}
-                {/* КІЛЬКІСТЬ ВИБРАНИХ */}
-                {/* ================================================= */}
-
-                {!useAllParticipants && (
-                  <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                    Обрано учасників:{" "}
-                    <span className="font-bold text-gray-800">
-                      {
-                        selectedParticipantObjects.length
-                      }
-                    </span>
-                  </div>
-                )}
-
-                {useAllParticipants && (
-                  <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-                    У статистиці враховано
-                    <span className="font-bold">
-                      {" "}
-                      усі{" "}
-                      {
-                        analytics
-                          .participants
-                          .length
-                      }{" "}
-                      результати
-                    </span>
-                    .
-                  </div>
-                )}
               </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
 
-              {/* ================================================= */}
-              {/* ЗАГАЛЬНА СТАТИСТИКА */}
-              {/* ================================================= */}
+/* =========================================================
+   СТАТИСТИКА
+========================================================= */
 
-              <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+function StatisticCard({
+  title,
+  count,
+  percent,
+  type,
+}: {
+  title: string;
+  count: number;
+  percent: number;
+  type:
+    | "correct"
+    | "incorrect"
+    | "skipped";
+}) {
+  const classes = {
+    correct:
+      "border-green-200 bg-green-50 text-green-700",
+    incorrect:
+      "border-red-200 bg-red-50 text-red-700",
+    skipped:
+      "border-gray-200 bg-gray-100 text-gray-600",
+  };
 
-                {/* Учасники */}
+  return (
+    <div
+      className={`rounded-lg border p-5 ${classes[type]}`}
+    >
+      <p className="text-sm font-semibold">
+        {title}
+      </p>
 
-                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm text-gray-500">
-                    Учасників
-                  </div>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <span className="text-3xl font-bold">
+          {count}
+        </span>
 
-                  <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-                    {
-                      analytics.summary
-                        .participants
-                    }
-                  </div>
+        <span className="text-xl font-bold">
+          {percent}%
+        </span>
+      </div>
+    </div>
+  );
+}
 
-                  <div className="mt-1 text-sm text-gray-400">
-                    враховано в аналізі
-                  </div>
-                </div>
+/* =========================================================
+   MATCHING
+========================================================= */
 
-                {/* Максимальний бал */}
+function MatchingOptions({
+  leftItems,
+  rightItems,
+}: {
+  leftItems: AnswerOption[];
+  rightItems: AnswerOption[];
+}) {
+  if (
+    leftItems.length === 0 &&
+    rightItems.length === 0
+  ) {
+    return (
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-5 text-yellow-800">
+        Дані для встановлення відповідності
+        відсутні.
+      </div>
+    );
+  }
 
-                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm text-gray-500">
-                    Максимальний бал
-                  </div>
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div>
+        <h5 className="mb-3 font-bold text-[#7A1F2B]">
+          Ліва частина
+        </h5>
 
-                  <div className="mt-2 text-3xl font-bold text-green-600">
-                    {
-                      analytics.summary
-                        .maxScore
-                    }
-                  </div>
+        <div className="space-y-3">
+          {leftItems.map(
+            (option, index) => (
+              <div
+                key={option.id}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F3E8EA] text-sm font-bold text-[#7A1F2B]">
+                    {index + 1}
+                  </span>
 
-                  <div className="mt-1 text-sm text-gray-400">
-                    найкращий результат
-                    учасника
-                  </div>
-                </div>
-
-                {/* Мінімальний бал */}
-
-                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm text-gray-500">
-                    Мінімальний бал
-                  </div>
-
-                  <div className="mt-2 text-3xl font-bold text-red-600">
-                    {
-                      analytics.summary
-                        .minScore
-                    }
-                  </div>
-
-                  <div className="mt-1 text-sm text-gray-400">
-                    найнижчий результат
-                    учасника
-                  </div>
-                </div>
-
-                {/* Середній бал */}
-
-                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                  <div className="text-sm text-gray-500">
-                    Середній бал
-                  </div>
-
-                  <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-                    {
-                      analytics.summary
-                        .averageScore
-                    }
-                  </div>
-
-                  <div className="mt-1 text-sm text-gray-400">
-                    балів (
-                    {
-                      analytics.summary
-                        .averagePercent
-                    }
-                    %)
-                  </div>
-                </div>
-              </div>
-
-              {/* ================================================= */}
-              {/* СТАТИСТИКА ЗАВДАНЬ */}
-              {/* ================================================= */}
-
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
-                <div className="border-b border-gray-200 p-6">
-                  <h2 className="text-2xl font-bold text-gray-800">
-                    Статистика завдань
-                  </h2>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    Натисніть на номер питання,
-                    щоб переглянути його текст.
+                  <p className="whitespace-pre-wrap pt-1 text-gray-700">
+                    {cleanMatchingText(
+                      option.text
+                    )}
                   </p>
                 </div>
-
-                <div className="overflow-x-auto">
-                  <table className="min-w-[1100px] w-full">
-                    <thead className="bg-[#7A1F2B] text-white">
-                      <tr>
-                        <th className="w-24 whitespace-nowrap p-4 text-center">
-                          №
-                        </th>
-
-                        <th className="whitespace-nowrap p-4 text-center">
-                          Правильні
-                        </th>
-
-                        <th className="whitespace-nowrap p-4 text-center">
-                          Неправильні
-                        </th>
-
-                        <th className="whitespace-nowrap p-4 text-center">
-                          Пропущені
-                        </th>
-
-                        <th className="whitespace-nowrap p-4 text-center">
-                          Складність
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {analytics.questions.length ===
-                      0 ? (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="p-12 text-center text-gray-500"
-                          >
-                            Завдань для аналізу
-                            немає.
-                          </td>
-                        </tr>
-                      ) : (
-                        analytics.questions.map(
-                          (question) => {
-                            const expanded =
-                              expandedQuestions.includes(
-                                question.id
-                              );
-
-                            return (
-                              <tr
-                                key={
-                                  question.id
-                                }
-                                className="border-b border-gray-100"
-                              >
-                                <td
-                                  colSpan={5}
-                                  className="p-0"
-                                >
-                                  {/* ================================================= */}
-                                  {/* РЯДОК СТАТИСТИКИ */}
-                                  {/* ================================================= */}
-
-                                  <div
-                                    className="
-                                      grid
-                                      grid-cols-[96px_repeat(4,minmax(160px,1fr))]
-                                      items-center
-                                    "
-                                  >
-                                    {/* № */}
-
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        toggleQuestion(
-                                          question.id
-                                        )
-                                      }
-                                      className="
-                                        flex
-                                        min-h-[88px]
-                                        items-center
-                                        justify-center
-                                        gap-2
-                                        border-r
-                                        border-gray-100
-                                        p-4
-                                        font-bold
-                                        text-[#7A1F2B]
-                                        transition
-                                        hover:bg-gray-50
-                                      "
-                                      title={
-                                        expanded
-                                          ? "Згорнути питання"
-                                          : "Показати питання"
-                                      }
-                                    >
-                                      <span className="text-lg">
-                                        {
-                                          question.order
-                                        }
-                                      </span>
-
-                                      <span className="text-xs text-gray-400">
-                                        {expanded
-                                          ? "▲"
-                                          : "▼"}
-                                      </span>
-                                    </button>
-
-                                    {/* ================================================= */}
-                                    {/* ПРАВИЛЬНІ */}
-                                    {/* ================================================= */}
-
-                                    <div className="min-h-[88px] p-4 text-center">
-                                      <div className="font-bold text-green-600">
-                                        {
-                                          question.correctPercent
-                                        }
-                                        %
-                                      </div>
-
-                                      <div className="mt-1 text-xs text-gray-400">
-                                        {
-                                          question.correct
-                                        }{" "}
-                                        уч.
-                                      </div>
-                                    </div>
-
-                                    {/* ================================================= */}
-                                    {/* НЕПРАВИЛЬНІ */}
-                                    {/* ================================================= */}
-
-                                    <div className="min-h-[88px] p-4 text-center">
-                                      <div className="font-bold text-red-600">
-                                        {
-                                          question.incorrectPercent
-                                        }
-                                        %
-                                      </div>
-
-                                      <div className="mt-1 text-xs text-gray-400">
-                                        {
-                                          question.incorrect
-                                        }{" "}
-                                        уч.
-                                      </div>
-                                    </div>
-
-                                    {/* ================================================= */}
-                                    {/* ПРОПУЩЕНІ */}
-                                    {/* ================================================= */}
-
-                                    <div className="min-h-[88px] p-4 text-center">
-                                      <div className="font-bold text-gray-500">
-                                        {
-                                          question.skippedPercent
-                                        }
-                                        %
-                                      </div>
-
-                                      <div className="mt-1 text-xs text-gray-400">
-                                        {
-                                          question.skipped
-                                        }{" "}
-                                        уч.
-                                      </div>
-                                    </div>
-
-                                    {/* ================================================= */}
-                                    {/* СКЛАДНІСТЬ */}
-                                    {/* ================================================= */}
-
-                                    <div className="min-h-[88px] p-4 text-center">
-                                      <span
-                                        className={`
-                                          inline-flex
-                                          rounded-full
-                                          px-4
-                                          py-2
-                                          text-sm
-                                          font-semibold
-                                          ${getDifficultyClasses(
-                                            question
-                                              .difficulty
-                                              .color
-                                          )}
-                                        `}
-                                      >
-                                        {
-                                          question
-                                            .difficulty
-                                            .color ===
-                                          "green"
-                                            ? question
-                                                .difficulty
-                                                .label ===
-                                              "Дуже легке"
-                                              ? "🟢 "
-                                              : "🟢 "
-                                            : question
-                                                .difficulty
-                                                .color ===
-                                              "yellow"
-                                            ? "🟡 "
-                                            : question
-                                                .difficulty
-                                                .color ===
-                                              "orange"
-                                            ? "🟠 "
-                                            : "🔴 "
-                                        }
-
-                                        {
-                                          question
-                                            .difficulty
-                                            .label
-                                        }
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {/* ================================================= */}
-                                  {/* ТЕКСТ ПИТАННЯ */}
-                                  {/* ================================================= */}
-
-                                  {expanded && (
-                                    <div className="border-t border-gray-200 bg-gray-50 px-6 py-6">
-                                      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                        <div className="text-sm font-bold text-[#7A1F2B]">
-                                          Питання №{" "}
-                                          {
-                                            question.order
-                                          }
-                                        </div>
-
-                                        <div className="text-sm text-gray-500">
-                                          Максимум:{" "}
-                                          <span className="font-semibold text-gray-700">
-                                            {
-                                              question.points
-                                            }{" "}
-                                            б.
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      <div className="rounded-lg border border-gray-200 bg-white p-5">
-                                        <div className="whitespace-pre-wrap leading-7 text-gray-800">
-                                          {
-                                            question.text
-                                          }
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          }
-                        )
-                      )}
-                    </tbody>
-                  </table>
-                </div>
               </div>
-
-              {/* ================================================= */}
-              {/* ПОЗНАЧЕННЯ СКЛАДНОСТІ */}
-              {/* ================================================= */}
-
-              <div className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-gray-800">
-                  Шкала складності завдань
-                </h3>
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  <div className="rounded-lg bg-green-50 p-3">
-                    <div className="font-semibold text-green-800">
-                      🟢 Дуже легке
-                    </div>
-
-                    <div className="mt-1 text-sm text-green-700">
-                      &gt; 80% правильних
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-green-50 p-3">
-                    <div className="font-semibold text-green-800">
-                      🟢 Легке
-                    </div>
-
-                    <div className="mt-1 text-sm text-green-700">
-                      60–79% правильних
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-yellow-50 p-3">
-                    <div className="font-semibold text-yellow-800">
-                      🟡 Оптимальне
-                    </div>
-
-                    <div className="mt-1 text-sm text-yellow-700">
-                      40–59% правильних
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-orange-50 p-3">
-                    <div className="font-semibold text-orange-800">
-                      🟠 Складне
-                    </div>
-
-                    <div className="mt-1 text-sm text-orange-700">
-                      21–39% правильних
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg bg-red-50 p-3">
-                    <div className="font-semibold text-red-800">
-                      🔴 Дуже складне
-                    </div>
-
-                    <div className="mt-1 text-sm text-red-700">
-                      ≤ 20% правильних
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
+            )
           )}
-
-        {/* ================================================= */}
-        {/* ТЕСТ НЕ ОБРАНО */}
-        {/* ================================================= */}
-
-        {!selectedTestId &&
-          !loadingTests && (
-            <div className="rounded-xl border border-gray-200 bg-white p-16 text-center shadow-sm">
-              <div className="text-5xl">
-                📊
-              </div>
-
-              <h2 className="mt-5 text-2xl font-bold text-gray-700">
-                Оберіть тест для аналізу
-              </h2>
-
-              <p className="mt-2 text-gray-500">
-                Після вибору тесту тут
-                з'явиться детальна
-                статистика його виконання.
-              </p>
-            </div>
-          )}
+        </div>
       </div>
-    </main>
+
+      <div>
+        <h5 className="mb-3 font-bold text-[#7A1F2B]">
+          Права частина
+        </h5>
+
+        <div className="space-y-3">
+          {rightItems.map(
+            (option, index) => (
+              <div
+                key={option.id}
+                className="rounded-lg border border-gray-200 bg-white p-4"
+              >
+                <div className="flex gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-bold text-gray-600">
+                    {index + 1}
+                  </span>
+
+                  <p className="whitespace-pre-wrap pt-1 text-gray-700">
+                    {cleanMatchingText(
+                      option.text
+                    )}
+                  </p>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
