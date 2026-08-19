@@ -490,15 +490,46 @@ export async function GET(
               // Ключ питання
               // -----------------------------------------
 
-              const answerKey =
-                String(
-                  question.id
-                );
+              // -----------------------------------------
+// Визначаємо відповідь учасника
+//
+// Основний ключ:
+//   ID питання.
+//
+// Для старих результатів, де відповіді
+// могли бути збережені за порядковим
+// номером питання, використовуємо
+// question.order як резервний ключ.
+// -----------------------------------------
 
-              const rawAnswer =
-                answers[
-                  answerKey
-                ];
+const questionIdKey =
+  String(question.id);
+
+const questionOrderKey =
+  String(question.order);
+
+let rawAnswer: unknown;
+
+if (
+  Object.prototype.hasOwnProperty.call(
+    answers,
+    questionIdKey
+  )
+) {
+  rawAnswer =
+    answers[questionIdKey];
+} else if (
+  Object.prototype.hasOwnProperty.call(
+    answers,
+    questionOrderKey
+  )
+) {
+  rawAnswer =
+    answers[questionOrderKey];
+} else {
+  rawAnswer =
+    undefined;
+}
 
               // -----------------------------------------
               // Перетворюємо відповідь
