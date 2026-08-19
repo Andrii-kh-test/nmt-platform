@@ -644,54 +644,53 @@ export default function AnalyticsClient({
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] table-fixed">
+            <table className="w-full min-w-[1200px] table-fixed">
   <colgroup>
-    <col className="w-[7%]" />
-    <col className="w-[16%]" />
-    <col className="w-[17%]" />
-    <col className="w-[12%]" />
-    <col className="w-[12%]" />
-    <col className="w-[12%]" />
-    <col className="w-[16%]" />
-    <col className="w-[8%]" />
+    <col style={{ width: "70px" }} />
+    <col style={{ width: "180px" }} />
+    <col style={{ width: "210px" }} />
+    <col style={{ width: "150px" }} />
+    <col style={{ width: "150px" }} />
+    <col style={{ width: "150px" }} />
+    <col style={{ width: "180px" }} />
+    <col style={{ width: "110px" }} />
   </colgroup>
 
   <thead className="bg-[#7A1F2B] text-white">
-    <tr>
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        №
-      </th>
+  <tr>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      №
+    </th>
 
-      <th className="px-4 py-4 text-left text-sm font-semibold">
-        Питання
-      </th>
+    <th className="px-4 py-4 text-left text-sm font-semibold">
+      Питання
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Тип
-      </th>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Тип
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Правильно
-      </th>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Правильно
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Неправильно
-      </th>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Неправильно
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Пропущено
-      </th>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Пропущено
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Складність
-      </th>
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Складність
+    </th>
 
-      <th className="px-4 py-4 text-center text-sm font-semibold">
-        Дія
-      </th>
-    </tr>
-  </thead>
-
+    <th className="px-4 py-4 text-center text-sm font-semibold">
+      Дія
+    </th>
+  </tr>
+</thead>
               <tbody className="divide-y divide-gray-100">
                 {analytics.questions.map(
                   (question) => {
