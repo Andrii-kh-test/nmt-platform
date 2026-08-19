@@ -150,7 +150,7 @@ function cleanText(text: string): string {
   );
 
   // Якщо у текст потрапили JSON-обгортки,
-  // намагаємося показати тільки текст.
+  // намагаємося показати тільки текст
   try {
     const parsed = JSON.parse(result);
 
@@ -171,7 +171,7 @@ function cleanText(text: string): string {
       }
     }
   } catch {
-    // Це звичайний текст — нічого не робимо.
+    // Звичайний текст
   }
 
   return result
@@ -432,11 +432,13 @@ export default function AnalyticsClient({
 
   return (
     <div className="space-y-8">
+
       {/* =================================================
           HEADER
       ================================================= */}
 
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+
         <div>
           <h2 className="text-4xl font-bold text-[#7A1F2B]">
             Аналітика
@@ -460,6 +462,7 @@ export default function AnalyticsClient({
         >
           ← Повернутися до адміністративної панелі
         </Link>
+
       </div>
 
       {/* =================================================
@@ -467,6 +470,7 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-gray-500">
             Учасників
@@ -528,6 +532,7 @@ export default function AnalyticsClient({
             {analytics.summary.averagePercent}%
           </p>
         </div>
+
       </div>
 
       {/* =================================================
@@ -535,29 +540,35 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <section>
+
         <div className="mb-5">
           <h3 className="text-2xl font-bold text-gray-800">
             Аналіз завдань
           </h3>
 
           <p className="mt-1 text-gray-500">
-            Натисніть на рядок, щоб
+            Натисніть на питання, щоб
             переглянути повний текст
             завдання та відповіді.
           </p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
           <div className="overflow-x-auto">
+
             <table className="w-full min-w-[1000px]">
+
               <thead className="bg-[#7A1F2B] text-white">
+
                 <tr>
+
                   <th className="whitespace-nowrap px-4 py-4 text-center text-sm font-semibold">
                     №
                   </th>
 
                   <th className="whitespace-nowrap px-4 py-4 text-left text-sm font-semibold">
-                    Умова
+                    Питання
                   </th>
 
                   <th className="whitespace-nowrap px-4 py-4 text-center text-sm font-semibold">
@@ -583,12 +594,16 @@ export default function AnalyticsClient({
                   <th className="whitespace-nowrap px-4 py-4 text-center text-sm font-semibold">
                     Дія
                   </th>
+
                 </tr>
+
               </thead>
 
               <tbody className="divide-y divide-gray-100">
+
                 {analytics.questions.map(
                   (question) => {
+
                     const details =
                       questionDetails[
                         question.id
@@ -604,6 +619,11 @@ export default function AnalyticsClient({
 
                     return (
                       <>
+
+                        {/* =================================================
+                            ОСНОВНИЙ РЯДОК
+                        ================================================= */}
+
                         <tr
                           key={`row-${question.id}`}
                           onClick={() =>
@@ -617,32 +637,33 @@ export default function AnalyticsClient({
                               : ""
                           }`}
                         >
+
                           <td className="px-4 py-4 text-center">
+
                             <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
                               {
                                 question.order
                               }
                             </div>
+
                           </td>
 
-                          <td className="max-w-[420px] px-4 py-4">
-                            <div className="font-medium text-gray-800">
-                              {cleanText(
-                                question.text
-                              )}
+                          <td className="px-4 py-4">
+
+                            <div className="font-semibold text-gray-800">
+                              Питання{" "}
+                              {
+                                question.order
+                              }
                             </div>
 
                             <div className="mt-1 text-xs text-gray-400">
-                              ID:{" "}
-                              {
-                                question.id
-                              }{" "}
-                              ·{" "}
                               {
                                 question.points
                               }{" "}
                               бал.
                             </div>
+
                           </td>
 
                           <td className="px-4 py-4 text-center text-sm text-gray-600">
@@ -652,11 +673,11 @@ export default function AnalyticsClient({
                           </td>
 
                           <td className="px-4 py-4 text-center">
+
                             <div className="font-bold text-green-600">
                               {
                                 question.correctPercent
-                              }
-                              %
+                              }%
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -664,14 +685,15 @@ export default function AnalyticsClient({
                                 question.correct
                               }
                             </div>
+
                           </td>
 
                           <td className="px-4 py-4 text-center">
+
                             <div className="font-bold text-red-600">
                               {
                                 question.incorrectPercent
-                              }
-                              %
+                              }%
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -679,14 +701,15 @@ export default function AnalyticsClient({
                                 question.incorrect
                               }
                             </div>
+
                           </td>
 
                           <td className="px-4 py-4 text-center">
+
                             <div className="font-bold text-gray-500">
                               {
                                 question.skippedPercent
-                              }
-                              %
+                              }%
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -694,31 +717,47 @@ export default function AnalyticsClient({
                                 question.skipped
                               }
                             </div>
+
+                          </td>
+
+                          {/* =================================================
+                              СКЛАДНІСТЬ
+                          ================================================= */}
+
+                          <td className="px-4 py-4 text-center">
+
+                            {question.difficulty ? (
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
+                                  question
+                                    .difficulty
+                                    .color
+                                )}`}
+                              >
+                                {
+                                  question
+                                    .difficulty
+                                    .label
+                                }
+                              </span>
+                            ) : (
+                              <span className="text-sm text-gray-400">
+                                Не визначено
+                              </span>
+                            )}
+
                           </td>
 
                           <td className="px-4 py-4 text-center">
-                            <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
-                                question
-                                  .difficulty
-                                  .color
-                              )}`}
-                            >
-                              {
-                                question
-                                  .difficulty
-                                  .label
-                              }
-                            </span>
-                          </td>
 
-                          <td className="px-4 py-4 text-center">
                             <span className="text-xl text-gray-400">
                               {isExpanded
                                 ? "⌃"
                                 : "⌄"}
                             </span>
+
                           </td>
+
                         </tr>
 
                         {/* =================================================
@@ -729,34 +768,46 @@ export default function AnalyticsClient({
                           <tr
                             key={`details-${question.id}`}
                           >
+
                             <td
                               colSpan={8}
                               className="border-t border-gray-200 bg-gray-50 p-6"
                             >
+
                               {isLoading && (
                                 <div className="flex items-center justify-center py-10">
+
                                   <div className="text-center">
+
                                     <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
                                     <p className="mt-3 text-gray-500">
                                       Завантаження завдання...
                                     </p>
+
                                   </div>
+
                                 </div>
                               )}
 
                               {!isLoading &&
                                 details && (
                                   <div className="space-y-6">
-                                    {/* УМОВА */}
+
+                                    {/* =================================================
+                                        УМОВА
+                                    ================================================= */}
 
                                     <div className="rounded-xl border border-gray-200 bg-white p-6">
+
                                       <div className="flex flex-wrap items-center justify-between gap-3">
+
                                         <h4 className="text-lg font-bold text-[#7A1F2B]">
                                           Умова завдання
                                         </h4>
 
                                         <div className="flex gap-2">
+
                                           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
                                             {getQuestionTypeLabel(
                                               details.type
@@ -769,7 +820,9 @@ export default function AnalyticsClient({
                                             }{" "}
                                             бал.
                                           </span>
+
                                         </div>
+
                                       </div>
 
                                       <div className="mt-5 whitespace-pre-wrap text-base leading-7 text-gray-800">
@@ -777,20 +830,26 @@ export default function AnalyticsClient({
                                           details.text
                                         )}
                                       </div>
+
                                     </div>
 
-                                    {/* ВАРІАНТИ ДЛЯ SINGLE / MULTIPLE */}
+                                    {/* =================================================
+                                        ВАРІАНТИ SINGLE / MULTIPLE
+                                    ================================================= */}
 
                                     {details.type !==
                                       "matching" &&
                                       details.type !==
                                         "sequence" && (
+
                                         <div className="rounded-xl border border-gray-200 bg-white p-6">
+
                                           <h4 className="mb-4 text-lg font-bold text-gray-800">
                                             Варіанти відповідей
                                           </h4>
 
                                           <div className="space-y-3">
+
                                             {details.options
                                               .filter(
                                                 (
@@ -808,6 +867,7 @@ export default function AnalyticsClient({
                                                   option,
                                                   index
                                                 ) => (
+
                                                   <div
                                                     key={
                                                       option.id
@@ -818,7 +878,9 @@ export default function AnalyticsClient({
                                                         : "border-gray-200 bg-white"
                                                     }`}
                                                   >
+
                                                     <div className="flex items-start gap-4">
+
                                                       <div
                                                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
                                                           option.isCorrect
@@ -833,6 +895,7 @@ export default function AnalyticsClient({
                                                       </div>
 
                                                       <div className="flex-1">
+
                                                         <p className="whitespace-pre-wrap text-gray-800">
                                                           {cleanText(
                                                             option.text
@@ -844,25 +907,37 @@ export default function AnalyticsClient({
                                                             ✓ Правильна відповідь
                                                           </p>
                                                         )}
+
                                                       </div>
+
                                                     </div>
+
                                                   </div>
+
                                                 )
                                               )}
+
                                           </div>
+
                                         </div>
+
                                       )}
 
-                                    {/* MATCHING */}
+                                    {/* =================================================
+                                        MATCHING
+                                    ================================================= */}
 
                                     {details.type ===
                                       "matching" && (
+
                                       <div className="rounded-xl border border-gray-200 bg-white p-6">
+
                                         <h4 className="mb-4 text-lg font-bold text-gray-800">
                                           Встановлення відповідності
                                         </h4>
 
                                         <div className="space-y-3">
+
                                           {details.options
                                             .filter(
                                               (
@@ -876,6 +951,7 @@ export default function AnalyticsClient({
                                               (
                                                 leftOption
                                               ) => {
+
                                                 const left =
                                                   getMatchingParts(
                                                     leftOption.text
@@ -886,6 +962,7 @@ export default function AnalyticsClient({
                                                     (
                                                       option
                                                     ) => {
+
                                                       if (
                                                         !option.text.startsWith(
                                                           "R|"
@@ -907,13 +984,16 @@ export default function AnalyticsClient({
                                                   );
 
                                                 return (
+
                                                   <div
                                                     key={
                                                       leftOption.id
                                                     }
                                                     className="grid gap-3 rounded-xl border border-gray-200 p-4 md:grid-cols-2"
                                                   >
+
                                                     <div>
+
                                                       <p className="text-xs font-semibold uppercase text-gray-500">
                                                         Елемент
                                                       </p>
@@ -923,9 +1003,11 @@ export default function AnalyticsClient({
                                                           left.text
                                                         )}
                                                       </p>
+
                                                     </div>
 
                                                     <div>
+
                                                       <p className="text-xs font-semibold uppercase text-green-600">
                                                         Правильна відповідь
                                                       </p>
@@ -939,19 +1021,29 @@ export default function AnalyticsClient({
                                                             )
                                                           : "Не визначено"}
                                                       </p>
+
                                                     </div>
+
                                                   </div>
+
                                                 );
                                               }
                                             )}
+
                                         </div>
+
                                       </div>
+
                                     )}
 
-                                    {/* СТАТИСТИКА */}
+                                    {/* =================================================
+                                        СТАТИСТИКА ПИТАННЯ
+                                    ================================================= */}
 
                                     <div className="grid gap-4 sm:grid-cols-3">
+
                                       <div className="rounded-xl bg-green-50 p-5">
+
                                         <p className="text-sm text-green-700">
                                           Правильно
                                         </p>
@@ -963,12 +1055,13 @@ export default function AnalyticsClient({
                                           (
                                           {
                                             question.correctPercent
-                                          }
-                                          %)
+                                          }%)
                                         </p>
+
                                       </div>
 
                                       <div className="rounded-xl bg-red-50 p-5">
+
                                         <p className="text-sm text-red-700">
                                           Неправильно
                                         </p>
@@ -980,12 +1073,13 @@ export default function AnalyticsClient({
                                           (
                                           {
                                             question.incorrectPercent
-                                          }
-                                          %)
+                                          }%)
                                         </p>
+
                                       </div>
 
                                       <div className="rounded-xl bg-gray-100 p-5">
+
                                         <p className="text-sm text-gray-600">
                                           Пропущено
                                         </p>
@@ -997,103 +1091,145 @@ export default function AnalyticsClient({
                                           (
                                           {
                                             question.skippedPercent
-                                          }
-                                          %)
+                                          }%)
                                         </p>
+
                                       </div>
+
                                     </div>
+
                                   </div>
                                 )}
+
                             </td>
+
                           </tr>
                         )}
+
                       </>
                     );
                   }
                 )}
+
               </tbody>
+
             </table>
+
           </div>
+
         </div>
+
       </section>
 
       {/* =================================================
-          PARTICIPANTS
+          ШКАЛА ВИЗНАЧЕННЯ СКЛАДНОСТІ
       ================================================= */}
 
       <section>
+
         <div className="mb-5">
+
           <h3 className="text-2xl font-bold text-gray-800">
-            Результати учасників
+            Шкала визначення складності
           </h3>
+
+          <p className="mt-1 text-gray-500">
+            Рівень складності визначається за часткою
+            учасників, які правильно виконали завдання.
+          </p>
+
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
-              <thead className="bg-[#7A1F2B] text-white">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold">
-                    Учасник
-                  </th>
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
 
-                  <th className="px-6 py-4 text-center text-sm font-semibold">
-                    Бал
-                  </th>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
-                  <th className="px-6 py-4 text-center text-sm font-semibold">
-                    Результат
-                  </th>
-                </tr>
-              </thead>
+            {/* ЛЕГКЕ */}
 
-              <tbody className="divide-y divide-gray-100">
-                {analytics.participants.map(
-                  (participant) => (
-                    <tr
-                      key={
-                        participant.id
-                      }
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 font-medium text-gray-800">
-                        {
-                          participant.name
-                        }
-                      </td>
+            <div className="rounded-xl bg-green-50 p-5">
 
-                      <td className="px-6 py-4 text-center text-gray-700">
-                        {
-                          participant.earnedPoints
-                        }
-                      </td>
+              <div className="flex items-center gap-3">
 
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
-                            participant.percent >=
-                            80
-                              ? "bg-green-100 text-green-700"
-                              : participant.percent >=
-                                60
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {
-                            participant.percent
-                          }
-                          %
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
+                <span className="h-4 w-4 rounded-full bg-green-500" />
+
+                <span className="font-bold text-green-700">
+                  Легке
+                </span>
+
+              </div>
+
+              <p className="mt-3 text-sm text-green-700">
+                80–100% правильних відповідей
+              </p>
+
+            </div>
+
+            {/* СЕРЕДНЬОЇ СКЛАДНОСТІ */}
+
+            <div className="rounded-xl bg-yellow-50 p-5">
+
+              <div className="flex items-center gap-3">
+
+                <span className="h-4 w-4 rounded-full bg-yellow-500" />
+
+                <span className="font-bold text-yellow-700">
+                  Середньої складності
+                </span>
+
+              </div>
+
+              <p className="mt-3 text-sm text-yellow-700">
+                60–79% правильних відповідей
+              </p>
+
+            </div>
+
+            {/* СКЛАДНЕ */}
+
+            <div className="rounded-xl bg-orange-50 p-5">
+
+              <div className="flex items-center gap-3">
+
+                <span className="h-4 w-4 rounded-full bg-orange-500" />
+
+                <span className="font-bold text-orange-700">
+                  Складне
+                </span>
+
+              </div>
+
+              <p className="mt-3 text-sm text-orange-700">
+                40–59% правильних відповідей
+              </p>
+
+            </div>
+
+            {/* ДУЖЕ СКЛАДНЕ */}
+
+            <div className="rounded-xl bg-red-50 p-5">
+
+              <div className="flex items-center gap-3">
+
+                <span className="h-4 w-4 rounded-full bg-red-500" />
+
+                <span className="font-bold text-red-700">
+                  Дуже складне
+                </span>
+
+              </div>
+
+              <p className="mt-3 text-sm text-red-700">
+                0–39% правильних відповідей
+              </p>
+
+            </div>
+
           </div>
+
         </div>
+
       </section>
+
     </div>
   );
 }
