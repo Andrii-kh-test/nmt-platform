@@ -457,31 +457,50 @@ export default function AdminAnalyticsPage() {
         {/* ЗАГОЛОВОК */}
         {/* ================================================= */}
 
-        <div className="mb-8">
-          <div className="mb-3">
-            <Link
-              href="/admin"
-              className="
-                text-sm
-                font-semibold
-                text-[#7A1F2B]
-                hover:underline
-              "
-            >
-              ← Адміністративна панель
-            </Link>
-          </div>
+        <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+  <div>
+    <h1 className="text-4xl font-bold text-[#7A1F2B]">
+      Аналітика тестування
+    </h1>
 
-          <h1 className="text-4xl font-bold text-[#7A1F2B]">
-            Аналітика тестування
-          </h1>
+    <p className="mt-2 text-lg text-gray-600">
+      Аналіз результатів учасників
+      та статистика виконання
+      окремих завдань.
+    </p>
+  </div>
 
-          <p className="mt-2 text-gray-600">
-            Аналіз результатів учасників
-            та статистика виконання
-            окремих завдань.
-          </p>
-        </div>
+  <Link
+    href="/admin"
+    className="
+      inline-flex
+      items-center
+      justify-center
+      gap-2
+      rounded-xl
+      border
+      border-[#7A1F2B]
+      bg-white
+      px-5
+      py-3
+      font-semibold
+      text-[#7A1F2B]
+      shadow-sm
+      transition
+      hover:bg-[#7A1F2B]
+      hover:text-white
+      hover:shadow-md
+    "
+  >
+    <span className="text-lg">
+      ←
+    </span>
+
+    <span>
+      Повернутися до адміністративної панелі
+    </span>
+  </Link>
+</div>
 
         {/* ================================================= */}
         {/* ВИБІР ТЕСТУ */}

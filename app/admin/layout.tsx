@@ -32,6 +32,11 @@ const menu = [
     icon: "📊",
   },
   {
+    title: "Аналітика",
+    href: "/admin/analytics",
+    icon: "📈",
+  },
+  {
     title: "Моніторинг",
     href: "/admin/monitoring",
     icon: "🖥️",
@@ -53,7 +58,10 @@ export default function AdminLayout({
 }: Props) {
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* ===================================================== */}
       {/* Верхня панель */}
+      {/* ===================================================== */}
+
       <header className="h-20 border-b bg-white shadow-sm">
         <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-8">
           <div>
@@ -68,9 +76,15 @@ export default function AdminLayout({
         </div>
       </header>
 
+      {/* ===================================================== */}
       {/* Основна область */}
+      {/* ===================================================== */}
+
       <div className="mx-auto flex max-w-7xl">
+        {/* =================================================== */}
         {/* Бічне меню */}
+        {/* =================================================== */}
+
         <aside className="min-h-[calc(100vh-80px)] w-72 border-r bg-white">
           <nav className="p-5">
             <ul className="space-y-2">
@@ -96,7 +110,9 @@ export default function AdminLayout({
                       {item.icon}
                     </span>
 
-                    <span>{item.title}</span>
+                    <span>
+                      {item.title}
+                    </span>
                   </Link>
                 </li>
               ))}
@@ -104,7 +120,10 @@ export default function AdminLayout({
           </nav>
         </aside>
 
+        {/* =================================================== */}
         {/* Вміст сторінки */}
+        {/* =================================================== */}
+
         <main className="flex-1 p-8">
           {children}
         </main>
