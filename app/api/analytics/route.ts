@@ -70,7 +70,7 @@ function getAnswerIds(value: unknown): number[] {
 }
 
 // =====================================================
-// ПОРІВНЯННЯ ВІДПОВІДЕЙ
+// ПОРІВНЯННЯ SINGLE / MULTIPLE
 // =====================================================
 
 function isSameAnswers(
@@ -137,198 +137,8 @@ function isMatchingCorrect(
 
   return leftItems.every(
     (leftItem, index) =>
-      userAnswer[index] ===
-      leftItem.correctRightId
+      userAnswer[index] === leftItem.correctRightId
   );
-}
-
-// =====================================================
-// ОТРИМАННЯ ВІДПОВІДІ З РЕЗУЛЬТАТУ
-// =====================================================
-//
-// Новий формат:
-//
-// {
-//   "629": [2962]
-// }
-//
-// Старий формат:
-//
-// {
-//   "781": [3671]
-// }
-//
-// Для старого формату визначаємо питання
-// за його позицією в тесті.
-//
-// =====================================================
-
-function getRawAnswer(
-  answers: Record<string, unknown>,
-  questionId: number,
-  questionOrder: number,
-  allQuestions: Array<{
-    id: number;
-    order: number;
-  }>
-): {
-  value: unknown;
-  source: "id" | "order" | "position" | "none";
-} {
-  // ---------------------------------------------------
-  // 1. Сучасний формат: ID питання
-  // ---------------------------------------------------
-
-  const idKey = String(questionId);
-
-  if (
-    Object.prototype.hasOwnProperty.call(
-      answers,
-      idKey
-    )
-  ) {
-    return {
-      value: answers[idKey],
-      source: "id",
-    };
-  }
-
-  // ---------------------------------------------------
-  // 2. Формат за order
-  // ---------------------------------------------------
-
-  const orderKey = String(questionOrder);
-
-  if (
-    Object.prototype.hasOwnProperty.call(
-      answers,
-      orderKey
-    )
-  ) {
-    return {
-      value: answers[orderKey],
-      source: "order",
-    };
-  }
-
-  // ---------------------------------------------------
-  // 3. Старий формат
-  //
-  // Наприклад:
-  //
-  // 781 -> питання 1
-  // 782 -> питання 2
-  // 783 -> питання 3
-  //
-  // Object.keys() зберігає порядок
-  // властивостей JSON.
-  // ---------------------------------------------------
-
-  const questionIndex =
-    allQuestions.findIndex(
-      (item) => item.id === questionId
-    );
-
-  if (questionIndex >= 0) {
-    const answerKeys =
-      Object.keys(answers);
-
-    const oldKey =
-      answerKeys[questionIndex];
-
-    if (oldKey !== undefined) {
-      return {
-        value: answers[oldKey],
-        source: "position",
-      };
-    }
-  }
-
-  return {
-    value: undefined,
-    source: "none",
-  };
-}
-
-// =====================================================
-// ПЕРЕТВОРЕННЯ СТАРИХ ID ВАРІАНТІВ
-// =====================================================
-//
-// Якщо результат був створений до зміни ID,
-// у ньому можуть бути старі AnswerOption.id.
-//
-// Ми не можемо математично встановити,
-// який саме старий ID відповідає новому.
-//
-// Тому для старого формату використовуємо
-// позицію варіанта.
-//
-// =====================================================
-
-function convertAnswerIdsByOrder(
-  userAnswer: number[],
-  options: Array<{
-    id: number;
-    order: number;
-  }>,
-  source:
-    | "id"
-    | "order"
-    | "position"
-    | "none"
-): number[] {
-  // Новий формат — ID вже актуальні.
-  if (source === "id") {
-    return userAnswer;
-  }
-
-  // Якщо відповіді відсутні.
-  if (userAnswer.length === 0) {
-    return [];
-  }
-
-  // Для старого формату:
-  //
-  // Беремо порядковий номер старого
-  // варіанта за позицією ID у масиві.
-  //
-  // Це працює лише тоді, коли порядок
-  // варіантів не змінювався.
-  const sortedOptions = [...options].sort(
-    (a, b) => a.order - b.order
-  );
-
-  const result: number[] = [];
-
-  for (const oldId of userAnswer) {
-    const numericId = Number(oldId);
-
-    // Якщо ID уже є серед поточних —
-    // залишаємо його.
-    const existing = sortedOptions.find(
-      (option) => option.id === numericId
-    );
-
-    if (existing) {
-      result.push(existing.id);
-      continue;
-    }
-
-    // -------------------------------------------------
-    // ВАЖЛИВО:
-    //
-    // Старий ID не дає можливості визначити
-    // позицію варіанта без старої структури.
-    //
-    // Тому нижче залишаємо ID як є.
-    //
-    // Це дозволяє не вигадувати відповідність.
-    // -------------------------------------------------
-
-    result.push(numericId);
-  }
-
-  return result;
 }
 
 // =====================================================
@@ -350,8 +160,7 @@ export async function GET(request: Request) {
     if (!testIdParam) {
       return NextResponse.json(
         {
-          message:
-            "Не вказано ID тесту.",
+          message: "Не вказано ID тесту.",
         },
         {
           status: 400,
@@ -367,8 +176,7 @@ export async function GET(request: Request) {
     ) {
       return NextResponse.json(
         {
-          message:
-            "Некоректний ID тесту.",
+          message: "Некоректний ID тесту.",
         },
         {
           status: 400,
@@ -377,7 +185,7 @@ export async function GET(request: Request) {
     }
 
     // =================================================
-    // PARTICIPANTS
+    // УЧАСНИКИ
     // =================================================
 
     const participantsParam =
@@ -404,14 +212,13 @@ export async function GET(request: Request) {
           );
         }
 
-        participantIds =
-          parsed
-            .map((id) => Number(id))
-            .filter(
-              (id) =>
-                Number.isInteger(id) &&
-                id > 0
-            );
+        participantIds = parsed
+          .map((id) => Number(id))
+          .filter(
+            (id) =>
+              Number.isInteger(id) &&
+              id > 0
+          );
       } catch {
         return NextResponse.json(
           {
@@ -426,7 +233,11 @@ export async function GET(request: Request) {
     }
 
     // =================================================
-    // TEST
+    // ЗАВАНТАЖЕННЯ ТЕСТУ
+    //
+    // ВАЖЛИВО:
+    // варіанти потрібні серверу для розрахунку
+    // статистики, але НЕ повертаються клієнту.
     // =================================================
 
     const test =
@@ -434,15 +245,35 @@ export async function GET(request: Request) {
         where: {
           id: testId,
         },
-        include: {
+
+        select: {
+          id: true,
+          title: true,
+          subject: true,
+          maxPoints: true,
+
           questions: {
             orderBy: {
               order: "asc",
             },
-            include: {
+
+            select: {
+              id: true,
+              order: true,
+              type: true,
+              text: true,
+              points: true,
+
               options: {
                 orderBy: {
                   order: "asc",
+                },
+
+                select: {
+                  id: true,
+                  order: true,
+                  text: true,
+                  isCorrect: true,
                 },
               },
             },
@@ -453,8 +284,7 @@ export async function GET(request: Request) {
     if (!test) {
       return NextResponse.json(
         {
-          message:
-            "Тест не знайдено.",
+          message: "Тест не знайдено.",
         },
         {
           status: 404,
@@ -463,7 +293,9 @@ export async function GET(request: Request) {
     }
 
     // =================================================
-    // RESULTS
+    // РЕЗУЛЬТАТИ
+    //
+    // Витягуємо тільки ті поля, які реально потрібні.
     // =================================================
 
     const results =
@@ -481,16 +313,27 @@ export async function GET(request: Request) {
             : {}),
         },
 
+        select: {
+          id: true,
+          earnedPoints: true,
+          percent: true,
+          answers: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          createdAt: true,
+        },
+
         orderBy: {
           createdAt: "asc",
         },
       });
 
     // =================================================
-    // PARTICIPANTS
+    // УЧАСНИКИ
     // =================================================
 
-    const participantResults =
+    const participants =
       results.map((result) => ({
         id: result.id,
 
@@ -515,7 +358,7 @@ export async function GET(request: Request) {
       results.length;
 
     // =================================================
-    // QUESTION STATISTICS
+    // СТАТИСТИКА ЗАВДАНЬ
     // =================================================
 
     const questionStatistics =
@@ -526,7 +369,7 @@ export async function GET(request: Request) {
           let skipped = 0;
 
           // -------------------------------------------
-          // CORRECT ANSWERS
+          // Правильні відповіді
           // -------------------------------------------
 
           const correctAnswers =
@@ -541,7 +384,7 @@ export async function GET(request: Request) {
               );
 
           // -------------------------------------------
-          // MATCHING
+          // Matching
           // -------------------------------------------
 
           const matchingLeftItems =
@@ -550,7 +393,7 @@ export async function GET(request: Request) {
             );
 
           // -------------------------------------------
-          // PARTICIPANTS
+          // Перевіряємо учасників
           // -------------------------------------------
 
           results.forEach(
@@ -577,38 +420,24 @@ export async function GET(request: Request) {
               }
 
               // ---------------------------------------
-              // ЗНАХОДИМО ВІДПОВІДЬ
+              // КЛЮЧ ПИТАННЯ
+              //
+              // Важливо:
+              // використовуємо question.id,
+              // а НЕ question.order.
               // ---------------------------------------
 
-              const raw =
-                getRawAnswer(
-                  answers,
-                  question.id,
-                  question.order,
-                  test.questions
-                );
+              const answerKey =
+                String(question.id);
 
               const rawAnswer =
-                raw.value;
+                answers[answerKey];
+
+              const userAnswer =
+                getAnswerIds(rawAnswer);
 
               // ---------------------------------------
-              // ПЕРЕТВОРЮЄМО
-              // ---------------------------------------
-
-              let userAnswer =
-                getAnswerIds(
-                  rawAnswer
-                );
-
-              userAnswer =
-                convertAnswerIdsByOrder(
-                  userAnswer,
-                  question.options,
-                  raw.source
-                );
-
-              // ---------------------------------------
-              // ПРОПУЩЕНО
+              // Пропущене
               // ---------------------------------------
 
               if (
@@ -647,14 +476,11 @@ export async function GET(request: Request) {
               // SINGLE / MULTIPLE
               // ---------------------------------------
 
-              const answerIsCorrect =
+              if (
                 isSameAnswers(
                   userAnswer,
                   correctAnswers
-                );
-
-              if (
-                answerIsCorrect
+                )
               ) {
                 correct++;
               } else {
@@ -664,7 +490,7 @@ export async function GET(request: Request) {
           );
 
           // -------------------------------------------
-          // PERCENTAGES
+          // ВІДСОТКИ
           // -------------------------------------------
 
           const correctPercent =
@@ -694,38 +520,31 @@ export async function GET(request: Request) {
                 )
               : 0;
 
-          // -------------------------------------------
-          // FULL QUESTION DATA
-          // -------------------------------------------
-
           return {
             id: question.id,
 
-            order: question.order,
+            order:
+              question.order,
 
-            type: question.type,
+            type:
+              question.type,
 
-            text: question.text,
+            text:
+              question.text,
 
-            points: question.points,
-
-            options:
-              question.options.map(
-                (option) => ({
-                  id: option.id,
-                  order: option.order,
-                  text: option.text,
-                  isCorrect:
-                    option.isCorrect,
-                })
-              ),
+            points:
+              question.points,
 
             correct,
+
             incorrect,
+
             skipped,
 
             correctPercent,
+
             incorrectPercent,
+
             skippedPercent,
 
             difficulty:
@@ -737,7 +556,7 @@ export async function GET(request: Request) {
       );
 
     // =================================================
-    // SCORES
+    // ЗАГАЛЬНА СТАТИСТИКА
     // =================================================
 
     const scores =
@@ -783,17 +602,16 @@ export async function GET(request: Request) {
         : 0;
 
     // =================================================
-    // RESPONSE
+    // ВІДПОВІДЬ
+    //
+    // Тут більше НЕ передаємо options.
     // =================================================
 
     return NextResponse.json({
       test: {
         id: test.id,
-
         title: test.title,
-
         subject: test.subject,
-
         maxPoints:
           test.maxPoints,
 
@@ -814,8 +632,7 @@ export async function GET(request: Request) {
         averagePercent,
       },
 
-      participants:
-        participantResults,
+      participants,
 
       questions:
         questionStatistics,
