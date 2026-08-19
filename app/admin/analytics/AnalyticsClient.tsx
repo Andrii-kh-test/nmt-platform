@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import Link from "next/link";
 
 type Props = {
@@ -23,17 +22,25 @@ type QuestionStatistic = {
   incorrectPercent: number;
   skippedPercent: number;
 
-  difficulty: {
-    label: string;
-    color: string;
-  };
+  difficulty: string;
+  difficultyColor: string;
 };
 
 type Participant = {
   id: number;
-  name: string;
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
+
   earnedPoints: number;
+  maxPoints: number;
   percent: number;
+
+  correct: number;
+  incorrect: number;
+  skipped: number;
+
+  createdAt: string;
 };
 
 type AnalyticsData = {
@@ -74,10 +81,37 @@ type QuestionDetails = {
 };
 
 // =====================================================
-// ПОЗНАЧЕННЯ ТИПІВ ПИТАНЬ
+// ТИП СКЛАДНОСТІ
 // =====================================================
 
-function getQuestionTypeLabel(type: string) {
+function getDifficultyClasses(
+  color: string
+) {
+  switch (color) {
+    case "green":
+      return "bg-green-100 text-green-700 border-green-200";
+
+    case "yellow":
+      return "bg-yellow-100 text-yellow-700 border-yellow-200";
+
+    case "orange":
+      return "bg-orange-100 text-orange-700 border-orange-200";
+
+    case "red":
+      return "bg-red-100 text-red-700 border-red-200";
+
+    default:
+      return "bg-gray-100 text-gray-700 border-gray-200";
+  }
+}
+
+// =====================================================
+// ТИП ПИТАННЯ
+// =====================================================
+
+function getQuestionTypeLabel(
+  type: string
+) {
   switch (type) {
     case "single":
       return "Одна правильна відповідь";
@@ -97,71 +131,15 @@ function getQuestionTypeLabel(type: string) {
 }
 
 // =====================================================
-// КОЛІР СКЛАДНОСТІ
-// =====================================================
-
-function getDifficultyClasses(color: string) {
-  switch (color) {
-    case "green":
-      return "bg-green-100 text-green-700 border border-green-200";
-
-    case "yellow":
-      return "bg-yellow-100 text-yellow-700 border border-yellow-200";
-
-    case "orange":
-      return "bg-orange-100 text-orange-700 border border-orange-200";
-
-    case "red":
-      return "bg-red-100 text-red-700 border border-red-200";
-
-    default:
-      return "bg-gray-100 text-gray-700 border border-gray-200";
-  }
-}
-
-// =====================================================
-// ВИЗНАЧЕННЯ КЛАСУ СКЛАДНОСТІ
-// =====================================================
-
-function getDifficultyByPercent(
-  percent: number
-) {
-  if (percent < 20) {
-    return {
-      label: "Дуже складне",
-      color: "red",
-    };
-  }
-
-  if (percent < 40) {
-    return {
-      label: "Складне",
-      color: "orange",
-    };
-  }
-
-  if (percent < 60) {
-    return {
-      label: "Оптимальне",
-      color: "yellow",
-    };
-  }
-
-  if (percent < 80) {
-    return {
-      label: "Легке",
-      color: "green",
-    };
-  }
-
-  return {
-    label: "Дуже легке",
-    color: "green",
-  };
-}
-
-// =====================================================
 // ОЧИЩЕННЯ ТЕХНІЧНИХ ДАНИХ
+//
+// Приклади:
+//
+// L|1|Текст
+// L|1|Текст|25
+// R|25|Відповідь
+//
+// Показуємо тільки людський текст.
 // =====================================================
 
 function cleanText(
@@ -174,7 +152,7 @@ function cleanText(
   let result = String(text);
 
   // ---------------------------------------------------
-  // JSON-обгортки
+  // JSON-обгортка
   // ---------------------------------------------------
 
   try {
@@ -186,90 +164,77 @@ function cleanText(
       parsed &&
       typeof parsed === "object"
     ) {
+      const object =
+        parsed as Record<string, unknown>;
+
       if (
-        typeof parsed.text === "string"
+        typeof object.text === "string"
       ) {
-        result = parsed.text;
+        result = object.text;
       } else if (
-        typeof parsed.question === "string"
+        typeof object.question ===
+        "string"
       ) {
-        result = parsed.question;
+        result = object.question;
       } else if (
-        typeof parsed.content === "string"
+        typeof object.content ===
+        "string"
       ) {
-        result = parsed.content;
+        result = object.content;
       }
     }
   } catch {
-    // Звичайний текст
+    // Звичайний текст.
   }
 
   // ---------------------------------------------------
-  // Технічні маркери matching
-  //
-  // L|id|текст|correctId
-  // R|id|текст
+  // L|id|text|correctId
+  // R|id|text
   // ---------------------------------------------------
 
-  if (
-    result.startsWith("L|") ||
-    result.startsWith("R|")
-  ) {
-    const parts = result.split("|");
+  const technicalMatch =
+    result.match(
+      /^(L|R)\|[^|]*\|([\s\S]*?)(?:\|[^|]*)?$/
+    );
 
-    if (parts.length >= 3) {
-      result = parts[2];
-    }
+  if (technicalMatch) {
+    result = technicalMatch[2];
   }
 
   // ---------------------------------------------------
-  // Повторне очищення можливого префікса
+  // Додаткове очищення службових маркерів
   // ---------------------------------------------------
 
   result = result.replace(
-    /^(L|R)\|\d+\|/i,
+    /^(L|R)\|[^|]*\|/i,
     ""
   );
 
   // ---------------------------------------------------
-  // Інші можливі службові маркери
+  // Якщо службові частини випадково залишилися
   // ---------------------------------------------------
 
   result = result.replace(
-    /^(LEFT|RIGHT)\|\d+\|/i,
-    ""
-  );
-
-  result = result.replace(
-    /^(left|right):\d+:/i,
+    /\|(?:\d+)\s*$/g,
     ""
   );
 
   // ---------------------------------------------------
-  // Прибираємо можливі службові JSON-поля,
-  // якщо вони залишилися у тексті
+  // Технічні Unicode / control characters
   // ---------------------------------------------------
 
   result = result.replace(
-    /^\s*\{\s*"text"\s*:\s*"/,
-    ""
-  );
-
-  result = result.replace(
-    /"\s*\}\s*$/,
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g,
     ""
   );
 
   // ---------------------------------------------------
-  // Нормалізація перенесень
+  // Переноси
   // ---------------------------------------------------
 
-  result = result
+  return result
     .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
     .trim();
-
-  return result;
 }
 
 // =====================================================
@@ -279,20 +244,13 @@ function cleanText(
 function getMatchingParts(
   text: string
 ) {
-  const clean = String(text ?? "");
-
-  const parts = clean.split("|");
+  const parts = text.split("|");
 
   if (parts[0] === "L") {
     return {
-      side: "left" as const,
-
+      side: "left",
       id: Number(parts[1]),
-
-      text: cleanText(
-        parts[2] ?? ""
-      ),
-
+      text: parts[2] ?? "",
       correctId:
         parts[3] !== undefined
           ? Number(parts[3])
@@ -302,27 +260,38 @@ function getMatchingParts(
 
   if (parts[0] === "R") {
     return {
-      side: "right" as const,
-
+      side: "right",
       id: Number(parts[1]),
-
-      text: cleanText(
-        parts[2] ?? ""
-      ),
-
+      text: parts[2] ?? "",
       correctId: null,
     };
   }
 
   return {
     side: null,
-
     id: null,
-
-    text: cleanText(clean),
-
+    text,
     correctId: null,
   };
+}
+
+// =====================================================
+// НАЗВА УЧАСНИКА
+// =====================================================
+
+function getParticipantName(
+  participant: Participant
+) {
+  const parts = [
+    participant.lastName,
+    participant.firstName,
+    participant.middleName,
+  ].filter(Boolean);
+
+  return (
+    parts.join(" ") ||
+    "Без зазначеного ПІБ"
+  );
 }
 
 // =====================================================
@@ -332,29 +301,19 @@ function getMatchingParts(
 export default function AnalyticsClient({
   testId,
 }: Props) {
-  const [
-    analytics,
-    setAnalytics,
-  ] = useState<AnalyticsData | null>(
-    null
-  );
+  const [analytics, setAnalytics] =
+    useState<AnalyticsData | null>(null);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [error, setError] =
+    useState("");
 
   const [
     expandedQuestion,
     setExpandedQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  ] = useState<number | null>(null);
 
   const [
     questionDetails,
@@ -366,9 +325,7 @@ export default function AnalyticsClient({
   const [
     loadingQuestion,
     setLoadingQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  ] = useState<number | null>(null);
 
   // =====================================================
   // ЗАВАНТАЖЕННЯ АНАЛІТИКИ
@@ -390,7 +347,6 @@ export default function AnalyticsClient({
     async function loadAnalytics() {
       try {
         setLoading(true);
-
         setError("");
 
         const response = await fetch(
@@ -438,35 +394,27 @@ export default function AnalyticsClient({
   }, [testId]);
 
   // =====================================================
-  // ВІДКРИТТЯ ПИТАННЯ
+  // РОЗГОРТАННЯ ПИТАННЯ
   // =====================================================
 
   async function toggleQuestion(
     questionId: number
   ) {
     if (
-      expandedQuestion ===
-      questionId
+      expandedQuestion === questionId
     ) {
       setExpandedQuestion(null);
-
       return;
     }
 
-    setExpandedQuestion(
-      questionId
-    );
+    setExpandedQuestion(questionId);
 
-    if (
-      questionDetails[questionId]
-    ) {
+    if (questionDetails[questionId]) {
       return;
     }
 
     try {
-      setLoadingQuestion(
-        questionId
-      );
+      setLoadingQuestion(questionId);
 
       const response = await fetch(
         `/api/analytics/question?testId=${encodeURIComponent(
@@ -492,7 +440,6 @@ export default function AnalyticsClient({
       setQuestionDetails(
         (previous) => ({
           ...previous,
-
           [questionId]:
             data.question,
         })
@@ -564,7 +511,6 @@ export default function AnalyticsClient({
 
   return (
     <div className="space-y-8">
-
       {/* =================================================
           HEADER
       ================================================= */}
@@ -600,7 +546,6 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-gray-500">
             Учасників
@@ -674,56 +619,48 @@ export default function AnalyticsClient({
             {
               analytics.summary
                 .averagePercent
-            }%
+            }
+            %
           </p>
         </div>
-
       </div>
 
       {/* =================================================
-          QUESTIONS TABLE
+          QUESTIONS
       ================================================= */}
 
       <section>
-
         <div className="mb-5">
           <h3 className="text-2xl font-bold text-gray-800">
             Аналіз завдань
           </h3>
 
           <p className="mt-1 text-gray-500">
-            Натисніть на завдання,
-            щоб переглянути умову
-            та варіанти відповідей.
+            Натисніть на завдання, щоб
+            переглянути умову та
+            правильну відповідь.
           </p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
           <div className="overflow-x-auto">
-
             <table className="w-full min-w-[900px] table-fixed">
-
               <colgroup>
-                <col className="w-[80px]" />
-                <col className="w-[210px]" />
-                <col className="w-[150px]" />
-                <col className="w-[150px]" />
-                <col className="w-[150px]" />
-                <col className="w-[150px]" />
-                <col className="w-[130px]" />
-                <col className="w-[80px]" />
+                <col className="w-[8%]" />
+                <col className="w-[20%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
+                <col className="w-[18%]" />
               </colgroup>
 
               <thead className="bg-[#7A1F2B] text-white">
-
                 <tr>
-
                   <th className="px-4 py-4 text-center text-sm font-semibold">
                     №
                   </th>
 
-                  <th className="px-4 py-4 text-left text-sm font-semibold">
+                  <th className="px-4 py-4 text-center text-sm font-semibold">
                     Тип
                   </th>
 
@@ -742,24 +679,12 @@ export default function AnalyticsClient({
                   <th className="px-4 py-4 text-center text-sm font-semibold">
                     Складність
                   </th>
-
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
-                    Бал
-                  </th>
-
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
-                    Дія
-                  </th>
-
                 </tr>
-
               </thead>
 
               <tbody className="divide-y divide-gray-100">
-
                 {analytics.questions.map(
                   (question) => {
-
                     const details =
                       questionDetails[
                         question.id
@@ -773,145 +698,124 @@ export default function AnalyticsClient({
                       loadingQuestion ===
                       question.id;
 
-                    const difficulty =
-                      question.difficulty ||
-                      getDifficultyByPercent(
-                        question.correctPercent
-                      );
-
                     return (
                       <tbody
-                        key={
-                          question.id
-                        }
-                        className="contents"
+                        key={question.id}
                       >
-
-                        {/* =================================================
-                            ОСНОВНИЙ РЯДОК
-                        ================================================= */}
-
                         <tr
                           onClick={() =>
                             toggleQuestion(
                               question.id
                             )
                           }
-                          className={`cursor-pointer transition hover:bg-gray-50 ${
+                          className={`cursor-pointer transition ${
                             isExpanded
                               ? "bg-gray-50"
-                              : ""
+                              : "hover:bg-gray-50"
                           }`}
                         >
+                          {/* № */}
 
-                          <td className="px-4 py-4 text-center align-middle">
-
-                            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
+                          <td className="px-4 py-5 text-center align-middle">
+                            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
                               {
                                 question.order
                               }
                             </div>
-
                           </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
+                          {/* TYPE */}
 
-                            <span className="text-sm text-gray-600">
-                              {
-                                getQuestionTypeLabel(
-                                  question.type
-                                )
-                              }
+                          <td className="px-4 py-5 text-center align-middle">
+                            <span className="text-sm leading-5 text-gray-600">
+                              {getQuestionTypeLabel(
+                                question.type
+                              )}
                             </span>
-
                           </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
+                          {/* CORRECT */}
 
+                          <td className="px-4 py-5 text-center align-middle">
                             <div className="font-bold text-green-600">
                               {
                                 question.correctPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
                               {
                                 question.correct
-                              }
+                              }{" "}
+                              уч.
                             </div>
-
                           </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
+                          {/* INCORRECT */}
 
+                          <td className="px-4 py-5 text-center align-middle">
                             <div className="font-bold text-red-600">
                               {
                                 question.incorrectPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
                               {
                                 question.incorrect
-                              }
+                              }{" "}
+                              уч.
                             </div>
-
                           </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
+                          {/* SKIPPED */}
 
+                          <td className="px-4 py-5 text-center align-middle">
                             <div className="font-bold text-gray-500">
                               {
                                 question.skippedPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
                               {
                                 question.skipped
-                              }
+                              }{" "}
+                              уч.
                             </div>
-
                           </td>
 
-                          {/* =================================================
-                              СКЛАДНІСТЬ
-                          ================================================= */}
+                          {/* DIFFICULTY */}
 
-                          <td className="px-4 py-4 text-center align-middle">
+                          <td className="px-4 py-5 text-center align-middle">
+                            <div className="flex flex-col items-center gap-2">
+                              <span
+                                className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-bold ${getDifficultyClasses(
+                                  question.difficultyColor
+                                )}`}
+                              >
+                                {
+                                  question.difficulty
+                                }
+                              </span>
 
-                            <span
-                              className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap ${getDifficultyClasses(
-                                difficulty.color
-                              )}`}
-                            >
-                              {
-                                difficulty.label
-                              }
-                            </span>
+                              <span className="text-xs text-gray-400">
+                                {
+                                  question.correctPercent
+                                }
+                                % правильних
+                              </span>
 
+                              <span className="text-lg text-gray-400">
+                                {isExpanded
+                                  ? "⌃"
+                                  : "⌄"}
+                              </span>
+                            </div>
                           </td>
-
-                          <td className="px-4 py-4 text-center align-middle">
-
-                            <span className="font-semibold text-gray-700">
-                              {
-                                question.points
-                              }
-                            </span>
-
-                          </td>
-
-                          <td className="px-4 py-4 text-center align-middle">
-
-                            <span className="text-xl text-gray-400">
-                              {isExpanded
-                                ? "⌃"
-                                : "⌄"}
-                            </span>
-
-                          </td>
-
                         </tr>
 
                         {/* =================================================
@@ -919,49 +823,35 @@ export default function AnalyticsClient({
                         ================================================= */}
 
                         {isExpanded && (
-
                           <tr>
-
                             <td
-                              colSpan={8}
+                              colSpan={6}
                               className="border-t border-gray-200 bg-gray-50 p-5"
                             >
-
                               {isLoading && (
-
                                 <div className="flex items-center justify-center py-12">
-
                                   <div className="text-center">
-
-                                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
+                                    <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
                                     <p className="mt-3 text-gray-500">
                                       Завантаження завдання...
                                     </p>
-
                                   </div>
-
                                 </div>
-
                               )}
 
                               {!isLoading &&
                                 details && (
+                                  <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                                    {/* =====================================
+                                        HEADER КАРТКИ
+                                    ===================================== */}
 
-                                  <div className="mx-auto max-w-5xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-md">
-
-                                    {/* =================================================
-                                        HEADER
-                                    ================================================= */}
-
-                                    <div className="border-b border-gray-200 bg-[#7A1F2B] px-6 py-4 text-white">
-
-                                      <div className="flex flex-wrap items-center justify-between gap-3">
-
+                                    <div className="border-b border-gray-200 bg-gradient-to-r from-[#7A1F2B] to-[#922C3A] px-6 py-5 text-white">
+                                      <div className="flex flex-wrap items-center justify-between gap-4">
                                         <div>
-
-                                          <p className="text-sm opacity-80">
-                                            Завдання №{" "}
+                                          <p className="text-sm font-medium text-white/70">
+                                            Завдання{" "}
                                             {
                                               question.order
                                             }
@@ -970,87 +860,260 @@ export default function AnalyticsClient({
                                           <h4 className="mt-1 text-xl font-bold">
                                             Перегляд завдання
                                           </h4>
-
                                         </div>
 
                                         <div className="flex flex-wrap gap-2">
-
-                                          <span className="rounded-full bg-white/15 px-3 py-1 text-sm">
-                                            {
-                                              getQuestionTypeLabel(
-                                                details.type
-                                              )
-                                            }
+                                          <span className="rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium">
+                                            {getQuestionTypeLabel(
+                                              details.type
+                                            )}
                                           </span>
 
-                                          <span className="rounded-full bg-white/15 px-3 py-1 text-sm font-semibold">
+                                          <span className="rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium">
                                             {
                                               details.points
                                             }{" "}
                                             бал.
                                           </span>
 
+                                          <span
+                                            className={`rounded-full px-3 py-1.5 text-sm font-bold ${
+                                              question.difficultyColor ===
+                                              "green"
+                                                ? "bg-green-100 text-green-700"
+                                                : question.difficultyColor ===
+                                                  "yellow"
+                                                ? "bg-yellow-100 text-yellow-700"
+                                                : question.difficultyColor ===
+                                                  "orange"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-red-100 text-red-700"
+                                            }`}
+                                          >
+                                            {
+                                              question.difficulty
+                                            }
+                                          </span>
                                         </div>
-
                                       </div>
-
                                     </div>
 
-                                    {/* =================================================
-                                        УМОВА
-                                    ================================================= */}
+                                    <div className="space-y-6 p-6">
+                                      {/* =================================
+                                          УМОВА
+                                      ================================= */}
 
-                                    <div className="border-b border-gray-200 p-6">
+                                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+                                        <div className="mb-4 flex items-center gap-3">
+                                          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
+                                            {
+                                              question.order
+                                            }
+                                          </div>
 
-                                      <div className="mb-4 flex items-center gap-3">
-
-                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                                          1
+                                          <h5 className="text-lg font-bold text-gray-800">
+                                            Умова завдання
+                                          </h5>
                                         </div>
-
-                                        <h5 className="text-lg font-bold text-gray-800">
-                                          Умова завдання
-                                        </h5>
-
-                                      </div>
-
-                                      <div className="rounded-xl bg-gray-50 p-5">
 
                                         <div className="whitespace-pre-wrap text-base leading-7 text-gray-800">
                                           {cleanText(
                                             details.text
                                           )}
                                         </div>
-
                                       </div>
 
-                                    </div>
+                                      {/* =================================
+                                          SINGLE / MULTIPLE
+                                      ================================= */}
 
-                                    {/* =================================================
-                                        ВІДПОВІДІ
-                                    ================================================= */}
-
-                                    {details.type !==
-                                      "matching" &&
-                                      details.type !==
-                                        "sequence" && (
-
-                                        <div className="p-6">
-
-                                          <div className="mb-4 flex items-center gap-3">
-
-                                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                                              2
-                                            </div>
-
-                                            <h5 className="text-lg font-bold text-gray-800">
+                                      {details.type !==
+                                        "matching" &&
+                                        details.type !==
+                                          "sequence" && (
+                                          <div className="rounded-xl border border-gray-200 bg-white p-6">
+                                            <h5 className="mb-5 text-lg font-bold text-gray-800">
                                               Варіанти відповідей
                                             </h5>
 
+                                            <div className="space-y-3">
+                                              {details.options
+                                                .filter(
+                                                  (
+                                                    option
+                                                  ) =>
+                                                    !option.text.startsWith(
+                                                      "L|"
+                                                    ) &&
+                                                    !option.text.startsWith(
+                                                      "R|"
+                                                    )
+                                                )
+                                                .map(
+                                                  (
+                                                    option,
+                                                    index
+                                                  ) => (
+                                                    <div
+                                                      key={
+                                                        option.id
+                                                      }
+                                                      className={`rounded-xl border-2 p-4 transition ${
+                                                        option.isCorrect
+                                                          ? "border-green-300 bg-green-50"
+                                                          : "border-gray-200 bg-white"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-start gap-4">
+                                                        <div
+                                                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-bold ${
+                                                            option.isCorrect
+                                                              ? "bg-green-600 text-white"
+                                                              : "bg-gray-100 text-gray-600"
+                                                          }`}
+                                                        >
+                                                          {String.fromCharCode(
+                                                            65 +
+                                                              index
+                                                          )}
+                                                        </div>
+
+                                                        <div className="min-w-0 flex-1">
+                                                          <div className="whitespace-pre-wrap text-base leading-6 text-gray-800">
+                                                            {cleanText(
+                                                              option.text
+                                                            )}
+                                                          </div>
+
+                                                          {option.isCorrect && (
+                                                            <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-sm font-bold text-green-700">
+                                                              <span>
+                                                                ✓
+                                                              </span>
+
+                                                              <span>
+                                                                Правильна відповідь
+                                                              </span>
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  )
+                                                )}
+                                            </div>
                                           </div>
+                                        )}
+
+                                      {/* =================================
+                                          MATCHING
+                                      ================================= */}
+
+                                      {details.type ===
+                                        "matching" && (
+                                        <div className="rounded-xl border border-gray-200 bg-white p-6">
+                                          <h5 className="mb-5 text-lg font-bold text-gray-800">
+                                            Встановлення відповідності
+                                          </h5>
 
                                           <div className="space-y-3">
+                                            {details.options
+                                              .filter(
+                                                (
+                                                  option
+                                                ) =>
+                                                  option.text.startsWith(
+                                                    "L|"
+                                                  )
+                                              )
+                                              .map(
+                                                (
+                                                  leftOption
+                                                ) => {
+                                                  const left =
+                                                    getMatchingParts(
+                                                      leftOption.text
+                                                    );
 
+                                                  const rightOption =
+                                                    details.options.find(
+                                                      (
+                                                        option
+                                                      ) => {
+                                                        if (
+                                                          !option.text.startsWith(
+                                                            "R|"
+                                                          )
+                                                        ) {
+                                                          return false;
+                                                        }
+
+                                                        const right =
+                                                          getMatchingParts(
+                                                            option.text
+                                                          );
+
+                                                        return (
+                                                          right.id ===
+                                                          left.correctId
+                                                        );
+                                                      }
+                                                    );
+
+                                                  return (
+                                                    <div
+                                                      key={
+                                                        leftOption.id
+                                                      }
+                                                      className="grid gap-4 rounded-xl border border-gray-200 bg-gray-50 p-5 md:grid-cols-2"
+                                                    >
+                                                      <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                                        <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                                                          Елемент
+                                                        </p>
+
+                                                        <p className="mt-2 text-gray-800">
+                                                          {cleanText(
+                                                            left.text
+                                                          )}
+                                                        </p>
+                                                      </div>
+
+                                                      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                                                        <p className="text-xs font-bold uppercase tracking-wide text-green-600">
+                                                          Правильна відповідь
+                                                        </p>
+
+                                                        <p className="mt-2 text-gray-800">
+                                                          {rightOption
+                                                            ? cleanText(
+                                                                getMatchingParts(
+                                                                  rightOption.text
+                                                                ).text
+                                                              )
+                                                            : "Не визначено"}
+                                                        </p>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                }
+                                              )}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* =================================
+                                          SEQUENCE
+                                      ================================= */}
+
+                                      {details.type ===
+                                        "sequence" && (
+                                        <div className="rounded-xl border border-gray-200 bg-white p-6">
+                                          <h5 className="mb-5 text-lg font-bold text-gray-800">
+                                            Встановлення послідовності
+                                          </h5>
+
+                                          <div className="space-y-3">
                                             {details.options
                                               .filter(
                                                 (
@@ -1063,370 +1126,134 @@ export default function AnalyticsClient({
                                                     "R|"
                                                   )
                                               )
+                                              .sort(
+                                                (
+                                                  a,
+                                                  b
+                                                ) =>
+                                                  a.order -
+                                                  b.order
+                                              )
                                               .map(
                                                 (
                                                   option,
                                                   index
                                                 ) => (
-
                                                   <div
                                                     key={
                                                       option.id
                                                     }
-                                                    className={`rounded-xl border-2 p-4 transition ${
+                                                    className={`flex items-center gap-4 rounded-xl border-2 p-4 ${
                                                       option.isCorrect
-                                                        ? "border-green-400 bg-green-50"
+                                                        ? "border-green-300 bg-green-50"
                                                         : "border-gray-200 bg-white"
                                                     }`}
                                                   >
-
-                                                    <div className="flex items-start gap-4">
-
-                                                      <div
-                                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-bold ${
-                                                          option.isCorrect
-                                                            ? "bg-green-600 text-white"
-                                                            : "bg-gray-100 text-gray-600"
-                                                        }`}
-                                                      >
-                                                        {String.fromCharCode(
-                                                          65 +
-                                                            index
-                                                        )}
-                                                      </div>
-
-                                                      <div className="flex-1">
-
-                                                        <p className="whitespace-pre-wrap leading-7 text-gray-800">
-                                                          {cleanText(
-                                                            option.text
-                                                          )}
-                                                        </p>
-
-                                                        {option.isCorrect && (
-
-                                                          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700">
-
-                                                            <span>
-                                                              ✓
-                                                            </span>
-
-                                                            <span>
-                                                              Правильна відповідь
-                                                            </span>
-
-                                                          </div>
-
-                                                        )}
-
-                                                      </div>
-
+                                                    <div
+                                                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
+                                                        option.isCorrect
+                                                          ? "bg-green-600 text-white"
+                                                          : "bg-gray-100 text-gray-600"
+                                                      }`}
+                                                    >
+                                                      {index +
+                                                        1}
                                                     </div>
 
+                                                    <div className="flex-1 text-gray-800">
+                                                      {cleanText(
+                                                        option.text
+                                                      )}
+                                                    </div>
                                                   </div>
-
                                                 )
                                               )}
-
                                           </div>
-
                                         </div>
-
                                       )}
 
-                                    {/* =================================================
-                                        MATCHING
-                                    ================================================= */}
+                                      {/* =================================
+                                          STATISTICS
+                                      ================================= */}
 
-                                    {details.type ===
-                                      "matching" && (
+                                      <div>
+                                        <h5 className="mb-4 text-lg font-bold text-gray-800">
+                                          Статистика виконання
+                                        </h5>
 
-                                      <div className="p-6">
+                                        <div className="grid gap-4 sm:grid-cols-3">
+                                          <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                                            <p className="text-sm font-medium text-green-700">
+                                              Правильно
+                                            </p>
 
-                                        <div className="mb-4 flex items-center gap-3">
-
-                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                                            2
+                                            <p className="mt-1 text-2xl font-bold text-green-700">
+                                              {
+                                                question.correct
+                                              }{" "}
+                                              <span className="text-base">
+                                                (
+                                                {
+                                                  question.correctPercent
+                                                }
+                                                %)
+                                              </span>
+                                            </p>
                                           </div>
 
-                                          <h5 className="text-lg font-bold text-gray-800">
-                                            Встановлення відповідності
-                                          </h5>
+                                          <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+                                            <p className="text-sm font-medium text-red-700">
+                                              Неправильно
+                                            </p>
 
-                                        </div>
-
-                                        <div className="space-y-3">
-
-                                          {details.options
-                                            .filter(
-                                              (
-                                                option
-                                              ) =>
-                                                option.text.startsWith(
-                                                  "L|"
-                                                )
-                                            )
-                                            .map(
-                                              (
-                                                leftOption
-                                              ) => {
-
-                                                const left =
-                                                  getMatchingParts(
-                                                    leftOption.text
-                                                  );
-
-                                                const rightOption =
-                                                  details.options.find(
-                                                    (
-                                                      option
-                                                    ) => {
-
-                                                      if (
-                                                        !option.text.startsWith(
-                                                          "R|"
-                                                        )
-                                                      ) {
-                                                        return false;
-                                                      }
-
-                                                      const right =
-                                                        getMatchingParts(
-                                                          option.text
-                                                        );
-
-                                                      return (
-                                                        right.id ===
-                                                        left.correctId
-                                                      );
-                                                    }
-                                                  );
-
-                                                const right =
-                                                  rightOption
-                                                    ? getMatchingParts(
-                                                        rightOption.text
-                                                      )
-                                                    : null;
-
-                                                return (
-
-                                                  <div
-                                                    key={
-                                                      leftOption.id
-                                                    }
-                                                    className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-2"
-                                                  >
-
-                                                    <div>
-
-                                                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                                        Елемент
-                                                      </p>
-
-                                                      <p className="leading-6 text-gray-800">
-                                                        {
-                                                          left.text
-                                                        }
-                                                      </p>
-
-                                                    </div>
-
-                                                    <div>
-
-                                                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-600">
-                                                        Правильна відповідь
-                                                      </p>
-
-                                                      <p className="leading-6 text-gray-800">
-                                                        {
-                                                          right
-                                                            ?.text ||
-                                                          "Не визначено"
-                                                        }
-                                                      </p>
-
-                                                    </div>
-
-                                                  </div>
-
-                                                );
-                                              }
-                                            )}
-
-                                        </div>
-
-                                      </div>
-
-                                    )}
-
-                                    {/* =================================================
-                                        SEQUENCE
-                                    ================================================= */}
-
-                                    {details.type ===
-                                      "sequence" && (
-
-                                      <div className="p-6">
-
-                                        <div className="mb-4 flex items-center gap-3">
-
-                                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                                            2
+                                            <p className="mt-1 text-2xl font-bold text-red-700">
+                                              {
+                                                question.incorrect
+                                              }{" "}
+                                              <span className="text-base">
+                                                (
+                                                {
+                                                  question.incorrectPercent
+                                                }
+                                                %)
+                                              </span>
+                                            </p>
                                           </div>
 
-                                          <h5 className="text-lg font-bold text-gray-800">
-                                            Правильна послідовність
-                                          </h5>
+                                          <div className="rounded-xl border border-gray-200 bg-gray-100 p-5">
+                                            <p className="text-sm font-medium text-gray-600">
+                                              Пропущено
+                                            </p>
 
+                                            <p className="mt-1 text-2xl font-bold text-gray-700">
+                                              {
+                                                question.skipped
+                                              }{" "}
+                                              <span className="text-base">
+                                                (
+                                                {
+                                                  question.skippedPercent
+                                                }
+                                                %)
+                                              </span>
+                                            </p>
+                                          </div>
                                         </div>
-
-                                        <div className="space-y-3">
-
-                                          {details.options
-                                            .filter(
-                                              (
-                                                option
-                                              ) =>
-                                                !option.text.startsWith(
-                                                  "L|"
-                                                ) &&
-                                                !option.text.startsWith(
-                                                  "R|"
-                                                )
-                                            )
-                                            .sort(
-                                              (
-                                                a,
-                                                b
-                                              ) =>
-                                                a.order -
-                                                b.order
-                                            )
-                                            .map(
-                                              (
-                                                option,
-                                                index
-                                              ) => (
-
-                                                <div
-                                                  key={
-                                                    option.id
-                                                  }
-                                                  className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4"
-                                                >
-
-                                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                                                    {index +
-                                                      1}
-                                                  </div>
-
-                                                  <p className="leading-6 text-gray-800">
-                                                    {cleanText(
-                                                      option.text
-                                                    )}
-                                                  </p>
-
-                                                </div>
-
-                                              )
-                                            )}
-
-                                        </div>
-
                                       </div>
-
-                                    )}
-
-                                    {/* =================================================
-                                        СТАТИСТИКА
-                                    ================================================= */}
-
-                                    <div className="border-t border-gray-200 bg-gray-50 p-6">
-
-                                      <div className="grid gap-4 sm:grid-cols-3">
-
-                                        <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-
-                                          <p className="text-sm font-medium text-green-700">
-                                            Правильно
-                                          </p>
-
-                                          <p className="mt-1 text-2xl font-bold text-green-700">
-                                            {
-                                              question.correct
-                                            }{" "}
-                                            (
-                                            {
-                                              question.correctPercent
-                                            }%)
-                                          </p>
-
-                                        </div>
-
-                                        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-
-                                          <p className="text-sm font-medium text-red-700">
-                                            Неправильно
-                                          </p>
-
-                                          <p className="mt-1 text-2xl font-bold text-red-700">
-                                            {
-                                              question.incorrect
-                                            }{" "}
-                                            (
-                                            {
-                                              question.incorrectPercent
-                                            }%)
-                                          </p>
-
-                                        </div>
-
-                                        <div className="rounded-xl border border-gray-200 bg-white p-5">
-
-                                          <p className="text-sm font-medium text-gray-600">
-                                            Пропущено
-                                          </p>
-
-                                          <p className="mt-1 text-2xl font-bold text-gray-700">
-                                            {
-                                              question.skipped
-                                            }{" "}
-                                            (
-                                            {
-                                              question.skippedPercent
-                                            }%)
-                                          </p>
-
-                                        </div>
-
-                                      </div>
-
                                     </div>
-
                                   </div>
-
                                 )}
-
                             </td>
-
                           </tr>
-
                         )}
-
                       </tbody>
                     );
                   }
                 )}
-
               </tbody>
-
             </table>
-
           </div>
-
         </div>
-
       </section>
 
       {/* =================================================
@@ -1434,199 +1261,138 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <section>
-
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-
-          <div className="bg-gradient-to-r from-[#7A1F2B] to-[#922D3C] px-6 py-6 text-white">
-
-            <h3 className="text-2xl font-bold">
+          <div className="border-b border-gray-200 bg-gradient-to-r from-[#7A1F2B] to-[#922C3A] px-6 py-5 text-white">
+            <h3 className="text-xl font-bold">
               Шкала визначення складності завдань
             </h3>
 
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/80">
-              Категорія складності визначається
-              за часткою учасників, які правильно
-              виконали відповідне завдання.
+            <p className="mt-1 text-sm text-white/75">
+              Категорія визначається за
+              часткою правильних відповідей
+              учасників.
             </p>
-
           </div>
 
-          <div className="p-6">
+          <div className="grid gap-4 p-6 md:grid-cols-5">
+            {/* 0–20 */}
 
-            <div className="grid gap-4 md:grid-cols-5">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-2xl font-bold text-red-600">
+                  0–20%
+                </span>
 
-              {/* ДУЖЕ СКЛАДНЕ */}
-
-              <div className="overflow-hidden rounded-xl border border-red-200 bg-red-50">
-
-                <div className="h-2 bg-red-500" />
-
-                <div className="p-5">
-
-                  <p className="text-sm font-medium text-red-600">
-                    0–20%
-                  </p>
-
-                  <h4 className="mt-1 text-lg font-bold text-red-700">
-                    Дуже складне
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-5 text-red-600/80">
-                    Правильно відповідає
-                    дуже мала частка
-                    учасників.
-                  </p>
-
-                </div>
-
+                <span className="h-3 w-3 rounded-full bg-red-500" />
               </div>
 
-              {/* СКЛАДНЕ */}
+              <h4 className="font-bold text-red-700">
+                Дуже складне
+              </h4>
 
-              <div className="overflow-hidden rounded-xl border border-orange-200 bg-orange-50">
-
-                <div className="h-2 bg-orange-500" />
-
-                <div className="p-5">
-
-                  <p className="text-sm font-medium text-orange-600">
-                    20–40%
-                  </p>
-
-                  <h4 className="mt-1 text-lg font-bold text-orange-700">
-                    Складне
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-5 text-orange-600/80">
-                    Завдання правильно
-                    виконують менше
-                    половини учасників.
-                  </p>
-
-                </div>
-
-              </div>
-
-              {/* ОПТИМАЛЬНЕ */}
-
-              <div className="overflow-hidden rounded-xl border border-yellow-200 bg-yellow-50">
-
-                <div className="h-2 bg-yellow-400" />
-
-                <div className="p-5">
-
-                  <p className="text-sm font-medium text-yellow-700">
-                    40–60%
-                  </p>
-
-                  <h4 className="mt-1 text-lg font-bold text-yellow-700">
-                    Оптимальне
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-5 text-yellow-700/80">
-                    Завдання має
-                    збалансований рівень
-                    складності.
-                  </p>
-
-                </div>
-
-              </div>
-
-              {/* ЛЕГКЕ */}
-
-              <div className="overflow-hidden rounded-xl border border-green-200 bg-green-50">
-
-                <div className="h-2 bg-green-500" />
-
-                <div className="p-5">
-
-                  <p className="text-sm font-medium text-green-600">
-                    60–80%
-                  </p>
-
-                  <h4 className="mt-1 text-lg font-bold text-green-700">
-                    Легке
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-5 text-green-600/80">
-                    Більшість учасників
-                    правильно виконує
-                    завдання.
-                  </p>
-
-                </div>
-
-              </div>
-
-              {/* ДУЖЕ ЛЕГКЕ */}
-
-              <div className="overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50">
-
-                <div className="h-2 bg-emerald-500" />
-
-                <div className="p-5">
-
-                  <p className="text-sm font-medium text-emerald-600">
-                    80–100%
-                  </p>
-
-                  <h4 className="mt-1 text-lg font-bold text-emerald-700">
-                    Дуже легке
-                  </h4>
-
-                  <p className="mt-2 text-sm leading-5 text-emerald-600/80">
-                    Майже всі учасники
-                    правильно виконують
-                    завдання.
-                  </p>
-
-                </div>
-
-              </div>
-
+              <p className="mt-2 text-sm leading-5 text-red-600">
+                Правильно відповіли до 20%
+                учасників.
+              </p>
             </div>
 
-            {/* =================================================
-                ВАЖЛИВЕ ПОЯСНЕННЯ
-            ================================================= */}
+            {/* 20–40 */}
 
-            <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-5">
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-2xl font-bold text-orange-600">
+                  20–40%
+                </span>
 
-              <div className="flex gap-3">
-
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                  i
-                </div>
-
-                <div>
-
-                  <p className="font-semibold text-gray-800">
-                    Як визначається складність
-                  </p>
-
-                  <p className="mt-1 text-sm leading-6 text-gray-600">
-                    Для кожного завдання
-                    використовується частка
-                    правильних відповідей.
-                    Чим менше учасників
-                    виконали завдання
-                    правильно, тим вищою
-                    є його складність.
-                  </p>
-
-                </div>
-
+                <span className="h-3 w-3 rounded-full bg-orange-500" />
               </div>
 
+              <h4 className="font-bold text-orange-700">
+                Складне
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-orange-600">
+                Правильно відповіли від
+                20% до 40% учасників.
+              </p>
             </div>
 
+            {/* 40–60 */}
+
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-2xl font-bold text-yellow-600">
+                  40–60%
+                </span>
+
+                <span className="h-3 w-3 rounded-full bg-yellow-500" />
+              </div>
+
+              <h4 className="font-bold text-yellow-700">
+                Оптимальне
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-yellow-700">
+                Правильно відповіли від
+                40% до 60% учасників.
+              </p>
+            </div>
+
+            {/* 60–80 */}
+
+            <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-2xl font-bold text-green-600">
+                  60–80%
+                </span>
+
+                <span className="h-3 w-3 rounded-full bg-green-500" />
+              </div>
+
+              <h4 className="font-bold text-green-700">
+                Легке
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-green-600">
+                Правильно відповіли від
+                60% до 80% учасників.
+              </p>
+            </div>
+
+            {/* 80–100 */}
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-2xl font-bold text-emerald-600">
+                  80–100%
+                </span>
+
+                <span className="h-3 w-3 rounded-full bg-emerald-500" />
+              </div>
+
+              <h4 className="font-bold text-emerald-700">
+                Дуже легке
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-emerald-600">
+                Правильно відповіли від
+                80% до 100% учасників.
+              </p>
+            </div>
           </div>
 
+          <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
+            <p className="text-sm leading-6 text-gray-500">
+              <span className="font-semibold text-gray-700">
+                Примітка:
+              </span>{" "}
+              межі категорій використовуються
+              для інтерпретації складності
+              завдань в аналітиці тестування.
+            </p>
+          </div>
         </div>
-
       </section>
-
     </div>
   );
 }
