@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import Link from "next/link";
 
 type Props = {
@@ -74,27 +73,31 @@ type QuestionDetails = {
 };
 
 // =====================================================
-// СЛУЖБОВІ ФУНКЦІЇ
+// СКЛАДНІСТЬ
 // =====================================================
 
 function getDifficultyClasses(color: string) {
   switch (color) {
     case "green":
-      return "bg-green-100 text-green-700";
+      return "bg-green-100 text-green-700 border-green-200";
 
     case "yellow":
-      return "bg-yellow-100 text-yellow-700";
+      return "bg-yellow-100 text-yellow-700 border-yellow-200";
 
     case "orange":
-      return "bg-orange-100 text-orange-700";
+      return "bg-orange-100 text-orange-700 border-orange-200";
 
     case "red":
-      return "bg-red-100 text-red-700";
+      return "bg-red-100 text-red-700 border-red-200";
 
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-gray-100 text-gray-700 border-gray-200";
   }
 }
+
+// =====================================================
+// ТИП ЗАВДАННЯ
+// =====================================================
 
 function getQuestionTypeLabel(type: string) {
   switch (type) {
@@ -116,7 +119,7 @@ function getQuestionTypeLabel(type: string) {
 }
 
 // =====================================================
-// ОЧИЩЕННЯ ТЕХНІЧНИХ ДАНИХ
+// ОЧИЩЕННЯ ТЕХНІЧНИХ ЗАПИСІВ
 // =====================================================
 
 function cleanText(text: string): string {
@@ -126,38 +129,36 @@ function cleanText(text: string): string {
 
   let result = text;
 
-  // -----------------------------------------------
-  // L|... та R|... — службові записи matching
-  // -----------------------------------------------
+  // ===================================================
+  // L|ID|TEXT|CORRECT_ID
+  // R|ID|TEXT
+  // ===================================================
 
-  if (result.startsWith("L|")) {
+  if (
+    result.startsWith("L|") ||
+    result.startsWith("R|")
+  ) {
     const parts = result.split("|");
 
     if (parts.length >= 3) {
-      result = parts[2];
+      result = parts
+        .slice(2, parts[0] === "L" ? 3 : 3)
+        .join("|");
     }
   }
 
-  if (result.startsWith("R|")) {
-    const parts = result.split("|");
-
-    if (parts.length >= 3) {
-      result = parts[2];
-    }
-  }
-
-  // -----------------------------------------------
-  // Прибираємо службові маркери
-  // -----------------------------------------------
+  // ===================================================
+  // ДОДАТКОВЕ ОЧИЩЕННЯ
+  // ===================================================
 
   result = result.replace(
     /^(L|R)\|\d+\|/i,
     ""
   );
 
-  // -----------------------------------------------
-  // JSON-обгортки
-  // -----------------------------------------------
+  // ===================================================
+  // JSON-ОБГОРТКА
+  // ===================================================
 
   try {
     const parsed = JSON.parse(result);
@@ -188,7 +189,7 @@ function cleanText(text: string): string {
 }
 
 // =====================================================
-// ОЧИЩЕННЯ MATCHING
+// MATCHING
 // =====================================================
 
 function getMatchingParts(text: string) {
@@ -198,7 +199,7 @@ function getMatchingParts(text: string) {
     return {
       side: "left",
       id: Number(parts[1]),
-      text: parts[2] ?? text,
+      text: parts[2] ?? "",
       correctId:
         parts[3] !== undefined
           ? Number(parts[3])
@@ -210,7 +211,7 @@ function getMatchingParts(text: string) {
     return {
       side: "right",
       id: Number(parts[1]),
-      text: parts[2] ?? text,
+      text: parts[2] ?? "",
       correctId: null,
     };
   }
@@ -262,12 +263,8 @@ export default function AnalyticsClient({
 
   useEffect(() => {
     if (!testId) {
-      setError(
-        "Не вказано ID тесту."
-      );
-
+      setError("Не вказано ID тесту.");
       setLoading(false);
-
       return;
     }
 
@@ -323,7 +320,7 @@ export default function AnalyticsClient({
   }, [testId]);
 
   // =====================================================
-  // ВІДКРИТТЯ ПИТАННЯ
+  // РОЗГОРТАННЯ ЗАВДАННЯ
   // =====================================================
 
   async function toggleQuestion(
@@ -440,7 +437,6 @@ export default function AnalyticsClient({
 
   return (
     <div className="space-y-8">
-
       {/* =================================================
           HEADER
       ================================================= */}
@@ -476,7 +472,6 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-gray-500">
             Учасників
@@ -538,7 +533,6 @@ export default function AnalyticsClient({
             {analytics.summary.averagePercent}%
           </p>
         </div>
-
       </div>
 
       {/* =================================================
@@ -546,82 +540,70 @@ export default function AnalyticsClient({
       ================================================= */}
 
       <section>
-
         <div className="mb-5">
           <h3 className="text-2xl font-bold text-gray-800">
             Аналіз завдань
           </h3>
 
           <p className="mt-1 text-gray-500">
-            Натисніть на рядок, щоб
-            переглянути повний текст
-            завдання та відповіді.
+            Натисніть на завдання, щоб
+            переглянути умову та відповіді.
           </p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-
           <div className="overflow-x-auto">
-
-            {/* =================================================
-                ТАБЛИЦЯ
-            ================================================= */}
-
-            <table className="w-full min-w-[1100px]">
-
-              {/* =================================================
-                  HEADER
-              ================================================= */}
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[7%]" />
+                <col className="w-[29%]" />
+                <col className="w-[17%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[12%]" />
+                <col className="w-[5%]" />
+              </colgroup>
 
               <thead className="bg-[#7A1F2B] text-white">
-
                 <tr>
-
-                  <th className="w-[7%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     №
                   </th>
 
-                  <th className="w-[18%] px-4 py-4 text-left text-sm font-semibold">
+                  <th className="px-3 py-4 text-left text-sm font-semibold">
                     Питання
                   </th>
 
-                  <th className="w-[15%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Тип
                   </th>
 
-                  <th className="w-[12%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Правильно
                   </th>
 
-                  <th className="w-[12%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Неправильно
                   </th>
 
-                  <th className="w-[12%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Пропущено
                   </th>
 
-                  <th className="w-[16%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Складність
                   </th>
 
-                  <th className="w-[8%] px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-3 py-4 text-center text-sm font-semibold">
                     Дія
                   </th>
-
                 </tr>
-
               </thead>
 
-              {/* =================================================
-                  BODY
-              ================================================= */}
-
               <tbody className="divide-y divide-gray-100">
-
                 {analytics.questions.map(
                   (question) => {
-
                     const details =
                       questionDetails[
                         question.id
@@ -636,14 +618,10 @@ export default function AnalyticsClient({
                       question.id;
 
                     return (
-                      <>
-
-                        {/* =================================================
-                            ОСНОВНИЙ РЯДОК
-                        ================================================= */}
-
+                      <tbody
+                        key={`question-group-${question.id}`}
+                      >
                         <tr
-                          key={`row-${question.id}`}
                           onClick={() =>
                             toggleQuestion(
                               question.id
@@ -655,24 +633,20 @@ export default function AnalyticsClient({
                               : ""
                           }`}
                         >
-
                           {/* № */}
 
-                          <td className="w-[7%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
                               {
                                 question.order
                               }
                             </div>
-
                           </td>
 
                           {/* ПИТАННЯ */}
 
-                          <td className="w-[18%] px-4 py-4 align-middle">
-
-                            <div className="font-medium text-gray-800">
+                          <td className="px-3 py-4 align-middle">
+                            <div className="font-semibold text-gray-800">
                               Питання{" "}
                               {
                                 question.order
@@ -690,27 +664,26 @@ export default function AnalyticsClient({
                               }{" "}
                               бал.
                             </div>
-
                           </td>
 
                           {/* ТИП */}
 
-                          <td className="w-[15%] px-4 py-4 text-center align-middle text-sm text-gray-600">
-
-                            {getQuestionTypeLabel(
-                              question.type
-                            )}
-
+                          <td className="px-3 py-4 text-center align-middle">
+                            <span className="text-sm text-gray-600">
+                              {getQuestionTypeLabel(
+                                question.type
+                              )}
+                            </span>
                           </td>
 
                           {/* ПРАВИЛЬНО */}
 
-                          <td className="w-[12%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <div className="font-bold text-green-600">
                               {
                                 question.correctPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -718,17 +691,16 @@ export default function AnalyticsClient({
                                 question.correct
                               }
                             </div>
-
                           </td>
 
                           {/* НЕПРАВИЛЬНО */}
 
-                          <td className="w-[12%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <div className="font-bold text-red-600">
                               {
                                 question.incorrectPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -736,17 +708,16 @@ export default function AnalyticsClient({
                                 question.incorrect
                               }
                             </div>
-
                           </td>
 
                           {/* ПРОПУЩЕНО */}
 
-                          <td className="w-[12%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <div className="font-bold text-gray-500">
                               {
                                 question.skippedPercent
-                              }%
+                              }
+                              %
                             </div>
 
                             <div className="text-xs text-gray-500">
@@ -754,15 +725,13 @@ export default function AnalyticsClient({
                                 question.skipped
                               }
                             </div>
-
                           </td>
 
                           {/* СКЛАДНІСТЬ */}
 
-                          <td className="w-[16%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <span
-                              className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
+                              className={`inline-flex whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold ${getDifficultyClasses(
                                 question
                                   .difficulty
                                   .color
@@ -774,487 +743,525 @@ export default function AnalyticsClient({
                                   .label
                               }
                             </span>
-
                           </td>
 
                           {/* ДІЯ */}
 
-                          <td className="w-[8%] px-4 py-4 text-center align-middle">
-
+                          <td className="px-3 py-4 text-center align-middle">
                             <span className="text-xl text-gray-400">
                               {isExpanded
                                 ? "⌃"
                                 : "⌄"}
                             </span>
-
                           </td>
-
                         </tr>
 
                         {/* =================================================
-                            РОЗГОРНУТИЙ РЯДОК
+                            РОЗГОРНУТЕ ЗАВДАННЯ
                         ================================================= */}
 
                         {isExpanded && (
-
-                          <tr
-                            key={`details-${question.id}`}
-                          >
-
+                          <tr>
                             <td
                               colSpan={8}
-                              className="border-t border-gray-200 bg-gray-50 p-6"
+                              className="border-t border-gray-200 bg-gray-50 p-5"
                             >
+                              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                                {isLoading && (
+                                  <div className="flex items-center justify-center py-10">
+                                    <div className="text-center">
+                                      <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
-                              {isLoading && (
-
-                                <div className="flex items-center justify-center py-10">
-
-                                  <div className="text-center">
-
-                                    <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
-
-                                    <p className="mt-3 text-gray-500">
-                                      Завантаження завдання...
-                                    </p>
-
+                                      <p className="mt-3 text-gray-500">
+                                        Завантаження завдання...
+                                      </p>
+                                    </div>
                                   </div>
+                                )}
 
-                                </div>
+                                {!isLoading &&
+                                  details && (
+                                    <div className="space-y-6">
+                                      {/* =================================================
+                                          HEADER ЗАВДАННЯ
+                                      ================================================= */}
 
-                              )}
+                                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-5">
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-500">
+                                            Завдання{" "}
+                                            {
+                                              question.order
+                                            }
+                                          </p>
 
-                              {!isLoading &&
-                                details && (
+                                          <h4 className="mt-1 text-xl font-bold text-[#7A1F2B]">
+                                            Умова
+                                            завдання
+                                          </h4>
+                                        </div>
 
-                                  <div className="space-y-6">
-
-                                    {/* УМОВА */}
-
-                                    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-
-                                      <div className="flex flex-wrap items-center justify-between gap-3">
-
-                                        <h4 className="text-lg font-bold text-[#7A1F2B]">
-                                          Умова завдання
-                                        </h4>
-
-                                        <div className="flex gap-2">
-
-                                          <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
+                                        <div className="flex flex-wrap gap-2">
+                                          <span className="rounded-full bg-gray-100 px-3 py-1.5 text-sm text-gray-600">
                                             {getQuestionTypeLabel(
                                               details.type
                                             )}
                                           </span>
 
-                                          <span className="rounded-full bg-[#F3E8EA] px-3 py-1 text-sm font-semibold text-[#7A1F2B]">
+                                          <span className="rounded-full bg-[#F3E8EA] px-3 py-1.5 text-sm font-semibold text-[#7A1F2B]">
                                             {
                                               details.points
                                             }{" "}
                                             бал.
                                           </span>
 
+                                          <span
+                                            className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${getDifficultyClasses(
+                                              question
+                                                .difficulty
+                                                .color
+                                            )}`}
+                                          >
+                                            {
+                                              question
+                                                .difficulty
+                                                .label
+                                            }
+                                          </span>
                                         </div>
-
                                       </div>
 
-                                      <div className="mt-5 whitespace-pre-wrap text-base leading-7 text-gray-800">
-                                        {cleanText(
-                                          details.text
+                                      {/* =================================================
+                                          УМОВА
+                                      ================================================= */}
+
+                                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+                                        <div className="text-base leading-7 text-gray-800">
+                                          {cleanText(
+                                            details.text
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* =================================================
+                                          SINGLE / MULTIPLE
+                                      ================================================= */}
+
+                                      {details.type !==
+                                        "matching" &&
+                                        details.type !==
+                                          "sequence" && (
+                                          <div className="rounded-xl border border-gray-200 bg-white p-6">
+                                            <h4 className="mb-5 text-lg font-bold text-gray-800">
+                                              Варіанти
+                                              відповідей
+                                            </h4>
+
+                                            <div className="space-y-3">
+                                              {details.options
+                                                .filter(
+                                                  (
+                                                    option
+                                                  ) =>
+                                                    !option.text.startsWith(
+                                                      "L|"
+                                                    ) &&
+                                                    !option.text.startsWith(
+                                                      "R|"
+                                                    )
+                                                )
+                                                .map(
+                                                  (
+                                                    option,
+                                                    index
+                                                  ) => (
+                                                    <div
+                                                      key={
+                                                        option.id
+                                                      }
+                                                      className={`rounded-xl border p-4 transition ${
+                                                        option.isCorrect
+                                                          ? "border-green-300 bg-green-50"
+                                                          : "border-gray-200 bg-white"
+                                                      }`}
+                                                    >
+                                                      <div className="flex items-start gap-4">
+                                                        <div
+                                                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
+                                                            option.isCorrect
+                                                              ? "bg-green-600 text-white"
+                                                              : "bg-gray-100 text-gray-600"
+                                                          }`}
+                                                        >
+                                                          {String.fromCharCode(
+                                                            65 +
+                                                              index
+                                                          )}
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                          <p className="whitespace-pre-wrap text-gray-800">
+                                                            {cleanText(
+                                                              option.text
+                                                            )}
+                                                          </p>
+
+                                                          {option.isCorrect && (
+                                                            <p className="mt-2 text-sm font-semibold text-green-700">
+                                                              ✓
+                                                              Правильна
+                                                              відповідь
+                                                            </p>
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  )
+                                                )}
+                                            </div>
+                                          </div>
                                         )}
-                                      </div>
 
-                                    </div>
+                                      {/* =================================================
+                                          MATCHING
+                                      ================================================= */}
 
-                                    {/* ВАРІАНТИ */}
-
-                                    {details.type !==
-                                      "matching" &&
-                                      details.type !==
-                                        "sequence" && (
-
-                                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-
-                                          <h4 className="mb-4 text-lg font-bold text-gray-800">
-                                            Варіанти відповідей
+                                      {details.type ===
+                                        "matching" && (
+                                        <div className="rounded-xl border border-gray-200 bg-white p-6">
+                                          <h4 className="mb-5 text-lg font-bold text-gray-800">
+                                            Встановлення
+                                            відповідності
                                           </h4>
 
                                           <div className="space-y-3">
-
                                             {details.options
                                               .filter(
                                                 (
                                                   option
                                                 ) =>
-                                                  !option.text.startsWith(
+                                                  option.text.startsWith(
                                                     "L|"
-                                                  ) &&
-                                                  !option.text.startsWith(
-                                                    "R|"
                                                   )
                                               )
                                               .map(
                                                 (
-                                                  option,
-                                                  index
-                                                ) => (
+                                                  leftOption
+                                                ) => {
+                                                  const left =
+                                                    getMatchingParts(
+                                                      leftOption.text
+                                                    );
 
-                                                  <div
-                                                    key={
-                                                      option.id
-                                                    }
-                                                    className={`rounded-xl border p-4 ${
-                                                      option.isCorrect
-                                                        ? "border-green-300 bg-green-50"
-                                                        : "border-gray-200 bg-white"
-                                                    }`}
-                                                  >
+                                                  const rightOption =
+                                                    details.options.find(
+                                                      (
+                                                        option
+                                                      ) => {
+                                                        if (
+                                                          !option.text.startsWith(
+                                                            "R|"
+                                                          )
+                                                        ) {
+                                                          return false;
+                                                        }
 
-                                                    <div className="flex items-start gap-4">
-
-                                                      <div
-                                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
-                                                          option.isCorrect
-                                                            ? "bg-green-600 text-white"
-                                                            : "bg-gray-100 text-gray-600"
-                                                        }`}
-                                                      >
-                                                        {String.fromCharCode(
-                                                          65 +
-                                                            index
-                                                        )}
-                                                      </div>
-
-                                                      <div className="flex-1">
-
-                                                        <p className="whitespace-pre-wrap text-gray-800">
-                                                          {cleanText(
+                                                        const right =
+                                                          getMatchingParts(
                                                             option.text
-                                                          )}
+                                                          );
+
+                                                        return (
+                                                          right.id ===
+                                                          left.correctId
+                                                        );
+                                                      }
+                                                    );
+
+                                                  return (
+                                                    <div
+                                                      key={
+                                                        leftOption.id
+                                                      }
+                                                      className="grid gap-4 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-2"
+                                                    >
+                                                      <div>
+                                                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                          Елемент
                                                         </p>
 
-                                                        {option.isCorrect && (
-
-                                                          <p className="mt-2 text-sm font-semibold text-green-700">
-                                                            ✓ Правильна відповідь
-                                                          </p>
-
-                                                        )}
-
+                                                        <p className="mt-1 text-gray-800">
+                                                          {cleanText(
+                                                            left.text
+                                                          )}
+                                                        </p>
                                                       </div>
 
+                                                      <div>
+                                                        <p className="text-xs font-semibold uppercase tracking-wide text-green-600">
+                                                          Правильна
+                                                          відповідь
+                                                        </p>
+
+                                                        <p className="mt-1 text-gray-800">
+                                                          {rightOption
+                                                            ? cleanText(
+                                                                getMatchingParts(
+                                                                  rightOption.text
+                                                                ).text
+                                                              )
+                                                            : "Не визначено"}
+                                                        </p>
+                                                      </div>
                                                     </div>
-
-                                                  </div>
-
-                                                )
+                                                  );
+                                                }
                                               )}
-
                                           </div>
-
                                         </div>
-
                                       )}
 
-                                    {/* MATCHING */}
+                                      {/* =================================================
+                                          СТАТИСТИКА
+                                      ================================================= */}
 
-                                    {details.type ===
-                                      "matching" && (
+                                      <div className="grid gap-4 sm:grid-cols-3">
+                                        <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                                          <p className="text-sm font-medium text-green-700">
+                                            Правильно
+                                          </p>
 
-                                      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-
-                                        <h4 className="mb-4 text-lg font-bold text-gray-800">
-                                          Встановлення відповідності
-                                        </h4>
-
-                                        <div className="space-y-3">
-
-                                          {details.options
-                                            .filter(
-                                              (
-                                                option
-                                              ) =>
-                                                option.text.startsWith(
-                                                  "L|"
-                                                )
-                                            )
-                                            .map(
-                                              (
-                                                leftOption
-                                              ) => {
-
-                                                const left =
-                                                  getMatchingParts(
-                                                    leftOption.text
-                                                  );
-
-                                                const rightOption =
-                                                  details.options.find(
-                                                    (
-                                                      option
-                                                    ) => {
-
-                                                      if (
-                                                        !option.text.startsWith(
-                                                          "R|"
-                                                        )
-                                                      ) {
-                                                        return false;
-                                                      }
-
-                                                      const right =
-                                                        getMatchingParts(
-                                                          option.text
-                                                        );
-
-                                                      return (
-                                                        right.id ===
-                                                        left.correctId
-                                                      );
-
-                                                    }
-                                                  );
-
-                                                return (
-
-                                                  <div
-                                                    key={
-                                                      leftOption.id
-                                                    }
-                                                    className="grid gap-3 rounded-xl border border-gray-200 p-4 md:grid-cols-2"
-                                                  >
-
-                                                    <div>
-
-                                                      <p className="text-xs font-semibold uppercase text-gray-500">
-                                                        Елемент
-                                                      </p>
-
-                                                      <p className="mt-1 text-gray-800">
-                                                        {cleanText(
-                                                          left.text
-                                                        )}
-                                                      </p>
-
-                                                    </div>
-
-                                                    <div>
-
-                                                      <p className="text-xs font-semibold uppercase text-green-600">
-                                                        Правильна відповідь
-                                                      </p>
-
-                                                      <p className="mt-1 text-gray-800">
-
-                                                        {rightOption
-                                                          ? cleanText(
-                                                              getMatchingParts(
-                                                                rightOption.text
-                                                              ).text
-                                                            )
-                                                          : "Не визначено"}
-
-                                                      </p>
-
-                                                    </div>
-
-                                                  </div>
-
-                                                );
-                                              }
-                                            )}
-
+                                          <p className="mt-1 text-2xl font-bold text-green-700">
+                                            {
+                                              question.correct
+                                            }{" "}
+                                            (
+                                            {
+                                              question.correctPercent
+                                            }
+                                            %)
+                                          </p>
                                         </div>
 
+                                        <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+                                          <p className="text-sm font-medium text-red-700">
+                                            Неправильно
+                                          </p>
+
+                                          <p className="mt-1 text-2xl font-bold text-red-700">
+                                            {
+                                              question.incorrect
+                                            }{" "}
+                                            (
+                                            {
+                                              question.incorrectPercent
+                                            }
+                                            %)
+                                          </p>
+                                        </div>
+
+                                        <div className="rounded-xl border border-gray-200 bg-gray-100 p-5">
+                                          <p className="text-sm font-medium text-gray-600">
+                                            Пропущено
+                                          </p>
+
+                                          <p className="mt-1 text-2xl font-bold text-gray-700">
+                                            {
+                                              question.skipped
+                                            }{" "}
+                                            (
+                                            {
+                                              question.skippedPercent
+                                            }
+                                            %)
+                                          </p>
+                                        </div>
                                       </div>
-
-                                    )}
-
-                                    {/* СТАТИСТИКА */}
-
-                                    <div className="grid gap-4 sm:grid-cols-3">
-
-                                      <div className="rounded-xl bg-green-50 p-5">
-
-                                        <p className="text-sm text-green-700">
-                                          Правильно
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-green-700">
-                                          {
-                                            question.correct
-                                          }{" "}
-                                          (
-                                          {
-                                            question.correctPercent
-                                          }%)
-                                        </p>
-
-                                      </div>
-
-                                      <div className="rounded-xl bg-red-50 p-5">
-
-                                        <p className="text-sm text-red-700">
-                                          Неправильно
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-red-700">
-                                          {
-                                            question.incorrect
-                                          }{" "}
-                                          (
-                                          {
-                                            question.incorrectPercent
-                                          }%)
-                                        </p>
-
-                                      </div>
-
-                                      <div className="rounded-xl bg-gray-100 p-5">
-
-                                        <p className="text-sm text-gray-600">
-                                          Пропущено
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-gray-700">
-                                          {
-                                            question.skipped
-                                          }{" "}
-                                          (
-                                          {
-                                            question.skippedPercent
-                                          }%)
-                                        </p>
-
-                                      </div>
-
                                     </div>
-
-                                  </div>
-
-                                )}
-
+                                  )}
+                              </div>
                             </td>
-
                           </tr>
-
                         )}
-
-                      </>
+                      </tbody>
                     );
                   }
                 )}
-
               </tbody>
-
             </table>
-
           </div>
-
         </div>
-
       </section>
 
       {/* =================================================
           ШКАЛА СКЛАДНОСТІ
       ================================================= */}
 
-      <section>
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 bg-gradient-to-r from-[#7A1F2B] to-[#922638] px-6 py-6 text-white">
+          <h3 className="text-2xl font-bold">
+            Шкала визначення складності завдань
+          </h3>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
-          <div className="mb-6">
-
-            <h3 className="text-2xl font-bold text-[#7A1F2B]">
-              Шкала визначення складності завдань
-            </h3>
-
-            <p className="mt-2 text-gray-500">
-              Категорія визначається за часткою
-              учасників, які правильно виконали
-              завдання.
-            </p>
-
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-5">
-
-            <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
-
-              <div className="mx-auto mb-3 h-3 w-3 rounded-full bg-red-500" />
-
-              <p className="text-sm font-bold text-red-700">
-                0–20%
-              </p>
-
-              <p className="mt-1 font-semibold text-red-800">
-                Дуже складне
-              </p>
-
-            </div>
-
-            <div className="rounded-xl border border-orange-200 bg-orange-50 p-5 text-center">
-
-              <div className="mx-auto mb-3 h-3 w-3 rounded-full bg-orange-500" />
-
-              <p className="text-sm font-bold text-orange-700">
-                20–40%
-              </p>
-
-              <p className="mt-1 font-semibold text-orange-800">
-                Складне
-              </p>
-
-            </div>
-
-            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-5 text-center">
-
-              <div className="mx-auto mb-3 h-3 w-3 rounded-full bg-yellow-500" />
-
-              <p className="text-sm font-bold text-yellow-700">
-                40–60%
-              </p>
-
-              <p className="mt-1 font-semibold text-yellow-800">
-                Оптимальне
-              </p>
-
-            </div>
-
-            <div className="rounded-xl border border-lime-200 bg-lime-50 p-5 text-center">
-
-              <div className="mx-auto mb-3 h-3 w-3 rounded-full bg-lime-500" />
-
-              <p className="text-sm font-bold text-lime-700">
-                60–80%
-              </p>
-
-              <p className="mt-1 font-semibold text-lime-800">
-                Легке
-              </p>
-
-            </div>
-
-            <div className="rounded-xl border border-green-200 bg-green-50 p-5 text-center">
-
-              <div className="mx-auto mb-3 h-3 w-3 rounded-full bg-green-500" />
-
-              <p className="text-sm font-bold text-green-700">
-                80–100%
-              </p>
-
-              <p className="mt-1 font-semibold text-green-800">
-                Дуже легке
-              </p>
-
-            </div>
-
-          </div>
-
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/80">
+            Категорія складності визначається
+            за часткою учасників, які виконали
+            завдання правильно.
+          </p>
         </div>
 
-      </section>
+        <div className="p-6">
+          {/* Візуальна шкала */}
 
+          <div className="mb-8">
+            <div className="flex h-5 w-full overflow-hidden rounded-full shadow-inner">
+              <div className="flex-1 bg-red-500" />
+              <div className="flex-1 bg-orange-500" />
+              <div className="flex-1 bg-yellow-400" />
+              <div className="flex-1 bg-green-400" />
+              <div className="flex-1 bg-green-600" />
+            </div>
+
+            <div className="mt-2 flex justify-between text-xs font-medium text-gray-500">
+              <span>0%</span>
+              <span>20%</span>
+              <span>40%</span>
+              <span>60%</span>
+              <span>80%</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          {/* Категорії */}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {/* 0–20 */}
+
+            <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-red-500" />
+
+                <span className="text-sm font-bold text-red-700">
+                  0–20%
+                </span>
+              </div>
+
+              <h4 className="mt-3 text-lg font-bold text-red-700">
+                Дуже складне
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-red-600">
+                Правильно відповідає не більше
+                п'ятої частини учасників.
+              </p>
+            </div>
+
+            {/* 20–40 */}
+
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-orange-500" />
+
+                <span className="text-sm font-bold text-orange-700">
+                  20–40%
+                </span>
+              </div>
+
+              <h4 className="mt-3 text-lg font-bold text-orange-700">
+                Складне
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-orange-600">
+                Правильна відповідь у меншої
+                частини учасників.
+              </p>
+            </div>
+
+            {/* 40–60 */}
+
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-yellow-400" />
+
+                <span className="text-sm font-bold text-yellow-700">
+                  40–60%
+                </span>
+              </div>
+
+              <h4 className="mt-3 text-lg font-bold text-yellow-700">
+                Оптимальне
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-yellow-700">
+                Завдання має збалансований
+                рівень складності.
+              </p>
+            </div>
+
+            {/* 60–80 */}
+
+            <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-green-400" />
+
+                <span className="text-sm font-bold text-green-700">
+                  60–80%
+                </span>
+              </div>
+
+              <h4 className="mt-3 text-lg font-bold text-green-700">
+                Легке
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-green-600">
+                Правильно відповідає більшість
+                учасників.
+              </p>
+            </div>
+
+            {/* 80–100 */}
+
+            <div className="rounded-xl border border-green-300 bg-green-100 p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-4 w-4 rounded-full bg-green-600" />
+
+                <span className="text-sm font-bold text-green-800">
+                  80–100%
+                </span>
+              </div>
+
+              <h4 className="mt-3 text-lg font-bold text-green-800">
+                Дуже легке
+              </h4>
+
+              <p className="mt-2 text-sm leading-5 text-green-700">
+                Правильно відповідає переважна
+                більшість учасників.
+              </p>
+            </div>
+          </div>
+
+          {/* Пояснення */}
+
+          <div className="mt-6 rounded-xl border border-[#E8D4D8] bg-[#FBF5F6] p-5">
+            <p className="text-sm leading-6 text-gray-600">
+              <span className="font-semibold text-[#7A1F2B]">
+                Як читати шкалу:
+              </span>{" "}
+              чим більша частка правильних
+              відповідей, тим легшим вважається
+              завдання. Саме показник
+              <span className="font-semibold">
+                {" "}
+                частки правильних відповідей
+              </span>{" "}
+              використовується для визначення
+              складності кожного завдання в
+              аналітиці.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
