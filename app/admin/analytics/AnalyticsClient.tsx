@@ -16,11 +16,6 @@ type Props = {
   testId: string;
 };
 
-type Difficulty = {
-  label: string;
-  color: string;
-};
-
 type QuestionStatistic = {
   id: number;
   order: number;
@@ -36,7 +31,8 @@ type QuestionStatistic = {
   incorrectPercent: number;
   skippedPercent: number;
 
-  difficulty: Difficulty;
+  difficulty: string;
+  difficultyColor: string;
 };
 
 type AnalyticsData = {
@@ -78,9 +74,7 @@ type QuestionDetails = {
 // СТИЛІ СКЛАДНОСТІ
 // =====================================================
 
-function getDifficultyClasses(
-  color: string
-) {
+function getDifficultyClasses(color: string) {
   switch (color) {
     case "green":
       return "bg-green-100 text-green-700 border border-green-200";
@@ -103,58 +97,41 @@ function getDifficultyClasses(
 // СТИЛІ ШКАЛИ СКЛАДНОСТІ
 // =====================================================
 
-function getDifficultyScaleClasses(
-  color: string
-) {
+function getDifficultyScaleClasses(color: string) {
   switch (color) {
     case "green":
       return {
-        wrapper:
-          "border-green-200 bg-green-50",
-        badge:
-          "bg-green-600 text-white",
-        percent:
-          "text-green-700",
+        wrapper: "border-green-200 bg-green-50",
+        badge: "bg-green-600 text-white",
+        percent: "text-green-700",
       };
 
     case "yellow":
       return {
-        wrapper:
-          "border-yellow-200 bg-yellow-50",
-        badge:
-          "bg-yellow-500 text-white",
-        percent:
-          "text-yellow-700",
+        wrapper: "border-yellow-200 bg-yellow-50",
+        badge: "bg-yellow-500 text-white",
+        percent: "text-yellow-700",
       };
 
     case "orange":
       return {
-        wrapper:
-          "border-orange-200 bg-orange-50",
-        badge:
-          "bg-orange-500 text-white",
-        percent:
-          "text-orange-700",
+        wrapper: "border-orange-200 bg-orange-50",
+        badge: "bg-orange-500 text-white",
+        percent: "text-orange-700",
       };
 
     case "red":
       return {
-        wrapper:
-          "border-red-200 bg-red-50",
-        badge:
-          "bg-red-600 text-white",
-        percent:
-          "text-red-700",
+        wrapper: "border-red-200 bg-red-50",
+        badge: "bg-red-600 text-white",
+        percent: "text-red-700",
       };
 
     default:
       return {
-        wrapper:
-          "border-gray-200 bg-gray-50",
-        badge:
-          "bg-gray-600 text-white",
-        percent:
-          "text-gray-700",
+        wrapper: "border-gray-200 bg-gray-50",
+        badge: "bg-gray-600 text-white",
+        percent: "text-gray-700",
       };
   }
 }
@@ -163,9 +140,7 @@ function getDifficultyScaleClasses(
 // ТИП ЗАВДАННЯ
 // =====================================================
 
-function getQuestionTypeLabel(
-  type: string
-) {
+function getQuestionTypeLabel(type: string) {
   switch (type) {
     case "single":
       return "Одна правильна відповідь";
@@ -188,126 +163,80 @@ function getQuestionTypeLabel(
 // ОЧИЩЕННЯ ТЕХНІЧНИХ ДАНИХ
 // =====================================================
 
-function cleanText(
-  text: string
-): string {
+function cleanText(text: string): string {
   if (!text) {
     return "";
   }
 
-  let result = text;
+  let result = String(text).trim();
 
-  // ---------------------------------------------------
-  // MATCHING:
+  // ===================================================
+  // MATCHING
   //
-  // L|1|Текст|25
-  // R|25|Текст
+  // L|1|Текст лівого елемента|25
+  // R|25|Текст правого елемента
   //
   // Показуємо тільки людський текст.
-  // ---------------------------------------------------
+  // ===================================================
 
-  if (
-    result.startsWith("L|") ||
-    result.startsWith("R|")
-  ) {
-    const parts =
-      result.split("|");
+  if (result.startsWith("L|")) {
+    const parts = result.split("|");
 
-    if (parts.length >= 3) {
-      result = parts
-        .slice(2)
-        .filter(
-          (part) =>
-            part !== undefined &&
-            part !== null
-        )
-        .join("|");
-
-      // Для L|1|Текст|25
-      // останній елемент 25 — ID,
-      // його потрібно прибрати.
-      if (
-        result.startsWith("L|") ||
-        result.startsWith("R|")
-      ) {
-        result = result.replace(
-          /^(L|R)\|\d+\|/i,
-          ""
-        );
-      }
-    }
+    return (parts[2] ?? "")
+      .replace(/\|\d+\s*$/g, "")
+      .trim();
   }
 
-  // ---------------------------------------------------
-  // Додаткове очищення службових маркерів
-  // ---------------------------------------------------
+  if (result.startsWith("R|")) {
+    const parts = result.split("|");
 
-  result = result.replace(
-    /^(L|R)\|\d+\|/i,
-    ""
-  );
+    return (parts[2] ?? "")
+      .replace(/\|\d+\s*$/g, "")
+      .trim();
+  }
 
-  // ---------------------------------------------------
-  // JSON-обгортки
-  // ---------------------------------------------------
+  // ===================================================
+  // JSON-ОБГОРТКИ
+  // ===================================================
 
   try {
-    const parsed =
-      JSON.parse(result);
+    const parsed = JSON.parse(result);
 
-    if (
-      typeof parsed ===
-      "string"
-    ) {
+    if (typeof parsed === "string") {
       result = parsed;
     } else if (
       parsed &&
-      typeof parsed ===
-        "object"
+      typeof parsed === "object"
     ) {
-      if (
-        typeof (
-          parsed as {
-            text?: unknown;
-          }
-        ).text === "string"
-      ) {
-        result = (
-          parsed as {
-            text: string;
-          }
-        ).text;
+      const object = parsed as {
+        text?: unknown;
+        question?: unknown;
+        content?: unknown;
+      };
+
+      if (typeof object.text === "string") {
+        result = object.text;
       } else if (
-        typeof (
-          parsed as {
-            question?: unknown;
-          }
-        ).question === "string"
+        typeof object.question === "string"
       ) {
-        result = (
-          parsed as {
-            question: string;
-          }
-        ).question;
+        result = object.question;
+      } else if (
+        typeof object.content === "string"
+      ) {
+        result = object.content;
       }
     }
   } catch {
     // Звичайний текст.
   }
 
-  // ---------------------------------------------------
-  // Прибираємо можливі службові конструкції
-  // ---------------------------------------------------
+  // ===================================================
+  // ДОДАТКОВЕ ОЧИЩЕННЯ
+  // ===================================================
 
   result = result
-    .replace(
-      /^\s*(L|R)\|\d+\|/i,
-      ""
-    )
-    .replace(
-      /\|\d+\s*$/g,
-      ""
-    );
+    .replace(/^(L|R)\|\d+\|/i, "")
+    .replace(/\|\d+\s*$/g, "");
 
   return result
     .replace(/\r\n/g, "\n")
@@ -318,11 +247,8 @@ function cleanText(
 // MATCHING
 // =====================================================
 
-function getMatchingParts(
-  text: string
-) {
-  const parts =
-    text.split("|");
+function getMatchingParts(text: string) {
+  const parts = text.split("|");
 
   if (parts[0] === "L") {
     return {
@@ -363,10 +289,7 @@ export default function AnalyticsClient({
   const [
     analytics,
     setAnalytics,
-  ] =
-    useState<AnalyticsData | null>(
-      null
-    );
+  ] = useState<AnalyticsData | null>(null);
 
   const [
     loading,
@@ -381,26 +304,19 @@ export default function AnalyticsClient({
   const [
     expandedQuestion,
     setExpandedQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  ] = useState<number | null>(null);
 
   const [
     questionDetails,
     setQuestionDetails,
   ] = useState<
-    Record<
-      number,
-      QuestionDetails
-    >
+    Record<number, QuestionDetails>
   >({});
 
   const [
     loadingQuestion,
     setLoadingQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  ] = useState<number | null>(null);
 
   // =====================================================
   // ЗАВАНТАЖЕННЯ АНАЛІТИКИ
@@ -408,10 +324,7 @@ export default function AnalyticsClient({
 
   useEffect(() => {
     if (!testId) {
-      setError(
-        "Не вказано ID тесту."
-      );
-
+      setError("Не вказано ID тесту.");
       setLoading(false);
 
       return;
@@ -424,18 +337,16 @@ export default function AnalyticsClient({
         setLoading(true);
         setError("");
 
-        const response =
-          await fetch(
-            `/api/analytics?testId=${encodeURIComponent(
-              testId
-            )}`,
-            {
-              cache: "no-store",
-            }
-          );
+        const response = await fetch(
+          `/api/analytics?testId=${encodeURIComponent(
+            testId
+          )}`,
+          {
+            cache: "no-store",
+          }
+        );
 
-        const data =
-          await response.json();
+        const data = await response.json();
 
         if (!response.ok) {
           throw new Error(
@@ -476,46 +387,32 @@ export default function AnalyticsClient({
   async function toggleQuestion(
     questionId: number
   ) {
-    if (
-      expandedQuestion ===
-      questionId
-    ) {
+    if (expandedQuestion === questionId) {
       setExpandedQuestion(null);
-
       return;
     }
 
-    setExpandedQuestion(
-      questionId
-    );
+    setExpandedQuestion(questionId);
 
-    if (
-      questionDetails[
-        questionId
-      ]
-    ) {
+    if (questionDetails[questionId]) {
       return;
     }
 
     try {
-      setLoadingQuestion(
-        questionId
+      setLoadingQuestion(questionId);
+
+      const response = await fetch(
+        `/api/analytics/question?testId=${encodeURIComponent(
+          testId
+        )}&questionId=${encodeURIComponent(
+          questionId
+        )}`,
+        {
+          cache: "no-store",
+        }
       );
 
-      const response =
-        await fetch(
-          `/api/analytics/question?testId=${encodeURIComponent(
-            testId
-          )}&questionId=${encodeURIComponent(
-            questionId
-          )}`,
-          {
-            cache: "no-store",
-          }
-        );
-
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -524,13 +421,10 @@ export default function AnalyticsClient({
         );
       }
 
-      setQuestionDetails(
-        (previous) => ({
-          ...previous,
-          [questionId]:
-            data.question,
-        })
-      );
+      setQuestionDetails((previous) => ({
+        ...previous,
+        [questionId]: data.question,
+      }));
     } catch (err) {
       console.error(err);
 
@@ -566,10 +460,7 @@ export default function AnalyticsClient({
   // ERROR
   // =====================================================
 
-  if (
-    error ||
-    !analytics
-  ) {
+  if (error || !analytics) {
     return (
       <div className="space-y-6">
         <div className="flex justify-end">
@@ -587,8 +478,7 @@ export default function AnalyticsClient({
           </h2>
 
           <p className="mt-2 text-red-600">
-            {error ||
-              "Невідома помилка."}
+            {error || "Невідома помилка."}
           </p>
         </div>
       </div>
@@ -615,14 +505,10 @@ export default function AnalyticsClient({
             {analytics.test.title}
           </p>
 
-          {analytics.test
-            .subject && (
+          {analytics.test.subject && (
             <p className="mt-1 text-gray-500">
               Предмет:{" "}
-              {
-                analytics.test
-                  .subject
-              }
+              {analytics.test.subject}
             </p>
           )}
         </div>
@@ -646,10 +532,7 @@ export default function AnalyticsClient({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .participants
-            }
+            {analytics.summary.participants}
           </p>
         </div>
 
@@ -659,10 +542,7 @@ export default function AnalyticsClient({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-green-700">
-            {
-              analytics.summary
-                .maxScore
-            }
+            {analytics.summary.maxScore}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -676,10 +556,7 @@ export default function AnalyticsClient({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-red-600">
-            {
-              analytics.summary
-                .minScore
-            }
+            {analytics.summary.minScore}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -693,10 +570,7 @@ export default function AnalyticsClient({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .averageScore
-            }
+            {analytics.summary.averageScore}
           </p>
 
           <p className="mt-1 text-sm text-gray-500">
@@ -710,10 +584,7 @@ export default function AnalyticsClient({
           </p>
 
           <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .averagePercent
-            }
+            {analytics.summary.averagePercent}
             %
           </p>
         </div>
@@ -730,28 +601,24 @@ export default function AnalyticsClient({
           </h3>
 
           <p className="mt-1 text-gray-500">
-            Натисніть на завдання,
-            щоб переглянути його
-            умову та відповіді.
+            Натисніть на завдання, щоб
+            переглянути його умову та
+            відповіді.
           </p>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] table-fixed">
-              {/* =================================================
-                  ФІКСОВАНІ ШИРИНИ КОЛОНОК
-              ================================================= */}
-
+            <table className="w-full min-w-[1100px] table-fixed">
               <colgroup>
-                <col className="w-[7%]" />
-                <col className="w-[27%]" />
-                <col className="w-[16%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[6%]" />
+                <col style={{ width: "7%" }} />
+                <col style={{ width: "27%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "6%" }} />
               </colgroup>
 
               <thead className="bg-[#7A1F2B] text-white">
@@ -808,9 +675,7 @@ export default function AnalyticsClient({
 
                     return (
                       <Fragment
-                        key={
-                          question.id
-                        }
+                        key={question.id}
                       >
                         {/* =================================================
                             ОСНОВНИЙ РЯДОК
@@ -832,9 +697,7 @@ export default function AnalyticsClient({
 
                           <td className="px-4 py-4 text-center align-middle">
                             <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                              {
-                                question.order
-                              }
+                              {question.order}
                             </div>
                           </td>
 
@@ -843,48 +706,32 @@ export default function AnalyticsClient({
                           <td className="px-4 py-4 align-middle">
                             <div className="font-medium text-gray-800">
                               Питання №
-                              {
-                                question.order
-                              }
+                              {question.order}
                             </div>
 
                             <div className="mt-1 text-xs text-gray-400">
-                              ID:{" "}
-                              {
-                                question.id
-                              }{" "}
-                              ·{" "}
-                              {
-                                question.points
-                              }{" "}
-                              бал.
+                              {question.points} бал.
                             </div>
                           </td>
 
                           {/* ТИП */}
 
                           <td className="px-4 py-4 text-center align-middle text-sm text-gray-600">
-                            {
-                              getQuestionTypeLabel(
-                                question.type
-                              )
-                            }
+                            {getQuestionTypeLabel(
+                              question.type
+                            )}
                           </td>
 
                           {/* ПРАВИЛЬНО */}
 
                           <td className="px-4 py-4 text-center align-middle">
                             <div className="font-bold text-green-600">
-                              {
-                                question.correctPercent
-                              }
+                              {question.correctPercent}
                               %
                             </div>
 
                             <div className="text-xs text-gray-500">
-                              {
-                                question.correct
-                              }
+                              {question.correct}
                             </div>
                           </td>
 
@@ -892,16 +739,12 @@ export default function AnalyticsClient({
 
                           <td className="px-4 py-4 text-center align-middle">
                             <div className="font-bold text-red-600">
-                              {
-                                question.incorrectPercent
-                              }
+                              {question.incorrectPercent}
                               %
                             </div>
 
                             <div className="text-xs text-gray-500">
-                              {
-                                question.incorrect
-                              }
+                              {question.incorrect}
                             </div>
                           </td>
 
@@ -909,16 +752,12 @@ export default function AnalyticsClient({
 
                           <td className="px-4 py-4 text-center align-middle">
                             <div className="font-bold text-gray-500">
-                              {
-                                question.skippedPercent
-                              }
+                              {question.skippedPercent}
                               %
                             </div>
 
                             <div className="text-xs text-gray-500">
-                              {
-                                question.skipped
-                              }
+                              {question.skipped}
                             </div>
                           </td>
 
@@ -926,17 +765,11 @@ export default function AnalyticsClient({
 
                           <td className="px-4 py-4 text-center align-middle">
                             <span
-                              className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
-                                question
-                                  .difficulty
-                                  .color
+                              className={`inline-flex items-center justify-center whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold ${getDifficultyClasses(
+                                question.difficultyColor
                               )}`}
                             >
-                              {
-                                question
-                                  .difficulty
-                                  .label
-                              }
+                              {question.difficulty}
                             </span>
                           </td>
 
@@ -958,9 +791,7 @@ export default function AnalyticsClient({
                         {isExpanded && (
                           <tr>
                             <td
-                              colSpan={
-                                8
-                              }
+                              colSpan={8}
                               className="border-t border-gray-200 bg-gray-50 p-6"
                             >
                               {isLoading && (
@@ -998,17 +829,11 @@ export default function AnalyticsClient({
                                         </div>
 
                                         <div className="flex flex-wrap gap-2">
-                                          {/* ТИП */}
-
                                           <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
-                                            {
-                                              getQuestionTypeLabel(
-                                                details.type
-                                              )
-                                            }
+                                            {getQuestionTypeLabel(
+                                              details.type
+                                            )}
                                           </span>
-
-                                          {/* БАЛИ */}
 
                                           <span className="rounded-full bg-[#F3E8EA] px-3 py-1 text-sm font-semibold text-[#7A1F2B]">
                                             {
@@ -1017,26 +842,20 @@ export default function AnalyticsClient({
                                             бал.
                                           </span>
 
-                                          {/* СКЛАДНІСТЬ */}
-
                                           <span
                                             className={`rounded-full px-3 py-1 text-sm font-semibold ${getDifficultyClasses(
-                                              question
-                                                .difficulty
-                                                .color
+                                              question.difficultyColor
                                             )}`}
                                           >
                                             {
-                                              question
-                                                .difficulty
-                                                .label
+                                              question.difficulty
                                             }
                                           </span>
                                         </div>
                                       </div>
 
                                       <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
-                                        <div className="whitespace-pre-wrap text-base leading-7 text-gray-800">
+                                        <div className="whitespace-pre-wrap break-words text-base leading-7 text-gray-800">
                                           {cleanText(
                                             details.text
                                           )}
@@ -1053,7 +872,7 @@ export default function AnalyticsClient({
                                       details.type !==
                                         "sequence" && (
                                         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                                          <div className="mb-5 flex items-center justify-between">
+                                          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                                             <h4 className="text-lg font-bold text-gray-800">
                                               Варіанти відповідей
                                             </h4>
@@ -1108,7 +927,7 @@ export default function AnalyticsClient({
                                                       </div>
 
                                                       <div className="min-w-0 flex-1">
-                                                        <p className="whitespace-pre-wrap text-gray-800">
+                                                        <p className="whitespace-pre-wrap break-words text-gray-800">
                                                           {cleanText(
                                                             option.text
                                                           )}
@@ -1201,7 +1020,7 @@ export default function AnalyticsClient({
                                                         Елемент
                                                       </p>
 
-                                                      <p className="mt-2 text-gray-800">
+                                                      <p className="mt-2 break-words text-gray-800">
                                                         {cleanText(
                                                           left.text
                                                         )}
@@ -1213,7 +1032,7 @@ export default function AnalyticsClient({
                                                         Правильна відповідь
                                                       </p>
 
-                                                      <p className="mt-2 text-gray-800">
+                                                      <p className="mt-2 break-words text-gray-800">
                                                         {rightOption
                                                           ? cleanText(
                                                               getMatchingParts(
@@ -1281,8 +1100,8 @@ export default function AnalyticsClient({
                                                       1}
                                                   </div>
 
-                                                  <div className="flex-1">
-                                                    <p className="text-gray-800">
+                                                  <div className="min-w-0 flex-1">
+                                                    <p className="break-words text-gray-800">
                                                       {cleanText(
                                                         option.text
                                                       )}
@@ -1290,7 +1109,8 @@ export default function AnalyticsClient({
 
                                                     {option.isCorrect && (
                                                       <p className="mt-2 text-sm font-semibold text-green-700">
-                                                        ✓ Елемент правильної послідовності
+                                                        ✓ Елемент правильної
+                                                        послідовності
                                                       </p>
                                                     )}
                                                   </div>
@@ -1383,15 +1203,13 @@ export default function AnalyticsClient({
           </h3>
 
           <p className="mt-1 text-gray-500">
-            Категорія визначається за
-            часткою учасників, які
-            правильно виконали завдання.
+            Категорія визначається за часткою
+            учасників, які правильно виконали
+            завдання.
           </p>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {/* Верхня частина */}
-
           <div className="border-b border-gray-200 bg-gradient-to-r from-[#7A1F2B] to-[#9B3545] px-6 py-5 text-white">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1412,11 +1230,7 @@ export default function AnalyticsClient({
             </div>
           </div>
 
-          {/* Шкала */}
-
           <div className="grid gap-4 p-6 md:grid-cols-5">
-            {/* 0–20 */}
-
             {[
               {
                 range: "0–20%",
@@ -1453,56 +1267,44 @@ export default function AnalyticsClient({
                 description:
                   "Правильно відповіли 80–100% учасників.",
               },
-            ].map(
-              (item) => {
-                const styles =
-                  getDifficultyScaleClasses(
-                    item.color
-                  );
-
-                return (
-                  <div
-                    key={
-                      item.range
-                    }
-                    className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-md ${styles.wrapper}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm font-bold ${styles.badge}`}
-                      >
-                        {
-                          item.range
-                        }
-                      </span>
-
-                      <span
-                        className={`text-lg font-bold ${styles.percent}`}
-                      >
-                        %
-                      </span>
-                    </div>
-
-                    <h5
-                      className={`mt-4 text-lg font-bold ${styles.percent}`}
-                    >
-                      {
-                        item.label
-                      }
-                    </h5>
-
-                    <p className="mt-2 text-sm leading-5 text-gray-600">
-                      {
-                        item.description
-                      }
-                    </p>
-                  </div>
+            ].map((item) => {
+              const styles =
+                getDifficultyScaleClasses(
+                  item.color
                 );
-              }
-            )}
-          </div>
 
-          {/* Нижня пояснювальна частина */}
+              return (
+                <div
+                  key={item.range}
+                  className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-md ${styles.wrapper}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm font-bold ${styles.badge}`}
+                    >
+                      {item.range}
+                    </span>
+
+                    <span
+                      className={`text-lg font-bold ${styles.percent}`}
+                    >
+                      %
+                    </span>
+                  </div>
+
+                  <h5
+                    className={`mt-4 text-lg font-bold ${styles.percent}`}
+                  >
+                    {item.label}
+                  </h5>
+
+                  <p className="mt-2 text-sm leading-5 text-gray-600">
+                    {item.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
 
           <div className="border-t border-gray-200 bg-gray-50 px-6 py-5">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1523,19 +1325,25 @@ export default function AnalyticsClient({
                 <span className="font-semibold text-[#7A1F2B]">
                   0%
                 </span>
+
                 <span className="mx-2">
                   →
                 </span>
+
                 дуже складне
+
                 <span className="mx-2">
                   ·
                 </span>
+
                 <span className="font-semibold text-[#7A1F2B]">
                   100%
                 </span>
+
                 <span className="mx-2">
                   →
                 </span>
+
                 дуже легке
               </div>
             </div>
