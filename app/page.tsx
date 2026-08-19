@@ -1,4 +1,9 @@
-import { Brain, ChevronRight, FileText } from "lucide-react";
+import {
+  Brain,
+  ChevronRight,
+  FileText,
+  LockKeyhole,
+} from "lucide-react";
 
 const examSections = [
   {
@@ -42,7 +47,6 @@ export default function Home() {
 
         {/* Розділи іспитів */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-
           {examSections.map((exam) => (
             <a
               key={exam.type}
@@ -79,11 +83,80 @@ export default function Home() {
                 <div className="mt-8 text-[#7A1F2B] font-semibold">
                   Переглянути тести →
                 </div>
-
               </div>
             </a>
           ))}
+        </div>
 
+        {/* =====================================================
+            ВХІД АДМІНІСТРАТОРА
+        ===================================================== */}
+
+        <div className="mt-14 flex justify-center">
+          <a
+            href="/admin/login"
+            className="
+              group
+              inline-flex
+              items-center
+              gap-3
+              rounded-xl
+              border
+              border-[#7A1F2B]/30
+              bg-white
+              px-6
+              py-3
+              text-sm
+              font-semibold
+              text-[#7A1F2B]
+              shadow-sm
+              transition-all
+              duration-200
+              hover:border-[#7A1F2B]
+              hover:bg-[#F3E8EA]
+              hover:shadow-md
+            "
+          >
+            <span
+              className="
+                flex
+                h-9
+                w-9
+                items-center
+                justify-center
+                rounded-lg
+                bg-[#F3E8EA]
+                transition-colors
+                group-hover:bg-[#7A1F2B]
+              "
+            >
+              <LockKeyhole
+                className="
+                  h-4
+                  w-4
+                  text-[#7A1F2B]
+                  transition-colors
+                  group-hover:text-white
+                "
+                strokeWidth={2}
+              />
+            </span>
+
+            <span>
+              Увійти як адміністратор
+            </span>
+
+            <ChevronRight
+              className="
+                h-4
+                w-4
+                text-gray-400
+                transition-all
+                group-hover:translate-x-1
+                group-hover:text-[#7A1F2B]
+              "
+            />
+          </a>
         </div>
 
       </div>
