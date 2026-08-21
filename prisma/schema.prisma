@@ -52,34 +52,34 @@ model AnswerOption {
 }
 
 model Participant {
-  id         Int           @id @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   lastName   String
   firstName  String
   middleName String?
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime  @default(now())
 
   sessions   TestSession[]
 }
 
 model TestSession {
-  id              Int           @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   testId          Int
-  currentQuestion Int           @default(0)
+  currentQuestion Int       @default(0)
   savedAnswers    Json
   timeLeft        Int
-  finished        Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  finished        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   participantId   Int?
   blockReason     String?
-  blocked         Boolean       @default(false)
-  extraTime       Int           @default(0)
+  blocked         Boolean   @default(false)
+  extraTime       Int       @default(0)
   finishedAt      DateTime?
-  startedAt       DateTime      @default(now())
+  startedAt       DateTime  @default(now())
   blockedAt       DateTime?
-  lastActivityAt  DateTime      @default(now())
+  lastActivityAt  DateTime  @default(now())
 
-  participant     Participant?  @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  participant     Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
   test            Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
 }
 
@@ -103,5 +103,5 @@ model TestResult {
   finishedAt   DateTime?
   startedAt    DateTime?
 
-  test         Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  test         Test @relation(fields: [testId], references: [id], onDelete: Cascade)
 }

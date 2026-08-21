@@ -20,6 +20,7 @@ export default function SessionMonitor() {
     sessionId,
     timeLeft,
     setTimeLeft,
+    currentQuestion,
     setCurrentQuestion,
     stopTimer,
   } = useTestSession();
@@ -29,19 +30,28 @@ export default function SessionMonitor() {
   const [blockReason, setBlockReason] =
     useState<string | null>(null);
 
-  const [checking, setChecking] =
-    useState(true);
+  const [checking, setChecking] = useState(true);
 
   // =====================================================
   // Останнє серверне значення часу
-  //
-  // Використовується для визначення:
-  // чи змінив адміністратор час,
-  // чи це просто звичайний локальний відлік.
   // =====================================================
 
   const lastServerTimeRef =
     useRef<number | null>(null);
+
+  // =====================================================
+  // Останнє відправлене питання
+  // =====================================================
+
+  const lastSentQuestionRef =
+    useRef<number | null>(null);
+
+  // =====================================================
+  // Захист від одночасних запитів
+  // =====================================================
+
+  const requestInProgressRef =
+    useRef(false);
 
   useEffect(() => {
     if (!test?.id || !sessionId) {
@@ -54,8 +64,24 @@ export default function SessionMonitor() {
 
     let cancelled = false;
 
-    async function checkSession() {
+    async function checkAndSyncSession() {
+      if (cancelled) {
+        return;
+      }
+
+      // Не запускаємо наступний цикл,
+      // якщо попередній ще не завершився.
+      if (requestInProgressRef.current) {
+        return;
+      }
+
+      requestInProgressRef.current = true;
+
       try {
+        // =================================================
+        // 1. ОТРИМУЄМО АКТУАЛЬНИЙ СТАН ІЗ СЕРВЕРА
+        // =================================================
+
         const response = await fetch(
           `/api/session/${testId}?sessionId=${currentSessionId}`,
           {
@@ -81,12 +107,12 @@ export default function SessionMonitor() {
         }
 
         console.log(
-          "SESSION MONITOR:",
+          "SESSION MONITOR GET:",
           session
         );
 
         // =================================================
-        // БЛОКУВАННЯ
+        // 2. БЛОКУВАННЯ
         // =================================================
 
         if (session.blocked) {
@@ -104,33 +130,15 @@ export default function SessionMonitor() {
         }
 
         // =================================================
-        // СИНХРОНІЗАЦІЯ ЧАСУ
-        // =================================================
-        //
-        // ВАЖЛИВО:
-        //
-        // Не можна кожні 2 секунди робити:
-        //
-        // setTimeLeft(session.timeLeft)
-        //
-        // бо локальний Timer сам відраховує секунди.
-        //
-        // Тому:
-        //
-        // 1. Перша відповідь сервера встановлює
-        //    початковий час.
-        //
-        // 2. Надалі невелика різниця (0–2 сек)
-        //    ігнорується.
-        //
-        // 3. Якщо серверне значення змінилося
-        //    суттєво — це адміністративна зміна,
-        //    наприклад +5 хвилин.
-        //
+        // 3. СИНХРОНІЗАЦІЯ ЧАСУ
         // =================================================
 
+        let effectiveTimeLeft =
+          timeLeft;
+
         if (
-          typeof session.timeLeft === "number"
+          typeof session.timeLeft ===
+          "number"
         ) {
           const serverTime = Math.max(
             0,
@@ -142,9 +150,13 @@ export default function SessionMonitor() {
           // -----------------------------------------------
 
           if (
-            lastServerTimeRef.current === null
+            lastServerTimeRef.current ===
+            null
           ) {
             lastServerTimeRef.current =
+              serverTime;
+
+            effectiveTimeLeft =
               serverTime;
 
             setTimeLeft(serverTime);
@@ -152,41 +164,41 @@ export default function SessionMonitor() {
             const previousServerTime =
               lastServerTimeRef.current;
 
-            // Запам'ятовуємо нове серверне значення
-            lastServerTimeRef.current =
-              serverTime;
+            // ---------------------------------------------
+            // Визначаємо, чи змінив сервер час
+            // ---------------------------------------------
 
-            // ---------------------------------------------
-            // Перевіряємо зміну серверного часу
-            // ---------------------------------------------
-            //
-            // У нормальному режимі серверне значення
-            // може відрізнятися від локального на 1–2 сек
-            // через затримку мережі.
-            //
-            // Таку різницю НЕ синхронізуємо.
-            //
-            // Якщо адміністратор додав час:
-            //
-            // 3900 → 4200
-            //
-            // різниця буде значною, тому синхронізація
-            // виконається.
-            //
             const serverChanged =
               Math.abs(
                 serverTime -
                   previousServerTime
               ) > 2;
 
+            lastServerTimeRef.current =
+              serverTime;
+
             if (serverChanged) {
+              // Адміністратор міг:
+              // + додати час
+              // + забрати час
+              // + встановити нове значення
+
+              effectiveTimeLeft =
+                serverTime;
+
               setTimeLeft(serverTime);
+            } else {
+              // Серверне значення є звичайним
+              // відліком часу.
+
+              effectiveTimeLeft =
+                timeLeft;
             }
           }
         }
 
         // =================================================
-        // СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
+        // 4. СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
         // =================================================
 
         if (
@@ -199,7 +211,82 @@ export default function SessionMonitor() {
         }
 
         // =================================================
-        // ЗАВЕРШЕННЯ
+        // 5. ВІДПРАВЛЯЄМО АКТУАЛЬНИЙ СТАН У БД
+        // =================================================
+
+        // Якщо сервер щойно повернув адміністративно
+        // змінений час — використовуємо саме його,
+        // а не старе локальне значення.
+
+        const questionToSave =
+          typeof session.currentQuestion ===
+          "number"
+            ? session.currentQuestion
+            : currentQuestion;
+
+        const timeToSave =
+          typeof effectiveTimeLeft ===
+          "number"
+            ? Math.max(
+                0,
+                Math.floor(
+                  effectiveTimeLeft
+                )
+              )
+            : Math.max(
+                0,
+                Math.floor(timeLeft)
+              );
+
+        const saveResponse =
+          await fetch(
+            `/api/session/${testId}?sessionId=${currentSessionId}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              cache: "no-store",
+              body: JSON.stringify({
+                sessionId:
+                  currentSessionId,
+
+                currentQuestion:
+                  questionToSave,
+
+                timeLeft:
+                  timeToSave,
+
+                finished:
+                  session.finished,
+              }),
+            }
+          );
+
+        if (!saveResponse.ok) {
+          console.error(
+            "SessionMonitor POST error:",
+            saveResponse.status
+          );
+        } else {
+          lastSentQuestionRef.current =
+            questionToSave;
+
+          console.log(
+            "SESSION MONITOR POST:",
+            {
+              currentQuestion:
+                questionToSave,
+
+              timeLeft:
+                timeToSave,
+            }
+          );
+        }
+
+        // =================================================
+        // 6. ЗАВЕРШЕННЯ
         // =================================================
 
         if (session.finished) {
@@ -207,10 +294,13 @@ export default function SessionMonitor() {
         }
       } catch (error) {
         console.error(
-          "Помилка перевірки сесії:",
+          "Помилка синхронізації сесії:",
           error
         );
       } finally {
+        requestInProgressRef.current =
+          false;
+
         if (!cancelled) {
           setChecking(false);
         }
@@ -221,24 +311,30 @@ export default function SessionMonitor() {
     // Перша перевірка одразу
     // =====================================================
 
-    checkSession();
+    checkAndSyncSession();
 
     // =====================================================
-    // Перевірка кожні 2 секунди
+    // Синхронізація кожні 2 секунди
     // =====================================================
 
     const interval = setInterval(
-      checkSession,
+      checkAndSyncSession,
       2000
     );
 
     return () => {
       cancelled = true;
+
       clearInterval(interval);
+
+      requestInProgressRef.current =
+        false;
     };
   }, [
     test?.id,
     sessionId,
+    timeLeft,
+    currentQuestion,
     setTimeLeft,
     setCurrentQuestion,
     stopTimer,

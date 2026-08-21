@@ -3,6 +3,7 @@ import {
   NextResponse,
 } from "next/server";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 
 type Props = {
@@ -95,6 +96,13 @@ export async function GET(
 
 // =====================================================
 // POST — керування сесією
+//
+// Доступні операції:
+//
+// block
+// unblock
+// addTime
+// annul
 // =====================================================
 
 export async function POST(
@@ -105,6 +113,10 @@ export async function POST(
     const { id } = await params;
 
     const sessionId = Number(id);
+
+    // =================================================
+    // Перевірка ID сесії
+    // =================================================
 
     if (
       !Number.isInteger(sessionId) ||
@@ -121,6 +133,10 @@ export async function POST(
       );
     }
 
+    // =================================================
+    // Отримуємо body
+    // =================================================
+
     const body = await request.json();
 
     const action = body.action;
@@ -136,9 +152,16 @@ export async function POST(
         },
 
         include: {
+          participant: true,
+
           test: {
-            select: {
-              duration: true,
+            include: {
+              questions: {
+                select: {
+                  id: true,
+                  points: true,
+                },
+              },
             },
           },
         },
@@ -213,7 +236,9 @@ export async function POST(
 
           data: {
             blocked: false,
+
             blockReason: null,
+
             blockedAt: null,
 
             lastActivityAt: new Date(),
@@ -241,19 +266,238 @@ export async function POST(
     }
 
     // =================================================
+    // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
+    //
+    // Після цієї операції:
+    //
+    // - тестування завершується;
+    // - результат = 0;
+    // - відсоток = 0;
+    // - правильних = 0;
+    // - неправильних = 0;
+    // - усі питання вважаються пропущеними;
+    // - причина = security;
+    // - причина завершення:
+    //   "Порушення правил тестування"
+    // =================================================
+
+    if (action === "annul") {
+      // -------------------------------------------------
+      // Якщо сесію вже завершено
+      // -------------------------------------------------
+
+      if (existingSession.finished) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Ця сесія вже завершена.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const now = new Date();
+
+      // -------------------------------------------------
+      // Кількість питань
+      // -------------------------------------------------
+
+      const questionsCount =
+        existingSession.test.questions.length;
+
+      // -------------------------------------------------
+      // Максимальна кількість балів
+      //
+      // Беремо значення безпосередньо з Test.maxPoints.
+      // -------------------------------------------------
+
+      const maxPoints =
+        existingSession.test.maxPoints;
+
+      // -------------------------------------------------
+      // Витрачений час
+      //
+      // duration зберігається у хвилинах,
+      // timeLeft — у секундах.
+      // -------------------------------------------------
+
+      const totalTime =
+        Math.max(
+          0,
+          existingSession.test.duration * 60
+        );
+
+      const timeSpent =
+        Math.max(
+          0,
+          totalTime -
+            Math.max(
+              0,
+              existingSession.timeLeft
+            )
+        );
+
+      // -------------------------------------------------
+      // Причина завершення
+      // -------------------------------------------------
+
+      const finishReason =
+        "security";
+
+      const finishMessage =
+        "Порушення правил тестування";
+
+      // -------------------------------------------------
+      // Створюємо результат і завершуємо сесію
+      // атомарно в одній транзакції.
+      // -------------------------------------------------
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+            // -------------------------------------------
+            // Завершуємо сесію
+            // -------------------------------------------
+
+            const finishedSession =
+              await tx.testSession.update({
+                where: {
+                  id: sessionId,
+                },
+
+                data: {
+                  finished: true,
+
+                  finishedAt: now,
+
+                  timeLeft: 0,
+
+                  blocked: true,
+
+                  blockReason:
+                    finishMessage,
+
+                  blockedAt:
+                    existingSession.blockedAt ??
+                    now,
+
+                  lastActivityAt: now,
+                },
+              });
+
+            // -------------------------------------------
+            // Створюємо анульований результат
+            // -------------------------------------------
+
+            const createdResult =
+              await tx.testResult.create({
+                data: {
+                  testId:
+                    existingSession.testId,
+
+                  earnedPoints: 0,
+
+                  maxPoints,
+
+                  percent: 0,
+
+                  correct: 0,
+
+                  incorrect: 0,
+
+                  skipped:
+                    questionsCount,
+
+                  timeSpent,
+
+                  answers:
+  existingSession.savedAnswers === null
+    ? Prisma.JsonNull
+    : (existingSession.savedAnswers as Prisma.InputJsonValue),
+
+                  finishReason,
+
+                  createdAt: now,
+
+                  finishedAt: now,
+
+                  startedAt:
+                    existingSession.startedAt,
+
+                  firstName:
+                    existingSession.participant
+                      ?.firstName ??
+                    null,
+
+                  lastName:
+                    existingSession.participant
+                      ?.lastName ??
+                    null,
+
+                  middleName:
+                    existingSession.participant
+                      ?.middleName ??
+                    null,
+                },
+              });
+
+            return {
+              session:
+                finishedSession,
+
+              result:
+                createdResult,
+            };
+          }
+        );
+
+      // -------------------------------------------------
+      // Повертаємо адміністратору інформацію
+      // -------------------------------------------------
+
+      return NextResponse.json({
+        success: true,
+
+        action: "annul",
+
+        message:
+          "Результат тестування анульовано.",
+
+        finishReason,
+
+        finishMessage,
+
+        sessionId,
+
+        resultId:
+          result.result.id,
+
+        result: {
+          earnedPoints: 0,
+          maxPoints,
+          percent: 0,
+          correct: 0,
+          incorrect: 0,
+          skipped: questionsCount,
+          timeSpent,
+        },
+
+        session:
+          result.session,
+      });
+    }
+
+    // =================================================
     // ДОДАВАННЯ ЧАСУ
     //
-    // ВАЖЛИВО:
-    //
-    // Не використовуємо existingSession.timeLeft,
-    // оскільки воно може бути старішим за локальний
-    // таймер учасника.
-    //
-    // Реальний залишок визначаємо через:
+    // Реальний залишок часу визначаємо через:
     //
     // startedAt
-    // + тривалість тесту
-    // + уже доданий extraTime
+    // + duration
+    // + extraTime
     // - час, що минув
     //
     // Після цього додаємо нові хвилини.
@@ -280,9 +524,8 @@ export async function POST(
         );
       }
 
-      const secondsToAdd = Math.floor(
-        minutes * 60
-      );
+      const secondsToAdd =
+        Math.floor(minutes * 60);
 
       // =================================================
       // Перевіряємо дату початку тестування
@@ -302,21 +545,24 @@ export async function POST(
       }
 
       // =================================================
-      // Тривалість основного тесту
-      // duration з БД зберігається у хвилинах.
+      // Основний час тесту
+      //
+      // duration з БД — хвилини.
       // =================================================
 
       const baseTime =
         Math.max(
           0,
           Math.floor(
-            existingSession.test.duration * 60
+            existingSession.test
+              .duration * 60
           )
         );
 
       // =================================================
       // Уже доданий додатковий час
-      // extraTime зберігається у секундах.
+      //
+      // extraTime — секунди.
       // =================================================
 
       const previousExtraTime =
@@ -328,24 +574,26 @@ export async function POST(
         );
 
       // =================================================
-      // Скільки секунд минуло від початку тесту
+      // Час від початку тесту
       // =================================================
 
       const startedAt =
         existingSession.startedAt.getTime();
 
-      const now = Date.now();
+      const now =
+        Date.now();
 
       const elapsedSeconds =
         Math.max(
           0,
           Math.floor(
-            (now - startedAt) / 1000
+            (now - startedAt) /
+              1000
           )
         );
 
       // =================================================
-      // Фактичний час, який мав би залишитися
+      // Фактичний залишок часу
       // =================================================
 
       const calculatedTimeLeft =
@@ -357,19 +605,23 @@ export async function POST(
         );
 
       // =================================================
-      // Додаємо новий час
+      // Новий залишок
       // =================================================
 
       const newTimeLeft =
         calculatedTimeLeft +
         secondsToAdd;
 
+      // =================================================
+      // Новий додатковий час
+      // =================================================
+
       const newExtraTime =
         previousExtraTime +
         secondsToAdd;
 
       // =================================================
-      // Оновлюємо БД
+      // Оновлюємо сесію
       // =================================================
 
       const session =
@@ -379,11 +631,14 @@ export async function POST(
           },
 
           data: {
-            timeLeft: newTimeLeft,
+            timeLeft:
+              newTimeLeft,
 
-            extraTime: newExtraTime,
+            extraTime:
+              newExtraTime,
 
-            lastActivityAt: new Date(),
+            lastActivityAt:
+              new Date(),
           },
 
           include: {
@@ -407,13 +662,16 @@ export async function POST(
 
         addedMinutes: minutes,
 
-        addedSeconds: secondsToAdd,
+        addedSeconds:
+          secondsToAdd,
 
         calculatedTimeLeft,
 
-        timeLeft: session.timeLeft,
+        timeLeft:
+          session.timeLeft,
 
-        extraTime: session.extraTime,
+        extraTime:
+          session.extraTime,
 
         session,
       });
@@ -442,7 +700,8 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error: "Не вдалося змінити сесію.",
+        error:
+          "Не вдалося змінити сесію.",
       },
       {
         status: 500,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   sessionId: number;
@@ -8,11 +9,19 @@ type Props = {
   blocked: boolean;
 };
 
+type Action =
+  | "block"
+  | "unblock"
+  | "addTime"
+  | "invalidate";
+
 export default function MonitoringControls({
   sessionId,
   testId,
   blocked: initialBlocked,
 }: Props) {
+  const router = useRouter();
+
   const [blocked, setBlocked] =
     useState(initialBlocked);
 
@@ -25,8 +34,15 @@ export default function MonitoringControls({
   const [error, setError] =
     useState("");
 
+  const [invalidated, setInvalidated] =
+    useState(false);
+
+  // =====================================================
+  // КЕРУВАННЯ СЕСІЄЮ
+  // =====================================================
+
   async function manageSession(
-    action: "block" | "unblock" | "addTime",
+    action: Action,
     minutes?: number
   ) {
     setLoading(true);
@@ -34,18 +50,35 @@ export default function MonitoringControls({
     setError("");
 
     try {
+      console.log(
+        "ADMIN MANAGE REQUEST:",
+        {
+          sessionId,
+          testId,
+          action,
+          minutes,
+        }
+      );
+
       const response = await fetch(
         `/api/session/manage/${sessionId}`,
         {
           method: "POST",
+
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
+
           body: JSON.stringify({
             action,
+
             ...(minutes !== undefined
-              ? { minutes }
+              ? {
+                  minutes,
+                }
               : {}),
+
             ...(action === "block"
               ? {
                   reason:
@@ -56,25 +89,28 @@ export default function MonitoringControls({
         }
       );
 
-      const data = await response.json();
-console.log("ADMIN MANAGE REQUEST:", {
-  sessionId,
-  testId,
-  action,
-  minutes,
-});
+      const data =
+        await response.json();
 
-console.log("ADMIN MANAGE RESPONSE:", {
-  status: response.status,
-  ok: response.ok,
-  data,
-});
+      console.log(
+        "ADMIN MANAGE RESPONSE:",
+        {
+          status: response.status,
+          ok: response.ok,
+          data,
+        }
+      );
+
       if (!response.ok) {
         throw new Error(
           data.error ||
             "Не вдалося виконати операцію."
         );
       }
+
+      // =================================================
+      // БЛОКУВАННЯ
+      // =================================================
 
       if (action === "block") {
         setBlocked(true);
@@ -84,6 +120,10 @@ console.log("ADMIN MANAGE RESPONSE:", {
         );
       }
 
+      // =================================================
+      // РОЗБЛОКУВАННЯ
+      // =================================================
+
       if (action === "unblock") {
         setBlocked(false);
 
@@ -92,13 +132,40 @@ console.log("ADMIN MANAGE RESPONSE:", {
         );
       }
 
+      // =================================================
+      // ДОДАВАННЯ ЧАСУ
+      // =================================================
+
       if (action === "addTime") {
         setMessage(
           `Додано ${minutes} хвилин.`
         );
       }
+
+      // =================================================
+      // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
+      // =================================================
+
+      if (action === "invalidate") {
+        setInvalidated(true);
+
+        setBlocked(true);
+
+        setMessage(
+          "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
+        );
+
+        // Даємо повідомленню відобразитися,
+        // після чого оновлюємо сторінку адміністратора.
+        setTimeout(() => {
+          router.refresh();
+        }, 1000);
+      }
     } catch (err) {
-      console.error(err);
+      console.error(
+        "ADMIN MANAGE ERROR:",
+        err
+      );
 
       setError(
         err instanceof Error
@@ -110,9 +177,28 @@ console.log("ADMIN MANAGE RESPONSE:", {
     }
   }
 
-  // ==========================================
-  // Автоматично прибираємо повідомлення
-  // ==========================================
+  // =====================================================
+  // АНУЛЮВАННЯ
+  // =====================================================
+
+  function handleInvalidate() {
+    const confirmed =
+      window.confirm(
+        "Ви впевнені, що хочете анулювати результат цього учасника?\n\n" +
+          "Результат буде збережено як 0 балів із причиною завершення «Порушення правил тестування».\n\n" +
+          "Після анулювання продовжити тестування буде неможливо."
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    manageSession("invalidate");
+  }
+
+  // =====================================================
+  // АВТОМАТИЧНО ПРИБИРАЄМО ПОВІДОМЛЕННЯ
+  // =====================================================
 
   useEffect(() => {
     if (!message && !error) {
@@ -123,7 +209,7 @@ console.log("ADMIN MANAGE RESPONSE:", {
       setTimeout(() => {
         setMessage("");
         setError("");
-      }, 4000);
+      }, 5000);
 
     return () => {
       clearTimeout(timer);
@@ -132,7 +218,9 @@ console.log("ADMIN MANAGE RESPONSE:", {
 
   return (
     <div className="space-y-6">
-      {/* Повідомлення */}
+      {/* =================================================
+          ПОВІДОМЛЕННЯ
+      ================================================= */}
 
       {message && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 font-semibold text-green-700">
@@ -146,36 +234,105 @@ console.log("ADMIN MANAGE RESPONSE:", {
         </div>
       )}
 
-      {/* Блокування */}
+      {/* =================================================
+          СТАН АНУЛЬОВАНОГО РЕЗУЛЬТАТУ
+      ================================================= */}
+
+      {invalidated && (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-5">
+          <div className="text-xl font-bold text-red-700">
+            Результат анульовано
+          </div>
+
+          <p className="mt-2 text-sm leading-6 text-red-600">
+            Результат учасника збережено як
+            0 балів. Причина завершення:
+            «Порушення правил тестування».
+          </p>
+        </div>
+      )}
+
+      {/* =================================================
+          КЕРУВАННЯ ДОСТУПОМ
+      ================================================= */}
 
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
         <h3 className="mb-2 text-lg font-bold text-gray-800">
           Керування доступом
         </h3>
 
-        <p className="mb-5 text-sm text-gray-500">
+        <p className="mb-5 text-sm leading-6 text-gray-500">
           Керування доступом учасника до
-          тестування в режимі реального часу.
+          тестування в режимі реального
+          часу.
         </p>
 
-        {blocked ? (
+        {invalidated ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <div className="font-bold text-red-700">
+              Тестування завершено
+            </div>
+
+            <div className="mt-1 text-sm text-red-600">
+              Результат учасника анульовано
+              через порушення правил
+              тестування.
+            </div>
+          </div>
+        ) : blocked ? (
           <div className="space-y-4">
+            {/* СТАН БЛОКУВАННЯ */}
+
             <div className="rounded-lg border border-red-200 bg-red-50 p-4">
               <div className="font-bold text-red-700">
                 Тестування заблоковано
               </div>
 
-              <div className="mt-1 text-sm text-red-600">
+              <div className="mt-1 text-sm leading-6 text-red-600">
                 Учасник не може продовжувати
-                тестування.
+                тестування, доки сесію не буде
+                розблоковано або анульовано.
               </div>
             </div>
+
+            {/* АНУЛЮВАННЯ */}
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={
+                handleInvalidate
+              }
+              className="
+                w-full
+                rounded-lg
+                bg-red-700
+                px-5
+                py-3
+                font-semibold
+                text-white
+                shadow-sm
+                transition
+                hover:bg-red-800
+                hover:shadow-md
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              {loading
+                ? "Виконується..."
+                : "Анулювати результат"}
+            </button>
+
+            {/* РОЗБЛОКУВАННЯ */}
 
             <button
               type="button"
               disabled={loading}
               onClick={() =>
-                manageSession("unblock")
+                manageSession(
+                  "unblock"
+                )
               }
               className="
                 w-full
@@ -197,6 +354,8 @@ console.log("ADMIN MANAGE RESPONSE:", {
             </button>
           </div>
         ) : (
+          /* БЛОКУВАННЯ */
+
           <button
             type="button"
             disabled={loading}
@@ -224,95 +383,125 @@ console.log("ADMIN MANAGE RESPONSE:", {
         )}
       </div>
 
-      {/* Додавання часу */}
+      {/* =================================================
+          ДОДАТКОВИЙ ЧАС
+      ================================================= */}
 
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-        <h3 className="mb-2 text-lg font-bold text-gray-800">
-          Додатковий час
-        </h3>
+      {!invalidated && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+          <h3 className="mb-2 text-lg font-bold text-gray-800">
+            Додатковий час
+          </h3>
 
-        <p className="mb-5 text-sm text-gray-500">
-          Додайте час конкретному учаснику
-          без переривання тестування.
-        </p>
+          <p className="mb-5 text-sm leading-6 text-gray-500">
+            Додайте час конкретному
+            учаснику без переривання
+            тестування.
+          </p>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() =>
-              manageSession(
-                "addTime",
-                5
-              )
-            }
-            className="
-              rounded-lg
-              bg-[#7A1F2B]
-              px-5
-              py-3
-              font-semibold
-              text-white
-              transition
-              hover:bg-[#651923]
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
-          >
-            +5 хв
-          </button>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {/* +5 */}
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() =>
-              manageSession(
-                "addTime",
-                10
-              )
-            }
-            className="
-              rounded-lg
-              bg-[#7A1F2B]
-              px-5
-              py-3
-              font-semibold
-              text-white
-              transition
-              hover:bg-[#651923]
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
-          >
-            +10 хв
-          </button>
+            <button
+              type="button"
+              disabled={
+                loading || blocked
+              }
+              onClick={() =>
+                manageSession(
+                  "addTime",
+                  5
+                )
+              }
+              className="
+                rounded-lg
+                bg-[#7A1F2B]
+                px-5
+                py-3
+                font-semibold
+                text-white
+                transition
+                hover:bg-[#651923]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              {loading
+                ? "..."
+                : "+5 хв"}
+            </button>
 
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() =>
-              manageSession(
-                "addTime",
-                30
-              )
-            }
-            className="
-              rounded-lg
-              bg-[#7A1F2B]
-              px-5
-              py-3
-              font-semibold
-              text-white
-              transition
-              hover:bg-[#651923]
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
-          >
-            +30 хв
-          </button>
+            {/* +10 */}
+
+            <button
+              type="button"
+              disabled={
+                loading || blocked
+              }
+              onClick={() =>
+                manageSession(
+                  "addTime",
+                  10
+                )
+              }
+              className="
+                rounded-lg
+                bg-[#7A1F2B]
+                px-5
+                py-3
+                font-semibold
+                text-white
+                transition
+                hover:bg-[#651923]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              {loading
+                ? "..."
+                : "+10 хв"}
+            </button>
+
+            {/* +30 */}
+
+            <button
+              type="button"
+              disabled={
+                loading || blocked
+              }
+              onClick={() =>
+                manageSession(
+                  "addTime",
+                  30
+                )
+              }
+              className="
+                rounded-lg
+                bg-[#7A1F2B]
+                px-5
+                py-3
+                font-semibold
+                text-white
+                transition
+                hover:bg-[#651923]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              {loading
+                ? "..."
+                : "+30 хв"}
+            </button>
+          </div>
+
+          {blocked && (
+            <p className="mt-4 text-sm text-gray-500">
+              Додавання часу недоступне,
+              поки тестування заблоковано.
+            </p>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
