@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
+import { mapPrismaTest } from "@/app/utils/mapPrismaTest";
 
 type Props = {
   params: Promise<{
@@ -156,6 +157,74 @@ function getQuestionStatus(
   };
 }
 
+function getMatchingStatus(
+  question: {
+    matchingLeftItems: {
+      id: number;
+      text: string;
+      correctRightId: number;
+    }[];
+  },
+  selectedAnswers: number[]
+) {
+  const leftItems = question.matchingLeftItems;
+
+  if (leftItems.length === 0) {
+    return {
+      correctPairs: 0,
+      totalPairs: 0,
+      label: "Немає даних",
+      className: "bg-gray-100 text-gray-600",
+      pointsClass: "text-gray-500",
+    };
+  }
+
+  let correctPairs = 0;
+
+  leftItems.forEach((leftItem, index) => {
+    const selectedRightId =
+      selectedAnswers[index];
+
+    if (
+      selectedRightId ===
+      leftItem.correctRightId
+    ) {
+      correctPairs++;
+    }
+  });
+
+  const totalPairs = leftItems.length;
+
+  if (correctPairs === totalPairs) {
+    return {
+      correctPairs,
+      totalPairs,
+      label: "Правильно",
+      className: "bg-green-100 text-green-700",
+      pointsClass: "text-green-600",
+    };
+  }
+
+  if (correctPairs > 0) {
+    return {
+      correctPairs,
+      totalPairs,
+      label: "Частково правильно",
+      className:
+        "bg-orange-100 text-orange-700",
+      pointsClass: "text-orange-600",
+    };
+  }
+
+  return {
+    correctPairs,
+    totalPairs,
+    label: "Неправильно",
+    className: "bg-red-100 text-red-700",
+    pointsClass: "text-red-600",
+  };
+}
+
 export default async function ResultDetailsPage({
   params,
 }: Props) {
@@ -185,36 +254,24 @@ export default async function ResultDetailsPage({
         },
       },
     });
-console.log(
-  "RESULT ID:",
-  result?.id
-);
 
-console.log(
-  "TEST:",
-  result?.test?.title
-);
-
-console.log(
-  "QUESTIONS COUNT:",
-  result?.test?.questions?.length
-);
-
-console.log(
-  "QUESTIONS:",
-  result?.test?.questions?.map(
-    (question) => ({
-      id: question.id,
-      order: question.order,
-      text: question.text,
-      optionsCount:
-        question.options?.length ?? 0,
-    })
-  )
-);
   if (!result) {
     notFound();
   }
+
+  /*
+   * ВАЖЛИВО:
+   *
+   * Matching.tsx НЕ ЗМІНЮЄМО.
+   *
+   * mapPrismaTest() відновлює:
+   *
+   * matchingLeftItems
+   * matchingRightItems
+   *
+   * із службових AnswerOption.
+   */
+  const mappedTest = mapPrismaTest(result.test);
 
   const participantName =
     getParticipantName(result);
@@ -493,7 +550,7 @@ console.log(
 
           <div className="space-y-5">
 
-            {result.test.questions.map(
+            {mappedTest.questions.map(
               (question, index) => {
 
                 const selectedAnswers =
@@ -502,11 +559,24 @@ console.log(
                     question.id
                   );
 
+                const isMatching =
+                  question.type === "matching";
+
+                const matchingStatus =
+                  isMatching
+                    ? getMatchingStatus(
+                        question,
+                        selectedAnswers
+                      )
+                    : null;
+
                 const status =
-                  getQuestionStatus(
-                    question,
-                    selectedAnswers
-                  );
+                  isMatching
+                    ? matchingStatus!
+                    : getQuestionStatus(
+                        question,
+                        selectedAnswers
+                      );
 
                 const correctOptions =
                   question.options.filter(
@@ -621,128 +691,155 @@ console.log(
                       </div>
 
                       {/* =================================================
-                          ВАРІАНТИ ВІДПОВІДЕЙ
+                          MATCHING
                       ================================================= */}
 
-                      {question.options.length > 0 && (
+                      {isMatching ? (
                         <div>
 
                           <div className="mb-3 text-sm font-medium text-gray-500">
-                            Варіанти відповідей
+                            Відповідності
                           </div>
 
-                          <div className="space-y-2">
+                          <div className="space-y-3">
 
-                            {question.options.map(
-                              (option) => {
+                            {question.matchingLeftItems.map(
+                              (
+                                leftItem,
+                                leftIndex
+                              ) => {
 
-                                const selected =
-                                  selectedAnswers.includes(
-                                    option.id
+                                const selectedRightId =
+                                  selectedAnswers[
+                                    leftIndex
+                                  ];
+
+                                const selectedRight =
+                                  question.matchingRightItems.find(
+                                    (
+                                      rightItem
+                                    ) =>
+                                      rightItem.id ===
+                                      selectedRightId
                                   );
 
-                                const correct =
-                                  option.isCorrect;
+                                const correctRight =
+                                  question.matchingRightItems.find(
+                                    (
+                                      rightItem
+                                    ) =>
+                                      rightItem.id ===
+                                      leftItem.correctRightId
+                                  );
 
-                                let className =
-                                  "border-gray-200 bg-white";
-
-                                if (
-                                  correct &&
-                                  selected
-                                ) {
-                                  className =
-                                    "border-green-400 bg-green-50";
-                                } else if (
-                                  correct
-                                ) {
-                                  className =
-                                    "border-green-300 bg-green-50";
-                                } else if (
-                                  selected
-                                ) {
-                                  className =
-                                    "border-red-300 bg-red-50";
-                                }
+                                const isPairCorrect =
+                                  selectedRightId ===
+                                  leftItem.correctRightId;
 
                                 return (
                                   <div
-                                    key={option.id}
+                                    key={
+                                      leftItem.id
+                                    }
                                     className={`
-                                      rounded-lg
+                                      rounded-xl
                                       border
                                       p-4
-                                      ${className}
+                                      ${
+                                        isPairCorrect
+                                          ? "border-green-300 bg-green-50"
+                                          : selectedRight
+                                          ? "border-red-300 bg-red-50"
+                                          : "border-gray-200 bg-gray-50"
+                                      }
                                     `}
                                   >
 
-                                    <div className="flex items-start gap-3">
+                                    <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
 
-                                      <div
-                                        className="
-                                          mt-0.5
-                                          flex
-                                          h-7
-                                          w-7
-                                          shrink-0
-                                          items-center
-                                          justify-center
-                                          rounded-full
-                                          border
-                                          border-gray-300
-                                          text-xs
-                                          font-bold
-                                          text-gray-700
-                                        "
-                                      >
-                                        {String.fromCharCode(
-                                          65 + option.order
-                                        )}
-                                      </div>
+                                      {/* ЛІВИЙ ЕЛЕМЕНТ */}
 
-                                      <div className="flex-1">
-
-                                        <div className="text-gray-900">
-                                          {option.text}
+                                      <div>
+                                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                          Лівий елемент
                                         </div>
 
-                                        <div className="mt-3 flex flex-wrap gap-2">
+                                        <div className="rounded-lg border border-gray-200 bg-white p-3 font-medium text-gray-900">
+                                          {leftItem.text}
+                                        </div>
+                                      </div>
 
-                                          {selected && (
-                                            <span
-                                              className="
-                                                rounded-full
-                                                bg-[#7A1F2B]
-                                                px-2.5
-                                                py-1
-                                                text-xs
-                                                font-semibold
-                                                text-white
-                                              "
-                                            >
-                                              Відповідь учасника
-                                            </span>
-                                          )}
+                                      {/* СТРІЛКА */}
 
-                                          {correct && (
-                                            <span
-                                              className="
-                                                rounded-full
-                                                bg-green-600
-                                                px-2.5
-                                                py-1
-                                                text-xs
-                                                font-semibold
-                                                text-white
-                                              "
-                                            >
-                                              Правильна відповідь
-                                            </span>
-                                          )}
+                                      <div className="hidden text-2xl text-gray-400 md:block">
+                                        →
+                                      </div>
 
+                                      {/* ВІДПОВІДЬ УЧАСНИКА */}
+
+                                      <div>
+                                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                          Відповідь учасника
+                                        </div>
+
+                                        <div
+                                          className={`
+                                            rounded-lg
+                                            border
+                                            p-3
+                                            font-medium
+                                            ${
+                                              isPairCorrect
+                                                ? "border-green-300 bg-green-100 text-green-800"
+                                                : selectedRight
+                                                ? "border-red-300 bg-red-100 text-red-800"
+                                                : "border-gray-200 bg-white text-gray-500"
+                                            }
+                                          `}
+                                        >
+                                          {selectedRight
+                                            ? selectedRight.text
+                                            : "Без відповіді"}
+                                        </div>
+                                      </div>
+
+                                    </div>
+
+                                    {/* ПРАВИЛЬНА ВІДПОВІДНІСТЬ */}
+
+                                    {!isPairCorrect && (
+                                      <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3">
+
+                                        <div className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                                          Правильна відповідність
+                                        </div>
+
+                                        <div className="mt-1 font-medium text-green-800">
+                                          {correctRight
+                                            ? correctRight.text
+                                            : "Не визначено"}
                                         </div>
 
                                       </div>
+                                    )}
+
+                                    {/* СТАТУС ПАРИ */}
+
+                                    <div className="mt-3">
+
+                                      {isPairCorrect ? (
+                                        <span className="inline-flex rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">
+                                          Правильно
+                                        </span>
+                                      ) : selectedRight ? (
+                                        <span className="inline-flex rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white">
+                                          Неправильно
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex rounded-full bg-gray-500 px-3 py-1 text-xs font-semibold text-white">
+                                          Без відповіді
+                                        </span>
+                                      )}
 
                                     </div>
 
@@ -753,60 +850,260 @@ console.log(
 
                           </div>
 
+                          {/* ПІДСУМОК MATCHING */}
+
+                          <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
+
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Правильні відповідності
+                                </div>
+
+                                <div
+                                  className={`
+                                    mt-1
+                                    text-xl
+                                    font-bold
+                                    ${matchingStatus!.pointsClass}
+                                  `}
+                                >
+                                  {
+                                    matchingStatus!
+                                      .correctPairs
+                                  }{" "}
+                                  /{" "}
+                                  {
+                                    matchingStatus!
+                                      .totalPairs
+                                  }
+                                </div>
+                              </div>
+
+                              <div
+                                className={`
+                                  rounded-full
+                                  px-4
+                                  py-2
+                                  text-sm
+                                  font-semibold
+                                  ${matchingStatus!.className}
+                                `}
+                              >
+                                {
+                                  matchingStatus!
+                                    .label
+                                }
+                              </div>
+
+                            </div>
+
+                          </div>
+
                         </div>
+                      ) : (
+                        /* =================================================
+                           SINGLE / MULTIPLE
+                           ================================================= */
+
+                        <>
+                          {question.options.length > 0 && (
+                            <div>
+
+                              <div className="mb-3 text-sm font-medium text-gray-500">
+                                Варіанти відповідей
+                              </div>
+
+                              <div className="space-y-2">
+
+                                {question.options.map(
+                                  (option) => {
+
+                                    const selected =
+                                      selectedAnswers.includes(
+                                        option.id
+                                      );
+
+                                    const correct =
+                                      option.isCorrect;
+
+                                    let className =
+                                      "border-gray-200 bg-white";
+
+                                    if (
+                                      correct &&
+                                      selected
+                                    ) {
+                                      className =
+                                        "border-green-400 bg-green-50";
+                                    } else if (
+                                      correct
+                                    ) {
+                                      className =
+                                        "border-green-300 bg-green-50";
+                                    } else if (
+                                      selected
+                                    ) {
+                                      className =
+                                        "border-red-300 bg-red-50";
+                                    }
+
+                                    return (
+                                      <div
+                                        key={
+                                          option.id
+                                        }
+                                        className={`
+                                          rounded-lg
+                                          border
+                                          p-4
+                                          ${className}
+                                        `}
+                                      >
+
+                                        <div className="flex items-start gap-3">
+
+                                          <div
+                                            className="
+                                              mt-0.5
+                                              flex
+                                              h-7
+                                              w-7
+                                              shrink-0
+                                              items-center
+                                              justify-center
+                                              rounded-full
+                                              border
+                                              border-gray-300
+                                              text-xs
+                                              font-bold
+                                              text-gray-700
+                                            "
+                                          >
+                                            {String.fromCharCode(
+                                              65 +
+                                                option.order
+                                            )}
+                                          </div>
+
+                                          <div className="flex-1">
+
+                                            <div className="text-gray-900">
+                                              {option.text}
+                                            </div>
+
+                                            <div className="mt-3 flex flex-wrap gap-2">
+
+                                              {selected && (
+                                                <span
+                                                  className="
+                                                    rounded-full
+                                                    bg-[#7A1F2B]
+                                                    px-2.5
+                                                    py-1
+                                                    text-xs
+                                                    font-semibold
+                                                    text-white
+                                                  "
+                                                >
+                                                  Відповідь учасника
+                                                </span>
+                                              )}
+
+                                              {correct && (
+                                                <span
+                                                  className="
+                                                    rounded-full
+                                                    bg-green-600
+                                                    px-2.5
+                                                    py-1
+                                                    text-xs
+                                                    font-semibold
+                                                    text-white
+                                                  "
+                                                >
+                                                  Правильна відповідь
+                                                </span>
+                                              )}
+
+                                            </div>
+
+                                          </div>
+
+                                        </div>
+
+                                      </div>
+                                    );
+                                  }
+                                )}
+
+                              </div>
+
+                            </div>
+                          )}
+
+                          {/* ПІДСУМОК SINGLE / MULTIPLE */}
+
+                          <div className="mt-5 border-t border-gray-200 pt-4">
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Обрано
+                                </div>
+
+                                <div className="mt-1 font-semibold text-gray-900">
+                                  {selectedOptions.length >
+                                  0
+                                    ? selectedOptions
+                                        .map(
+                                          (
+                                            option
+                                          ) =>
+                                            option.text
+                                        )
+                                        .join(
+                                          ", "
+                                        )
+                                    : "Без відповіді"}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Правильна відповідь
+                                </div>
+
+                                <div
+                                  className={`
+                                    mt-1
+                                    font-semibold
+                                    ${status.pointsClass}
+                                  `}
+                                >
+                                  {correctOptions.length >
+                                  0
+                                    ? correctOptions
+                                        .map(
+                                          (
+                                            option
+                                          ) =>
+                                            option.text
+                                        )
+                                        .join(
+                                          ", "
+                                        )
+                                    : "Не визначено"}
+                                </div>
+                              </div>
+
+                            </div>
+
+                          </div>
+                        </>
                       )}
-
-                      {/* =================================================
-                          ПІДСУМОК ЗАВДАННЯ
-                      ================================================= */}
-
-                      <div className="mt-5 border-t border-gray-200 pt-4">
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-
-                          <div>
-                            <div className="text-sm text-gray-500">
-                              Обрано
-                            </div>
-
-                            <div className="mt-1 font-semibold text-gray-900">
-                              {selectedOptions.length > 0
-                                ? selectedOptions
-                                    .map(
-                                      (option) =>
-                                        option.text
-                                    )
-                                    .join(", ")
-                                : "Без відповіді"}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="text-sm text-gray-500">
-                              Правильна відповідь
-                            </div>
-
-                            <div
-                              className={`
-                                mt-1
-                                font-semibold
-                                ${status.pointsClass}
-                              `}
-                            >
-                              {correctOptions.length > 0
-                                ? correctOptions
-                                    .map(
-                                      (option) =>
-                                        option.text
-                                    )
-                                    .join(", ")
-                                : "Не визначено"}
-                            </div>
-                          </div>
-
-                        </div>
-
-                      </div>
 
                     </div>
 
