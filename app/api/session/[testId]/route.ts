@@ -4,6 +4,7 @@ import {
 } from "next/server";
 
 import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/app/lib/prisma";
 
 type Props = {
@@ -15,9 +16,8 @@ type Props = {
 // =====================================================
 // GET — отримання стану конкретної сесії
 //
-// Використовується SessionMonitor.
+// Учасник отримує:
 //
-// Повертаємо:
 // - id
 // - currentQuestion
 // - blocked
@@ -29,7 +29,9 @@ type Props = {
 //
 // ВАЖЛИВО:
 //
-// GET нічого не змінює в БД.
+// timeLeft тут тільки ЧИТАЄМО.
+//
+// GET нічого не змінює.
 // =====================================================
 
 export async function GET(
@@ -44,10 +46,11 @@ export async function GET(
         "sessionId"
       );
 
-    const testIdNumber = Number(testId);
+    const testIdNumber =
+      Number(testId);
 
     const sessionId =
-      sessionIdParam !== null
+      sessionIdParam
         ? Number(sessionIdParam)
         : null;
 
@@ -56,12 +59,13 @@ export async function GET(
     // =================================================
 
     if (
-      !Number.isInteger(testIdNumber) ||
+      !Number.isInteger(
+        testIdNumber
+      ) ||
       testIdNumber <= 0
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
             "Некоректний id тесту.",
         },
@@ -76,13 +80,12 @@ export async function GET(
     // =================================================
 
     if (
-      sessionId === null ||
+      !sessionId ||
       !Number.isInteger(sessionId) ||
       sessionId <= 0
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
             "Некоректний id сесії.",
         },
@@ -93,13 +96,14 @@ export async function GET(
     }
 
     // =================================================
-    // Шукаємо саме цю сесію
+    // Знаходимо конкретну сесію
     // =================================================
 
     const session =
       await prisma.testSession.findFirst({
         where: {
           id: sessionId,
+
           testId: testIdNumber,
         },
 
@@ -119,24 +123,6 @@ export async function GET(
           finished: true,
 
           finishedAt: true,
-
-          startedAt: true,
-
-          lastActivityAt: true,
-
-          // -------------------------------------------
-          // Якщо результат вже створений,
-          // отримуємо його ID.
-          //
-          // Це особливо важливо після "Анулювати
-          // результат" в адміністративній панелі.
-          // -------------------------------------------
-
-          test: {
-            select: {
-              id: true,
-            },
-          },
         },
       });
 
@@ -146,43 +132,58 @@ export async function GET(
 
     if (!session) {
       return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Сесію не знайдено.",
-        },
-        {
-          status: 404,
-        }
+        null
       );
     }
 
     // =================================================
-    // Шукаємо останній результат цієї сесії
+    // Шукаємо результат
     //
-    // У TestResult немає sessionId,
-    // тому зв'язок визначаємо через:
+    // У поточній структурі TestResult може бути
+    // пов'язаний із testId, але не обов'язково
+    // мати sessionId.
     //
-    // testId + startedAt / finishedAt
+    // Тому спочатку намагаємося знайти результат
+    // за sessionId через поле, якщо воно існує
+    // у Prisma-моделі.
     //
-    // Для анулювання результат створюється
-    // безпосередньо під час завершення сесії.
+    // Щоб цей GET не падав через відсутність
+    // такого поля в старій схемі, основна логіка
+    // нижче працює без нього.
     // =================================================
 
-    let resultId: number | null = null;
+    let resultId: number | null =
+      null;
 
     if (session.finished) {
+      // -------------------------------------------------
+      // Варіант 1:
+      //
+      // Якщо TestResult має sessionId, його потрібно
+      // використовувати як основний спосіб зв'язку.
+      //
+      // У поточній схемі цей блок свідомо не виконує
+      // Prisma-запит із sessionId, щоб код відповідав
+      // схемі, яку ми використовували до цього.
+      // -------------------------------------------------
+
+      // -------------------------------------------------
+      // Варіант 2:
+      //
+      // Знаходимо останній результат цього тесту.
+      //
+      // Це тимчасовий механізм до додавання sessionId
+      // у TestResult.
+      // -------------------------------------------------
+
       const result =
         await prisma.testResult.findFirst({
           where: {
             testId: testIdNumber,
-
-            finishedAt:
-              session.finishedAt ?? undefined,
           },
 
           orderBy: {
-            id: "desc",
+            createdAt: "desc",
           },
 
           select: {
@@ -190,8 +191,10 @@ export async function GET(
           },
         });
 
-      resultId =
-        result?.id ?? null;
+      if (result) {
+        resultId =
+          result.id;
+      }
     }
 
     // =================================================
@@ -199,8 +202,6 @@ export async function GET(
     // =================================================
 
     return NextResponse.json({
-      success: true,
-
       id: session.id,
 
       currentQuestion:
@@ -221,15 +222,6 @@ export async function GET(
       finished:
         session.finished,
 
-      finishedAt:
-        session.finishedAt,
-
-      startedAt:
-        session.startedAt,
-
-      lastActivityAt:
-        session.lastActivityAt,
-
       resultId,
     });
   } catch (error) {
@@ -240,7 +232,6 @@ export async function GET(
 
     return NextResponse.json(
       {
-        success: false,
         error:
           "Помилка отримання сесії.",
       },
@@ -252,15 +243,16 @@ export async function GET(
 }
 
 // =====================================================
-// POST — синхронізація сесії учасником
+// POST — синхронізація сесії
 //
-// Дозволено змінювати:
+// Учасник може передавати:
 //
+// - sessionId
 // - currentQuestion
 // - savedAnswers
 // - finished
 //
-// НЕ дозволено змінювати:
+// Учасник НЕ може змінювати:
 //
 // - timeLeft
 // - extraTime
@@ -268,7 +260,7 @@ export async function GET(
 // - blockReason
 // - blockedAt
 //
-// Час контролюється сервером.
+// Це критично для роботи адміністративної панелі.
 // =====================================================
 
 export async function POST(
@@ -278,27 +270,27 @@ export async function POST(
   try {
     const { testId } = await params;
 
-    const body = await req.json();
+    const body =
+      await req.json();
 
-    const testIdNumber = Number(testId);
+    const testIdNumber =
+      Number(testId);
 
     const sessionId =
-      body.sessionId !== undefined &&
-      body.sessionId !== null
-        ? Number(body.sessionId)
-        : null;
+      Number(body.sessionId);
 
     // =================================================
     // Перевірка testId
     // =================================================
 
     if (
-      !Number.isInteger(testIdNumber) ||
+      !Number.isInteger(
+        testIdNumber
+      ) ||
       testIdNumber <= 0
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
             "Некоректний id тесту.",
         },
@@ -313,13 +305,11 @@ export async function POST(
     // =================================================
 
     if (
-      sessionId === null ||
       !Number.isInteger(sessionId) ||
       sessionId <= 0
     ) {
       return NextResponse.json(
         {
-          success: false,
           error:
             "Некоректний id сесії.",
         },
@@ -330,25 +320,25 @@ export async function POST(
     }
 
     // =================================================
-    // Знаходимо сесію
+    // Знаходимо конкретну сесію
     // =================================================
 
     const session =
       await prisma.testSession.findFirst({
         where: {
           id: sessionId,
+
           testId: testIdNumber,
         },
       });
 
     // =================================================
-    // Сесію не знайдено
+    // Сесії немає
     // =================================================
 
     if (!session) {
       return NextResponse.json(
         {
-          success: false,
           error:
             "Сесію не знайдено.",
         },
@@ -361,10 +351,15 @@ export async function POST(
     // =================================================
     // HEARTBEAT
     //
-    // Heartbeat не змінює жодного іншого поля.
+    // Heartbeat лише повідомляє сервер,
+    // що браузер учасника активний.
+    //
+    // НІЯКОГО timeLeft.
     // =================================================
 
-    if (body.heartbeat === true) {
+    if (
+      body.heartbeat === true
+    ) {
       const updatedSession =
         await prisma.testSession.update({
           where: {
@@ -378,39 +373,48 @@ export async function POST(
 
           select: {
             id: true,
+
             lastActivityAt: true,
           },
         });
 
-      return NextResponse.json({
-        success: true,
-        heartbeat: true,
-        session:
-          updatedSession,
-      });
+      return NextResponse.json(
+        updatedSession
+      );
     }
 
     // =================================================
-    // Якщо сесія вже завершена
+    // ВАЖЛИВО:
     //
-    // Учасник не повинен мати можливості
-    // змінювати завершену сесію.
-    //
-    // Але дозволяємо повторний POST,
-    // якщо він просто повідомляє finished=true.
+    // Якщо сесію вже завершено сервером,
+    // учасник не повинен мати можливості
+    // знову її "відкрити" через POST.
     // =================================================
 
-    if (
-      session.finished &&
-      body.finished !== true
-    ) {
-      return NextResponse.json(
-        {
-          success: true,
-          finished: true,
-          session,
-        }
-      );
+    if (session.finished) {
+      return NextResponse.json({
+        id: session.id,
+
+        currentQuestion:
+          session.currentQuestion,
+
+        savedAnswers:
+          session.savedAnswers,
+
+        timeLeft:
+          session.timeLeft,
+
+        extraTime:
+          session.extraTime,
+
+        blocked:
+          session.blocked,
+
+        blockReason:
+          session.blockReason,
+
+        finished: true,
+      });
     }
 
     // =================================================
@@ -418,7 +422,7 @@ export async function POST(
     //
     // КРИТИЧНО:
     //
-    // Тут НЕМАЄ:
+    // Тут НІКОЛИ не повинно бути:
     //
     // timeLeft
     // extraTime
@@ -426,12 +430,15 @@ export async function POST(
     // blockReason
     // blockedAt
     //
-    // Це захищає адміністративні зміни.
+    // Інакше браузер учасника може перезаписати
+    // зміни адміністратора.
     // =================================================
 
-    const updateData: Prisma.TestSessionUpdateInput = {
-  lastActivityAt: new Date(),
-};
+    const updateData: Prisma.TestSessionUpdateInput =
+      {
+        lastActivityAt:
+          new Date(),
+      };
 
     // =================================================
     // Поточне питання
@@ -453,25 +460,34 @@ export async function POST(
     // Збережені відповіді
     // =================================================
 
-    if (body.savedAnswers !== undefined) {
-  updateData.savedAnswers =
-    body.savedAnswers === null
-      ? Prisma.JsonNull
-      : (body.savedAnswers as Prisma.InputJsonValue);
-}
+    if (
+      body.savedAnswers !==
+      undefined
+    ) {
+      updateData.savedAnswers =
+        body.savedAnswers === null
+          ? Prisma.JsonNull
+          : body.savedAnswers;
+    }
 
     // =================================================
-    // Завершення сесії
+    // Завершення
+    //
+    // Зазвичай завершення виконується через
+    // finishTest().
+    //
+    // Але якщо учасник передав finished=true,
+    // дозволяємо завершити сесію.
     // =================================================
 
     if (
       typeof body.finished ===
       "boolean"
     ) {
-      updateData.finished =
-        body.finished;
-
       if (body.finished) {
+        updateData.finished =
+          true;
+
         updateData.finishedAt =
           session.finishedAt ??
           new Date();
@@ -479,7 +495,7 @@ export async function POST(
     }
 
     // =================================================
-    // Оновлення
+    // ОНОВЛЕННЯ
     // =================================================
 
     const updatedSession =
@@ -492,53 +508,35 @@ export async function POST(
       });
 
     // =================================================
-    // Якщо після POST сесію завершено,
-    // шукаємо результат.
-    // =================================================
-
-    let resultId: number | null =
-      null;
-
-    if (
-      updatedSession.finished
-    ) {
-      const result =
-        await prisma.testResult.findFirst(
-          {
-            where: {
-              testId:
-                updatedSession.testId,
-
-              finishedAt:
-                updatedSession.finishedAt ??
-                undefined,
-            },
-
-            orderBy: {
-              id: "desc",
-            },
-
-            select: {
-              id: true,
-            },
-          }
-        );
-
-      resultId =
-        result?.id ?? null;
-    }
-
-    // =================================================
     // Повертаємо актуальний стан
     // =================================================
 
     return NextResponse.json({
-      success: true,
+      id: updatedSession.id,
 
-      session:
-        updatedSession,
+      currentQuestion:
+        updatedSession.currentQuestion,
 
-      resultId,
+      savedAnswers:
+        updatedSession.savedAnswers,
+
+      timeLeft:
+        updatedSession.timeLeft,
+
+      extraTime:
+        updatedSession.extraTime,
+
+      blocked:
+        updatedSession.blocked,
+
+      blockReason:
+        updatedSession.blockReason,
+
+      finished:
+        updatedSession.finished,
+
+      finishedAt:
+        updatedSession.finishedAt,
     });
   } catch (error) {
     console.error(
@@ -548,7 +546,6 @@ export async function POST(
 
     return NextResponse.json(
       {
-        success: false,
         error:
           "Помилка збереження сесії.",
       },

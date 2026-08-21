@@ -7,30 +7,21 @@ import { prisma } from "@/app/lib/prisma";
 // /api/analytics/question?testId=1&questionId=629
 // =====================================================
 
-export async function GET(
-  request: Request
-) {
+export async function GET(request: Request) {
   try {
-    const { searchParams } =
-      new URL(request.url);
+    const { searchParams } = new URL(request.url);
 
-    const testIdParam =
-      searchParams.get("testId");
-
-    const questionIdParam =
-      searchParams.get(
-        "questionId"
-      );
+    const testIdParam = searchParams.get("testId");
+    const questionIdParam = searchParams.get("questionId");
 
     // =================================================
-    // Перевірка TEST ID
+    // ПЕРЕВІРКА TEST ID
     // =================================================
 
     if (!testIdParam) {
       return NextResponse.json(
         {
-          message:
-            "Не вказано ID тесту.",
+          message: "Не вказано ID тесту.",
         },
         {
           status: 400,
@@ -38,17 +29,12 @@ export async function GET(
       );
     }
 
-    const testId =
-      Number(testIdParam);
+    const testId = Number(testIdParam);
 
-    if (
-      !Number.isInteger(testId) ||
-      testId <= 0
-    ) {
+    if (!Number.isInteger(testId) || testId <= 0) {
       return NextResponse.json(
         {
-          message:
-            "Некоректний ID тесту.",
+          message: "Некоректний ID тесту.",
         },
         {
           status: 400,
@@ -57,14 +43,13 @@ export async function GET(
     }
 
     // =================================================
-    // Перевірка QUESTION ID
+    // ПЕРЕВІРКА QUESTION ID
     // =================================================
 
     if (!questionIdParam) {
       return NextResponse.json(
         {
-          message:
-            "Не вказано ID питання.",
+          message: "Не вказано ID питання.",
         },
         {
           status: 400,
@@ -72,19 +57,12 @@ export async function GET(
       );
     }
 
-    const questionId =
-      Number(questionIdParam);
+    const questionId = Number(questionIdParam);
 
-    if (
-      !Number.isInteger(
-        questionId
-      ) ||
-      questionId <= 0
-    ) {
+    if (!Number.isInteger(questionId) || questionId <= 0) {
       return NextResponse.json(
         {
-          message:
-            "Некоректний ID питання.",
+          message: "Некоректний ID питання.",
         },
         {
           status: 400,
@@ -93,43 +71,76 @@ export async function GET(
     }
 
     // =================================================
-    // ЗАВАНТАЖУЄМО ТІЛЬКИ ОДНЕ ПИТАННЯ
+    // ЗАВАНТАЖЕННЯ ПИТАННЯ ЧЕРЕЗ TEST QUESTION
+    //
+    // Актуальна структура:
+    //
+    // Test
+    //   └── TestQuestion
+    //         └── Question
+    //               └── AnswerOption
+    //
+    // TestQuestion містить:
+    // - testId
+    // - questionId
+    // - order
+    //
+    // Question містить:
+    // - id
+    // - text
+    // - type
+    // - points
+    //
+    // Question НЕ містить testId та order.
     // =================================================
 
-    const question =
-      await prisma.question.findFirst({
+    const testQuestion =
+      await prisma.testQuestion.findFirst({
         where: {
-          id: questionId,
           testId,
+          questionId,
         },
 
         select: {
           id: true,
+          testId: true,
+          questionId: true,
           order: true,
-          type: true,
-          text: true,
-          points: true,
 
-          options: {
-            orderBy: {
-              order: "asc",
-            },
-
+          question: {
             select: {
               id: true,
-              order: true,
               text: true,
-              isCorrect: true,
+              type: true,
+              points: true,
+
+              answerOptions: {
+                orderBy: {
+                  order: "asc",
+                },
+
+                select: {
+                  id: true,
+                  questionId: true,
+                  text: true,
+                  isCorrect: true,
+                  order: true,
+                },
+              },
             },
           },
         },
       });
 
-    if (!question) {
+    // =================================================
+    // ПЕРЕВІРКА НАЯВНОСТІ
+    // =================================================
+
+    if (!testQuestion) {
       return NextResponse.json(
         {
           message:
-            "Питання не знайдено.",
+            "Питання не знайдено в указаному тесті.",
         },
         {
           status: 404,
@@ -138,27 +149,23 @@ export async function GET(
     }
 
     // =================================================
-    // ПОВЕРТАЄМО ДЕТАЛІ
+    // ПОВЕРТАЄМО ДЕТАЛІ ПИТАННЯ
     // =================================================
 
     return NextResponse.json({
       question: {
-        id: question.id,
+        id: testQuestion.question.id,
 
-        order:
-          question.order,
+        // Порядок питання належить TestQuestion
+        order: testQuestion.order,
 
-        type:
-          question.type,
+        type: testQuestion.question.type,
 
-        text:
-          question.text,
+        text: testQuestion.question.text,
 
-        points:
-          question.points,
+        points: testQuestion.question.points,
 
-        options:
-          question.options,
+        options: testQuestion.question.answerOptions,
       },
     });
   } catch (error) {

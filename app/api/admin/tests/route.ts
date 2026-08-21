@@ -1,243 +1,43 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
 import { prisma } from "@/app/lib/prisma";
 
-export async function POST(request: Request) {
+/**
+ * GET /api/admin/tests
+ *
+ * Список усіх тестів.
+ */
+export async function GET() {
   try {
-    const body = await request.json();
-
-    // ==========================================
-    // НОМЕР РОЗТАШУВАННЯ НА ГОЛОВНІЙ СТОРІНЦІ
-    // ==========================================
-
-    const displayOrder = Number(body.displayOrder);
-
-    if (
-      !Number.isInteger(displayOrder) ||
-      displayOrder < 1
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Номер розташування тесту повинен бути цілим числом більше 0.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    // ==========================================
-    // ПЕРЕВІРКА УНІКАЛЬНОСТІ НОМЕРА
-    // ==========================================
-
-    const existingTest = await prisma.test.findUnique({
-      where: {
-        displayOrder,
+    const tests = await prisma.test.findMany({
+      orderBy: {
+        createdAt: "desc",
       },
-      select: {
-        id: true,
-        title: true,
-      },
-    });
-
-    if (existingTest) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            `Номер ${displayOrder} уже використовується тестом "${existingTest.title}".`,
-        },
-        {
-          status: 409,
-        }
-      );
-    }
-
-    // ==========================================
-    // СТВОРЕННЯ ТЕСТУ
-    // ==========================================
-
-    const test = await prisma.test.create({
-      data: {
-        title: body.title,
-
-        // Номер розташування
-        displayOrder,
-
-        // Тип іспиту
-        examType: body.examType ?? "НМТ",
-
-        subject: body.subject,
-
-        description: body.description,
-
-        schoolYear: body.schoolYear,
-
-        duration: body.duration,
-
-        maxPoints: body.maxPoints,
-
-        // Публікація
-        isPublished:
-          body.isPublished ?? false,
-
-        // Код доступу
-        codeRequired:
-          body.codeRequired ?? true,
-
-        accessCode:
-          body.accessCode || null,
-
-        // ==========================================
-        // ПИТАННЯ
-        // ==========================================
-
-        questions: {
-          create: (body.questions ?? []).map(
-            (
-              question: any,
-              index: number
-            ) => {
-              let options: {
-                order: number;
-                text: string;
-                isCorrect: boolean;
-              }[] = [];
-
-              // ======================================
-              // ЗВИЧАЙНІ ПИТАННЯ
-              // ======================================
-
-              if (
-                question.type !== "matching"
-              ) {
-                options =
-                  (
-                    question.options ?? []
-                  ).map(
-                    (
-                      option: any,
-                      optionIndex: number
-                    ) => ({
-                      order:
-                        optionIndex + 1,
-
-                      text:
-                        option.text ?? "",
-
-                      isCorrect:
-                        option.isCorrect ??
-                        false,
-                    })
-                  );
-              }
-
-              // ======================================
-              // MATCHING
-              // ======================================
-
-              if (
-                question.type === "matching"
-              ) {
-                const leftItems =
-                  question.matchingLeftItems ??
-                  [];
-
-                const rightItems =
-                  question.matchingRightItems ??
-                  [];
-
-                // ------------------------------
-                // Ліва частина
-                // L|id|text|correctRightId
-                // ------------------------------
-
-                const leftOptions =
-                  leftItems.map(
-                    (
-                      item: any,
-                      itemIndex: number
-                    ) => ({
-                      order:
-                        itemIndex + 1,
-
-                      text:
-                        `L|${item.id}|${item.text ?? ""}|${item.correctRightId}`,
-
-                      isCorrect: false,
-                    })
-                  );
-
-                // ------------------------------
-                // Права частина
-                // R|id|text
-                // ------------------------------
-
-                const rightOptions =
-                  rightItems.map(
-                    (
-                      item: any,
-                      itemIndex: number
-                    ) => ({
-                      order:
-                        leftItems.length +
-                        itemIndex +
-                        1,
-
-                      text:
-                        `R|${item.id}|${item.text ?? ""}`,
-
-                      isCorrect: false,
-                    })
-                  );
-
-                options = [
-                  ...leftOptions,
-                  ...rightOptions,
-                ];
-              }
-
-              return {
-                order: index + 1,
-
-                type: question.type,
-
-                text:
-                  question.text ?? "",
-
-                points:
-                  question.points ?? 1,
-
-                shuffleQuestion:
-                  question.shuffleQuestion ??
-                  true,
-
-                options: {
-                  create: options,
-                },
-              };
-            }
-          ),
-        },
-      },
-
-      // ==========================================
-      // ПОВЕРТАЄМО СТВОРЕНИЙ ТЕСТ
-      // ==========================================
 
       include: {
         questions: {
+          orderBy: {
+            order: "asc",
+          },
+
           include: {
-            options: {
-              orderBy: {
-                order: "asc",
+            question: {
+              include: {
+                answerOptions: {
+                  orderBy: {
+                    order: "asc",
+                  },
+                },
               },
             },
           },
+        },
 
-          orderBy: {
-            order: "asc",
+        _count: {
+          select: {
+            questions: true,
+            sessions: true,
+            results: true,
           },
         },
       },
@@ -245,38 +45,216 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      test,
+      tests,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error(
-      "CREATE TEST ERROR:",
+      "GET /api/admin/tests error:",
       error
     );
 
-    // ==========================================
-    // ЗАХИСТ ВІД ДУБЛЮВАННЯ displayOrder
-    // ==========================================
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Не вдалося отримати список тестів.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
+
+/**
+ * POST /api/admin/tests
+ *
+ * Створення нового тесту.
+ *
+ * Очікуваний body:
+ *
+ * {
+ *   title: string;
+ *   subject: string;
+ *   duration: number;
+ *   maxPoints?: number;
+ *   isPublished?: boolean;
+ *   codeRequired?: boolean;
+ *   accessCode?: string | null;
+ * }
+ */
+export async function POST(
+  request: NextRequest
+) {
+  try {
+    const body = await request.json();
+
+    const title =
+      typeof body.title === "string"
+        ? body.title.trim()
+        : "";
+
+    const subject =
+      typeof body.subject === "string"
+        ? body.subject.trim()
+        : "";
+
+    const duration = Number(body.duration);
+
+    if (!title) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Вкажіть назву тесту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!subject) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Вкажіть предмет.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     if (
-      error?.code === "P2002"
+      !Number.isInteger(duration) ||
+      duration <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Такий номер розташування вже використовується іншим тестом.",
+            "Тривалість повинна бути додатним цілим числом.",
         },
         {
-          status: 409,
+          status: 400,
         }
       );
     }
 
+    /*
+     * maxPoints необов'язковий.
+     *
+     * Якщо його не передали,
+     * спочатку створюємо тест із 0.
+     *
+     * Надалі він може бути оновлений
+     * після додавання питань.
+     */
+    const maxPoints =
+      body.maxPoints === undefined
+        ? 0
+        : Number(body.maxPoints);
+
+    if (
+      !Number.isInteger(maxPoints) ||
+      maxPoints < 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Максимальна кількість балів повинна бути невід’ємним цілим числом.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const isPublished =
+      typeof body.isPublished === "boolean"
+        ? body.isPublished
+        : false;
+
+    const codeRequired =
+      typeof body.codeRequired === "boolean"
+        ? body.codeRequired
+        : false;
+
+    const accessCode =
+      body.accessCode === undefined ||
+      body.accessCode === null ||
+      body.accessCode === ""
+        ? null
+        : String(body.accessCode).trim();
+
+    /*
+     * Якщо код доступу не потрібен,
+     * не зберігаємо його.
+     */
+    const finalAccessCode = codeRequired
+      ? accessCode
+      : null;
+
+    const test = await prisma.test.create({
+      data: {
+        title,
+        subject,
+        duration,
+        maxPoints,
+        isPublished,
+        codeRequired,
+        accessCode: finalAccessCode,
+      },
+
+      include: {
+        questions: {
+          orderBy: {
+            order: "asc",
+          },
+
+          include: {
+            question: {
+              include: {
+                answerOptions: {
+                  orderBy: {
+                    order: "asc",
+                  },
+                },
+              },
+            },
+          },
+        },
+
+        _count: {
+          select: {
+            questions: true,
+            sessions: true,
+            results: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Тест успішно створено.",
+        test,
+      },
+      {
+        status: 201,
+      }
+    );
+  } catch (error) {
+    console.error(
+      "POST /api/admin/tests error:",
+      error
+    );
+
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Не вдалося створити тест.",
+        message: "Не вдалося створити тест.",
       },
       {
         status: 500,

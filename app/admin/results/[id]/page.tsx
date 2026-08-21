@@ -37,10 +37,9 @@ function formatDuration(seconds: number) {
   if (hours > 0) {
     return `${String(hours).padStart(2, "0")}:${String(
       minutes
-    ).padStart(2, "0")}:${String(remainingSeconds).padStart(
-      2,
-      "0"
-    )}`;
+    ).padStart(2, "0")}:${String(
+      remainingSeconds
+    ).padStart(2, "0")}`;
   }
 
   return `${String(minutes).padStart(2, "0")}:${String(
@@ -50,8 +49,6 @@ function formatDuration(seconds: number) {
 
 /* ============================================================
    ОЧИЩЕННЯ HTML
-   Використовується тільки там, де HTML НЕ потрібно показувати
-   форматованим — наприклад, для коротких підсумкових рядків.
 ============================================================ */
 
 function stripHtml(html: string | null | undefined) {
@@ -84,7 +81,9 @@ function getParticipantName(result: {
     result.middleName,
   ].filter(Boolean);
 
-  return parts.length > 0 ? parts.join(" ") : "Не вказано";
+  return parts.length > 0
+    ? parts.join(" ")
+    : "Не вказано";
 }
 
 function getFinishReason(reason: string) {
@@ -123,6 +122,10 @@ function getFinishReason(reason: string) {
   }
 }
 
+/* ============================================================
+   ОТРИМАННЯ ЗБЕРЕЖЕНОЇ ВІДПОВІДІ
+============================================================ */
+
 function getSavedAnswer(
   answers: unknown,
   questionId: number
@@ -139,17 +142,18 @@ function getSavedAnswer(
   }
 
   return answer.filter(
-    (value): value is number => typeof value === "number"
+    (value): value is number =>
+      typeof value === "number"
   );
 }
 
 /* ============================================================
-   СТАТУС ЗВИЧАЙНОГО ПИТАННЯ
+   ЗВИЧАЙНЕ ПИТАННЯ
 ============================================================ */
 
 function getQuestionStatus(
   question: {
-    options: {
+    answerOptions: {
       id: number;
       isCorrect: boolean;
     }[];
@@ -166,7 +170,7 @@ function getQuestionStatus(
     };
   }
 
-  const correctIds = question.options
+  const correctIds = question.answerOptions
     .filter((option) => option.isCorrect)
     .map((option) => option.id)
     .sort((a, b) => a - b);
@@ -201,18 +205,20 @@ function getQuestionStatus(
 }
 
 /* ============================================================
-   MATCHING — ОТРИМАННЯ ВІДПОВІДНОСТЕЙ
+   MATCHING — ОТРИМАННЯ ДАНИХ
 ============================================================ */
 
 function getMatchingData(question: {
-  options: {
+  answerOptions: {
     id: number;
     text: string;
     order?: number;
   }[];
 }) {
-  const leftItems = question.options
-    .filter((option) => option.text?.startsWith("L|"))
+  const leftItems = question.answerOptions
+    .filter((option) =>
+      option.text?.startsWith("L|")
+    )
     .map((option) => {
       const parts = option.text.split("|");
 
@@ -224,8 +230,10 @@ function getMatchingData(question: {
     })
     .sort((a, b) => a.id - b.id);
 
-  const rightItems = question.options
-    .filter((option) => option.text?.startsWith("R|"))
+  const rightItems = question.answerOptions
+    .filter((option) =>
+      option.text?.startsWith("R|")
+    )
     .map((option) => {
       const parts = option.text.split("|");
 
@@ -248,7 +256,7 @@ function getMatchingData(question: {
 
 function getMatchingStatus(
   question: {
-    options: {
+    answerOptions: {
       id: number;
       text: string;
     }[];
@@ -317,7 +325,7 @@ function getMatchingStatus(
 
 function getMatchingCorrectPairs(
   question: {
-    options: {
+    answerOptions: {
       id: number;
       text: string;
     }[];
@@ -352,39 +360,68 @@ export default async function ResultDetailsPage({
 }: Props) {
   const { id } = await params;
 
-  const result = await prisma.testResult.findUnique({
-    where: {
-      id: Number(id),
-    },
-    include: {
-      test: {
-        include: {
-          questions: {
-            orderBy: {
-              order: "asc",
-            },
-            include: {
-              options: {
-                orderBy: {
-                  order: "asc",
+  const resultId = Number(id);
+
+  if (
+    !Number.isInteger(resultId) ||
+    resultId <= 0
+  ) {
+    notFound();
+  }
+
+  const result =
+    await prisma.testResult.findUnique({
+      where: {
+        id: resultId,
+      },
+
+      include: {
+        test: {
+          include: {
+            questions: {
+              orderBy: {
+                order: "asc",
+              },
+
+              include: {
+                question: {
+                  include: {
+                    answerOptions: {
+                      orderBy: {
+                        order: "asc",
+                      },
+                    },
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    });
 
   if (!result) {
     notFound();
   }
 
-  const participantName = getParticipantName(result);
+  const participantName =
+    getParticipantName(result);
 
   const finishReason = getFinishReason(
     result.finishReason
   );
+
+  /*
+   * У Test.questions зберігаються зв'язки
+   * TestQuestion -> Question.
+   *
+   * Для відображення результату нам потрібні
+   * безпосередньо Question.
+   */
+  const questions =
+    result.test.questions.map(
+      (testQuestion) => testQuestion.question
+    );
 
   return (
     <main className="min-h-screen bg-[#f5f5f6]">
@@ -669,7 +706,6 @@ export default async function ResultDetailsPage({
                 {result.skipped}
               </div>
             </div>
-
           </div>
         </section>
 
@@ -718,6 +754,7 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+
           <div className="mb-7">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
@@ -737,345 +774,39 @@ export default async function ResultDetailsPage({
           </div>
 
           <div className="space-y-6">
-            {result.test.questions.map(
-              (question, index) => {
-                const selectedAnswers =
-                  getSavedAnswer(
-                    result.answers,
-                    question.id
-                  );
 
-                const isMatching =
-                  question.type === "matching";
+            {questions.map((question, index) => {
+              const selectedAnswers =
+                getSavedAnswer(
+                  result.answers,
+                  question.id
+                );
 
-                /* ==================================================
-                   MATCHING
-                ================================================== */
+              const isMatching =
+                question.type === "matching";
 
-                if (isMatching) {
-                  const {
-                    leftItems,
-                    rightItems,
-                  } = getMatchingData(question);
+              /* ==================================================
+                 MATCHING
+              ================================================== */
 
-                  const {
-                    correctPairs,
-                    totalPairs,
-                  } = getMatchingCorrectPairs(
-                    question,
-                    selectedAnswers
-                  );
+              if (isMatching) {
+                const {
+                  leftItems,
+                  rightItems,
+                } = getMatchingData(question);
 
-                  const status =
-                    getMatchingStatus(
-                      question,
-                      selectedAnswers
-                    );
-
-                  return (
-                    <article
-                      key={question.id}
-                      className="
-                        overflow-hidden
-                        rounded-2xl
-                        border
-                        border-gray-200
-                        bg-white
-                      "
-                    >
-                      {/* HEADER */}
-
-                      <div className="bg-gray-50 p-5">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-4">
-                            <div
-                              className="
-                                flex
-                                h-11
-                                w-11
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-full
-                                bg-[#7A1F2B]
-                                font-bold
-                                text-white
-                              "
-                            >
-                              {index + 1}
-                            </div>
-
-                            <div>
-                              <div className="text-sm font-medium text-gray-500">
-                                Завдання {index + 1}
-                              </div>
-
-                              <div className="mt-1 font-semibold text-gray-900">
-                                {question.points}{" "}
-                                {question.points === 1
-                                  ? "бал"
-                                  : "бали"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`
-                              inline-flex
-                              w-fit
-                              items-center
-                              gap-2
-                              rounded-full
-                              border
-                              px-4
-                              py-2
-                              text-sm
-                              font-semibold
-                              ${status.className}
-                            `}
-                          >
-                            <span className="font-bold">
-                              {status.icon}
-                            </span>
-
-                            {status.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* CONTENT */}
-
-                      <div className="p-5 sm:p-6">
-
-                        {/* УМОВА */}
-
-                        <div className="mb-7">
-                          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                            Умова
-                          </div>
-
-                          <HtmlContent
-                            html={question.text}
-                            className="text-lg leading-8 text-gray-900"
-                          />
-                        </div>
-
-                        {/* MATCHING */}
-
-                        <div>
-                          <div className="mb-3 text-sm font-semibold text-gray-600">
-                            Відповідності учасника
-                          </div>
-
-                          {leftItems.length === 0 ? (
-                            <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-500">
-                              Дані відповідності відсутні.
-                            </div>
-                          ) : (
-                            <div className="overflow-hidden rounded-xl border border-gray-200">
-                              {leftItems.map(
-                                (
-                                  leftItem,
-                                  leftIndex
-                                ) => {
-                                  const selectedRightId =
-                                    selectedAnswers[
-                                      leftIndex
-                                    ];
-
-                                  const correct =
-                                    selectedRightId ===
-                                    leftItem.correctRightId;
-
-                                  const selectedRight =
-                                    rightItems.find(
-                                      (right) =>
-                                        right.id ===
-                                        selectedRightId
-                                    );
-
-                                  const correctRight =
-                                    rightItems.find(
-                                      (right) =>
-                                        right.id ===
-                                        leftItem.correctRightId
-                                    );
-
-                                  return (
-                                    <div
-                                      key={leftItem.id}
-                                      className={`
-                                        grid
-                                        gap-4
-                                        border-b
-                                        border-gray-200
-                                        p-4
-                                        last:border-b-0
-                                        sm:grid-cols-[1fr_auto_1fr]
-                                        sm:items-center
-                                        ${
-                                          correct
-                                            ? "bg-green-50/60"
-                                            : "bg-red-50/40"
-                                        }
-                                      `}
-                                    >
-                                      {/* LEFT */}
-
-                                      <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-                                          Ліва частина
-                                        </div>
-
-                                        <HtmlContent
-                                          html={leftItem.text}
-                                          className="font-medium text-gray-900"
-                                        />
-                                      </div>
-
-                                      {/* ARROW */}
-
-                                      <div
-                                        className={`
-                                          hidden
-                                          text-xl
-                                          font-bold
-                                          sm:block
-                                          ${
-                                            correct
-                                              ? "text-green-500"
-                                              : "text-red-500"
-                                          }
-                                        `}
-                                      >
-                                        →
-                                      </div>
-
-                                      {/* RIGHT */}
-
-                                      <div
-                                        className={`
-                                          rounded-lg
-                                          border
-                                          p-3
-                                          ${
-                                            correct
-                                              ? "border-green-200 bg-green-100"
-                                              : "border-red-200 bg-red-100"
-                                          }
-                                        `}
-                                      >
-                                        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                          Відповідь учасника
-                                        </div>
-
-                                        <HtmlContent
-                                          html={
-                                            selectedRight
-                                              ? selectedRight.text
-                                              : "Без відповіді"
-                                          }
-                                          className={`
-                                            font-medium
-                                            ${
-                                              correct
-                                                ? "text-green-800"
-                                                : "text-red-800"
-                                            }
-                                          `}
-                                        />
-
-                                        {!correct &&
-                                          correctRight && (
-                                            <div className="mt-3 border-t border-red-200 pt-2">
-                                              <div className="text-xs font-medium text-gray-500">
-                                                Правильна відповідність
-                                              </div>
-
-                                              <HtmlContent
-                                                html={
-                                                  correctRight.text
-                                                }
-                                                className="mt-1 text-sm font-semibold text-green-700"
-                                              />
-                                            </div>
-                                          )}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ПІДСУМОК MATCHING */}
-
-                        {totalPairs > 0 && (
-                          <div className="mt-6 rounded-xl bg-gray-50 p-5">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div>
-                                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                                  Результат відповідності
-                                </div>
-
-                                <div className="mt-1 text-lg font-bold text-gray-900">
-                                  {correctPairs} з{" "}
-                                  {totalPairs}{" "}
-                                  правильних пар
-                                </div>
-                              </div>
-
-                              <div
-                                className={`
-                                  text-2xl
-                                  font-bold
-                                  ${
-                                    correctPairs ===
-                                    totalPairs
-                                      ? "text-green-600"
-                                      : correctPairs > 0
-                                      ? "text-orange-600"
-                                      : "text-red-600"
-                                  }
-                                `}
-                              >
-                                {Math.round(
-                                  (correctPairs /
-                                    totalPairs) *
-                                    100
-                                )}
-                                %
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                }
-
-                /* ==================================================
-                   SINGLE / MULTIPLE
-                ================================================== */
+                const {
+                  correctPairs,
+                  totalPairs,
+                } = getMatchingCorrectPairs(
+                  question,
+                  selectedAnswers
+                );
 
                 const status =
-                  getQuestionStatus(
+                  getMatchingStatus(
                     question,
                     selectedAnswers
-                  );
-
-                const correctOptions =
-                  question.options.filter(
-                    (option) => option.isCorrect
-                  );
-
-                const selectedOptions =
-                  question.options.filter(
-                    (option) =>
-                      selectedAnswers.includes(
-                        option.id
-                      )
                   );
 
                 return (
@@ -1093,6 +824,7 @@ export default async function ResultDetailsPage({
 
                     <div className="bg-gray-50 p-5">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
                         <div className="flex items-center gap-4">
                           <div
                             className="
@@ -1166,198 +898,516 @@ export default async function ResultDetailsPage({
                         />
                       </div>
 
-                      {/* ВАРІАНТИ */}
+                      {/* MATCHING */}
 
-                      {question.options.length > 0 && (
-                        <div>
-                          <div className="mb-3 text-sm font-semibold text-gray-600">
-                            Варіанти відповідей
+                      <div>
+                        <div className="mb-3 text-sm font-semibold text-gray-600">
+                          Відповідності учасника
+                        </div>
+
+                        {leftItems.length === 0 ? (
+                          <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-500">
+                            Дані відповідності відсутні.
                           </div>
+                        ) : (
+                          <div className="overflow-hidden rounded-xl border border-gray-200">
 
-                          <div className="space-y-3">
-                            {question.options.map(
-                              (option) => {
-                                const selected =
-                                  selectedAnswers.includes(
-                                    option.id
-                                  );
+                            {leftItems.map(
+                              (
+                                leftItem,
+                                leftIndex
+                              ) => {
+                                const selectedRightId =
+                                  selectedAnswers[
+                                    leftIndex
+                                  ];
 
                                 const correct =
-                                  option.isCorrect;
+                                  selectedRightId ===
+                                  leftItem.correctRightId;
 
-                                let optionClass =
-                                  "border-gray-200 bg-white";
+                                const selectedRight =
+                                  rightItems.find(
+                                    (right) =>
+                                      right.id ===
+                                      selectedRightId
+                                  );
 
-                                if (
-                                  correct &&
-                                  selected
-                                ) {
-                                  optionClass =
-                                    "border-green-300 bg-green-50";
-                                } else if (
-                                  correct
-                                ) {
-                                  optionClass =
-                                    "border-green-200 bg-green-50/70";
-                                } else if (
-                                  selected
-                                ) {
-                                  optionClass =
-                                    "border-red-300 bg-red-50";
-                                }
+                                const correctRight =
+                                  rightItems.find(
+                                    (right) =>
+                                      right.id ===
+                                      leftItem.correctRightId
+                                  );
 
                                 return (
                                   <div
-                                    key={option.id}
+                                    key={leftItem.id}
                                     className={`
-                                      rounded-xl
-                                      border
+                                      grid
+                                      gap-4
+                                      border-b
+                                      border-gray-200
                                       p-4
-                                      transition
-                                      ${optionClass}
+                                      last:border-b-0
+                                      sm:grid-cols-[1fr_auto_1fr]
+                                      sm:items-center
+                                      ${
+                                        correct
+                                          ? "bg-green-50/60"
+                                          : "bg-red-50/40"
+                                      }
                                     `}
                                   >
-                                    <div className="flex items-start gap-3">
 
-                                      {/* ЛІТЕРА */}
+                                    {/* LEFT */}
 
-                                      <div
-                                        className="
-                                          flex
-                                          h-8
-                                          w-8
-                                          shrink-0
-                                          items-center
-                                          justify-center
-                                          rounded-full
-                                          border
-                                          border-gray-300
-                                          bg-white
-                                          text-sm
-                                          font-bold
-                                          text-gray-700
-                                        "
-                                      >
-                                        {String.fromCharCode(
-                                          65 +
-                                            option.order
+                                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                                        Ліва частина
+                                      </div>
+
+                                      <HtmlContent
+                                        html={
+                                          leftItem.text
+                                        }
+                                        className="font-medium text-gray-900"
+                                      />
+                                    </div>
+
+                                    {/* ARROW */}
+
+                                    <div
+                                      className={`
+                                        hidden
+                                        text-xl
+                                        font-bold
+                                        sm:block
+                                        ${
+                                          correct
+                                            ? "text-green-500"
+                                            : "text-red-500"
+                                        }
+                                      `}
+                                    >
+                                      →
+                                    </div>
+
+                                    {/* RIGHT */}
+
+                                    <div
+                                      className={`
+                                        rounded-lg
+                                        border
+                                        p-3
+                                        ${
+                                          correct
+                                            ? "border-green-200 bg-green-100"
+                                            : "border-red-200 bg-red-100"
+                                        }
+                                      `}
+                                    >
+                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+                                        Відповідь учасника
+                                      </div>
+
+                                      <HtmlContent
+                                        html={
+                                          selectedRight
+                                            ? selectedRight.text
+                                            : "Без відповіді"
+                                        }
+                                        className={`
+                                          font-medium
+                                          ${
+                                            correct
+                                              ? "text-green-800"
+                                              : "text-red-800"
+                                          }
+                                        `}
+                                      />
+
+                                      {!correct &&
+                                        correctRight && (
+                                          <div className="mt-3 border-t border-red-200 pt-2">
+                                            <div className="text-xs font-medium text-gray-500">
+                                              Правильна відповідність
+                                            </div>
+
+                                            <HtmlContent
+                                              html={
+                                                correctRight.text
+                                              }
+                                              className="mt-1 text-sm font-semibold text-green-700"
+                                            />
+                                          </div>
                                         )}
-                                      </div>
-
-                                      {/* ТЕКСТ */}
-
-                                      <div className="min-w-0 flex-1">
-                                        <HtmlContent
-                                          html={option.text}
-                                          className="text-base leading-7 text-gray-900"
-                                        />
-
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                          {selected && (
-                                            <span
-                                              className="
-                                                rounded-full
-                                                bg-[#7A1F2B]
-                                                px-3
-                                                py-1
-                                                text-xs
-                                                font-semibold
-                                                text-white
-                                              "
-                                            >
-                                              Відповідь учасника
-                                            </span>
-                                          )}
-
-                                          {correct && (
-                                            <span
-                                              className="
-                                                rounded-full
-                                                bg-green-600
-                                                px-3
-                                                py-1
-                                                text-xs
-                                                font-semibold
-                                                text-white
-                                              "
-                                            >
-                                              Правильна відповідь
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
                                     </div>
                                   </div>
                                 );
                               }
                             )}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
 
-                      {/* ПІДСУМОК */}
+                      {/* ПІДСУМОК MATCHING */}
 
-                      <div className="mt-6 border-t border-gray-200 pt-5">
-                        <div className="grid gap-5 md:grid-cols-2">
+                      {totalPairs > 0 && (
+                        <div className="mt-6 rounded-xl bg-gray-50 p-5">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-                          {/* ОБРАНО */}
+                            <div>
+                              <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Результат відповідності
+                              </div>
 
-                          <div className="rounded-xl bg-gray-50 p-4">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                              Обрано
-                            </div>
-
-                            <div className="mt-2 font-semibold leading-6 text-gray-900">
-                              {selectedOptions.length >
-                              0
-                                ? selectedOptions
-                                    .map(
-                                      (option) =>
-                                        stripHtml(
-                                          option.text
-                                        )
-                                    )
-                                    .join(", ")
-                                : "Без відповіді"}
-                            </div>
-                          </div>
-
-                          {/* ПРАВИЛЬНА ВІДПОВІДЬ */}
-
-                          <div className="rounded-xl bg-gray-50 p-4">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                              Правильна відповідь
+                              <div className="mt-1 text-lg font-bold text-gray-900">
+                                {correctPairs} з{" "}
+                                {totalPairs}{" "}
+                                правильних пар
+                              </div>
                             </div>
 
                             <div
                               className={`
-                                mt-2
-                                font-semibold
-                                leading-6
-                                ${status.pointsClass}
+                                text-2xl
+                                font-bold
+                                ${
+                                  correctPairs ===
+                                  totalPairs
+                                    ? "text-green-600"
+                                    : correctPairs > 0
+                                    ? "text-orange-600"
+                                    : "text-red-600"
+                                }
                               `}
                             >
-                              {correctOptions.length >
-                              0
-                                ? correctOptions
-                                    .map(
-                                      (option) =>
-                                        stripHtml(
-                                          option.text
-                                        )
-                                    )
-                                    .join(", ")
-                                : "Не визначено"}
+                              {Math.round(
+                                (correctPairs /
+                                  totalPairs) *
+                                  100
+                              )}
+                              %
                             </div>
                           </div>
-
                         </div>
-                      </div>
+                      )}
                     </div>
                   </article>
                 );
               }
-            )}
+
+              /* ==================================================
+                 SINGLE / MULTIPLE
+              ================================================== */
+
+              const status =
+                getQuestionStatus(
+                  question,
+                  selectedAnswers
+                );
+
+              const correctOptions =
+                question.answerOptions.filter(
+                  (option) =>
+                    option.isCorrect
+                );
+
+              const selectedOptions =
+                question.answerOptions.filter(
+                  (option) =>
+                    selectedAnswers.includes(
+                      option.id
+                    )
+                );
+
+              return (
+                <article
+                  key={question.id}
+                  className="
+                    overflow-hidden
+                    rounded-2xl
+                    border
+                    border-gray-200
+                    bg-white
+                  "
+                >
+
+                  {/* HEADER */}
+
+                  <div className="bg-gray-50 p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="
+                            flex
+                            h-11
+                            w-11
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-full
+                            bg-[#7A1F2B]
+                            font-bold
+                            text-white
+                          "
+                        >
+                          {index + 1}
+                        </div>
+
+                        <div>
+                          <div className="text-sm font-medium text-gray-500">
+                            Завдання {index + 1}
+                          </div>
+
+                          <div className="mt-1 font-semibold text-gray-900">
+                            {question.points}{" "}
+                            {question.points === 1
+                              ? "бал"
+                              : "бали"}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`
+                          inline-flex
+                          w-fit
+                          items-center
+                          gap-2
+                          rounded-full
+                          border
+                          px-4
+                          py-2
+                          text-sm
+                          font-semibold
+                          ${status.className}
+                        `}
+                      >
+                        <span className="font-bold">
+                          {status.icon}
+                        </span>
+
+                        {status.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* CONTENT */}
+
+                  <div className="p-5 sm:p-6">
+
+                    {/* УМОВА */}
+
+                    <div className="mb-7">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Умова
+                      </div>
+
+                      <HtmlContent
+                        html={question.text}
+                        className="text-lg leading-8 text-gray-900"
+                      />
+                    </div>
+
+                    {/* ВАРІАНТИ */}
+
+                    {question.answerOptions.length >
+                      0 && (
+                      <div>
+                        <div className="mb-3 text-sm font-semibold text-gray-600">
+                          Варіанти відповідей
+                        </div>
+
+                        <div className="space-y-3">
+
+                          {question.answerOptions.map(
+                            (option) => {
+                              const selected =
+                                selectedAnswers.includes(
+                                  option.id
+                                );
+
+                              const correct =
+                                option.isCorrect;
+
+                              let optionClass =
+                                "border-gray-200 bg-white";
+
+                              if (
+                                correct &&
+                                selected
+                              ) {
+                                optionClass =
+                                  "border-green-300 bg-green-50";
+                              } else if (
+                                correct
+                              ) {
+                                optionClass =
+                                  "border-green-200 bg-green-50/70";
+                              } else if (
+                                selected
+                              ) {
+                                optionClass =
+                                  "border-red-300 bg-red-50";
+                              }
+
+                              return (
+                                <div
+                                  key={option.id}
+                                  className={`
+                                    rounded-xl
+                                    border
+                                    p-4
+                                    transition
+                                    ${optionClass}
+                                  `}
+                                >
+                                  <div className="flex items-start gap-3">
+
+                                    {/* ЛІТЕРА */}
+
+                                    <div
+                                      className="
+                                        flex
+                                        h-8
+                                        w-8
+                                        shrink-0
+                                        items-center
+                                        justify-center
+                                        rounded-full
+                                        border
+                                        border-gray-300
+                                        bg-white
+                                        text-sm
+                                        font-bold
+                                        text-gray-700
+                                      "
+                                    >
+                                      {String.fromCharCode(
+                                        65 +
+                                          (option.order ?? 0)
+                                      )}
+                                    </div>
+
+                                    {/* ТЕКСТ */}
+
+                                    <div className="min-w-0 flex-1">
+
+                                      <HtmlContent
+                                        html={
+                                          option.text
+                                        }
+                                        className="text-base leading-7 text-gray-900"
+                                      />
+
+                                      <div className="mt-3 flex flex-wrap gap-2">
+
+                                        {selected && (
+                                          <span
+                                            className="
+                                              rounded-full
+                                              bg-[#7A1F2B]
+                                              px-3
+                                              py-1
+                                              text-xs
+                                              font-semibold
+                                              text-white
+                                            "
+                                          >
+                                            Відповідь учасника
+                                          </span>
+                                        )}
+
+                                        {correct && (
+                                          <span
+                                            className="
+                                              rounded-full
+                                              bg-green-600
+                                              px-3
+                                              py-1
+                                              text-xs
+                                              font-semibold
+                                              text-white
+                                            "
+                                          >
+                                            Правильна відповідь
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ПІДСУМОК */}
+
+                    <div className="mt-6 border-t border-gray-200 pt-5">
+                      <div className="grid gap-5 md:grid-cols-2">
+
+                        {/* ОБРАНО */}
+
+                        <div className="rounded-xl bg-gray-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            Обрано
+                          </div>
+
+                          <div className="mt-2 font-semibold leading-6 text-gray-900">
+                            {selectedOptions.length >
+                            0
+                              ? selectedOptions
+                                  .map(
+                                    (option) =>
+                                      stripHtml(
+                                        option.text
+                                      )
+                                  )
+                                  .join(", ")
+                              : "Без відповіді"}
+                          </div>
+                        </div>
+
+                        {/* ПРАВИЛЬНА ВІДПОВІДЬ */}
+
+                        <div className="rounded-xl bg-gray-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            Правильна відповідь
+                          </div>
+
+                          <div
+                            className={`
+                              mt-2
+                              font-semibold
+                              leading-6
+                              ${status.pointsClass}
+                            `}
+                          >
+                            {correctOptions.length >
+                            0
+                              ? correctOptions
+                                  .map(
+                                    (option) =>
+                                      stripHtml(
+                                        option.text
+                                      )
+                                  )
+                                  .join(", ")
+                              : "Не визначено"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
 

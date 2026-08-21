@@ -12,12 +12,20 @@ import { useTestSession } from "@/app/context/TestSessionContext";
 
 type SessionState = {
   id: number;
+
   blocked: boolean;
+
   blockReason: string | null;
+
   timeLeft: number;
+
   extraTime: number;
+
   finished: boolean;
+
   currentQuestion: number;
+
+  resultId?: number | null;
 };
 
 export default function SessionMonitor() {
@@ -26,12 +34,20 @@ export default function SessionMonitor() {
   const {
     test,
     sessionId,
+
     timeLeft,
     setTimeLeft,
+
     currentQuestion,
     setCurrentQuestion,
+
     stopTimer,
+    startTimer,
   } = useTestSession();
+
+  // =====================================================
+  // Стан блокування
+  // =====================================================
 
   const [blocked, setBlocked] =
     useState(false);
@@ -39,32 +55,27 @@ export default function SessionMonitor() {
   const [blockReason, setBlockReason] =
     useState<string | null>(null);
 
+  // =====================================================
+  // Стан первинної перевірки
+  // =====================================================
+
   const [checking, setChecking] =
     useState(true);
 
   // =====================================================
-  // Поточні значення з React.
+  // Останній серверний час
   //
-  // Зберігаємо їх у ref, щоб interval не потрібно
-  // було перебудовувати після кожної зміни таймера
-  // або поточного питання.
+  // ВАЖЛИВО:
+  //
+  // Ми НЕ записуємо локальний timeLeft назад
+  // на сервер.
+  //
+  // Цей ref потрібен лише для визначення,
+  // чи змінився час на сервері.
   // =====================================================
 
-  const timeLeftRef =
-    useRef(timeLeft);
-
-  const currentQuestionRef =
-    useRef(currentQuestion);
-
-  useEffect(() => {
-    timeLeftRef.current =
-      timeLeft;
-  }, [timeLeft]);
-
-  useEffect(() => {
-    currentQuestionRef.current =
-      currentQuestion;
-  }, [currentQuestion]);
+  const lastServerTimeRef =
+    useRef<number | null>(null);
 
   // =====================================================
   // Захист від одночасних запитів
@@ -74,33 +85,77 @@ export default function SessionMonitor() {
     useRef(false);
 
   // =====================================================
-  // Чи вже виконано redirect після завершення
+  // Захист від повторного переходу
+  // на сторінку результату
   // =====================================================
 
-  const redirectingRef =
+  const resultRedirectedRef =
     useRef(false);
 
   // =====================================================
-  // Періодична синхронізація
+  // Зберігаємо актуальний локальний час
+  //
+  // Це потрібно, щоб callback interval
+  // не працював із застарілим значенням.
+  // =====================================================
+
+  const timeLeftRef =
+    useRef(timeLeft);
+
+  useEffect(() => {
+    timeLeftRef.current =
+      timeLeft;
+  }, [timeLeft]);
+
+  // =====================================================
+  // Зберігаємо актуальне поточне питання
+  // =====================================================
+
+  const currentQuestionRef =
+    useRef(currentQuestion);
+
+  useEffect(() => {
+    currentQuestionRef.current =
+      currentQuestion;
+  }, [currentQuestion]);
+
+  // =====================================================
+  // Основний моніторинг
+  //
+  // ВАЖЛИВО:
+  //
+  // effect НЕ залежить від timeLeft.
+  //
+  // Інакше кожна секунда створювала б новий
+  // цикл моніторингу.
   // =====================================================
 
   useEffect(() => {
     if (!test?.id || !sessionId) {
       setChecking(false);
+
       return;
     }
 
     const testId = test.id;
-    const currentSessionId = sessionId;
+
+    const currentSessionId =
+      sessionId;
 
     let cancelled = false;
 
-    async function checkAndSyncSession() {
+    // ===================================================
+    // Перевірка сесії
+    // ===================================================
+
+    async function checkSession() {
       if (cancelled) {
         return;
       }
 
-      if (requestInProgressRef.current) {
+      if (
+        requestInProgressRef.current
+      ) {
         return;
       }
 
@@ -108,16 +163,22 @@ export default function SessionMonitor() {
         true;
 
       try {
-        // =================================================
-        // 1. Отримуємо актуальну сесію із сервера
-        // =================================================
+        // ===============================================
+        // GET актуального стану
+        // ===============================================
 
         const response =
           await fetch(
             `/api/session/${testId}?sessionId=${currentSessionId}`,
             {
               method: "GET",
+
               cache: "no-store",
+
+              headers: {
+                "Cache-Control":
+                  "no-cache",
+              },
             }
           );
 
@@ -144,9 +205,65 @@ export default function SessionMonitor() {
           session
         );
 
-        // =================================================
+        // ===============================================
+        // 1. ЗАВЕРШЕННЯ СЕСІЇ
+        //
+        // Це перевіряємо ПЕРШИМ.
+        //
+        // Бо після анулювання:
+        //
+        // finished = true
+        // blocked = true
+        //
+        // але учасник повинен перейти
+        // на результат, а не побачити
+        // екран блокування.
+        // ===============================================
+
+        if (session.finished) {
+          stopTimer();
+
+          // ---------------------------------------------
+          // Якщо API вже повернув resultId
+          // ---------------------------------------------
+
+          if (
+            session.resultId &&
+            Number.isInteger(
+              session.resultId
+            ) &&
+            session.resultId > 0
+          ) {
+            if (
+              !resultRedirectedRef.current
+            ) {
+              resultRedirectedRef.current =
+                true;
+
+              router.replace(
+                `/result/${session.resultId}`
+              );
+            }
+
+            return;
+          }
+
+          // ---------------------------------------------
+          // Якщо resultId ще не прийшов
+          //
+          // Не показуємо блокування.
+          // Продовжуємо перевіряти сервер.
+          // ---------------------------------------------
+
+          setBlocked(false);
+          setBlockReason(null);
+
+          return;
+        }
+
+        // ===============================================
         // 2. БЛОКУВАННЯ
-        // =================================================
+        // ===============================================
 
         if (session.blocked) {
           setBlocked(true);
@@ -159,33 +276,66 @@ export default function SessionMonitor() {
           stopTimer();
         } else {
           setBlocked(false);
+
           setBlockReason(null);
         }
 
-        // =================================================
-        // 3. СИНХРОНІЗАЦІЯ ЧАСУ
+        // ===============================================
+        // 3. СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
+        // ===============================================
+
+        if (
+          typeof session.currentQuestion ===
+            "number" &&
+          Number.isInteger(
+            session.currentQuestion
+          ) &&
+          session.currentQuestion >= 0
+        ) {
+          const serverQuestion =
+            session.currentQuestion;
+
+          if (
+            serverQuestion !==
+            currentQuestionRef.current
+          ) {
+            currentQuestionRef.current =
+              serverQuestion;
+
+            setCurrentQuestion(
+              serverQuestion
+            );
+          }
+        }
+
+        // ===============================================
+        // 4. СИНХРОНІЗАЦІЯ ЧАСУ
         //
-        // Сервер є головним джерелом timeLeft.
+        // Серверне значення використовується
+        // тільки тоді, коли воно реально змінилося.
         //
-        // Це критично важливо для функції:
+        // Наприклад:
         //
-        // Адмін:
-        // +10 хвилин
+        // сервер: 1800
+        // локально: 1799
         //
-        // БД:
-        // timeLeft = старий час + 600
+        // це нормальний відлік.
         //
-        // Учасник:
-        // отримує нове значення через GET
-        // і встановлює його локальному таймеру.
+        // Але:
         //
-        // ВАЖЛИВО:
-        // ми НЕ відправляємо timeLeft назад через POST.
-        // =================================================
+        // сервер: 1800
+        // локально: 1790
+        //
+        // сервер змінився суттєво —
+        // синхронізуємо.
+        // ===============================================
 
         if (
           typeof session.timeLeft ===
-          "number"
+            "number" &&
+          Number.isFinite(
+            session.timeLeft
+          )
         ) {
           const serverTime =
             Math.max(
@@ -195,146 +345,92 @@ export default function SessionMonitor() {
               )
             );
 
-          const localTime =
-            Math.max(
-              0,
-              Math.floor(
-                timeLeftRef.current
-              )
-            );
+          const previousServerTime =
+            lastServerTimeRef.current;
 
-          // -------------------------------------------------
-          // Встановлюємо серверне значення.
-          //
-          // Невелика різниця в 1–2 секунди є нормальною:
-          // сервер і локальний interval працюють незалежно.
-          //
-          // Але якщо адміністратор змінив час,
-          // наприклад:
-          //
-          // 1200 -> 1800
-          //
-          // нове значення обов'язково потрапить
-          // у локальний таймер.
-          // -------------------------------------------------
+          // ---------------------------------------------
+          // Перша синхронізація
+          // ---------------------------------------------
 
           if (
-            Math.abs(
-              serverTime - localTime
-            ) > 1
+            previousServerTime ===
+            null
           ) {
-            setTimeLeft(
-              serverTime
-            );
-          }
-        }
+            lastServerTimeRef.current =
+              serverTime;
 
-        // =================================================
-        // 4. СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
-        //
-        // Адміністративна панель повинна бачити,
-        // яке питання зараз проходить учасник.
-        // =================================================
+            timeLeftRef.current =
+              serverTime;
 
-        if (
-          typeof session.currentQuestion ===
-          "number" &&
-          Number.isInteger(
-            session.currentQuestion
-          ) &&
-          session.currentQuestion >= 0
-        ) {
-          if (
-            session.currentQuestion !==
-            currentQuestionRef.current
-          ) {
-            setCurrentQuestion(
-              session.currentQuestion
-            );
-          }
-        }
+            setTimeLeft(serverTime);
 
-        // =================================================
-        // 5. ОНОВЛЮЄМО СЕСІЮ НА СЕРВЕРІ
-        //
-        // ВАЖЛИВО:
-        //
-        // Тут НЕ передаємо:
-        //
-        // timeLeft
-        // extraTime
-        // blocked
-        // blockReason
-        //
-        // Інакше браузер може перезаписати
-        // адміністративну зміну часу.
-        // =================================================
-
-        const questionToSave =
-          currentQuestionRef.current;
-
-        const saveResponse =
-          await fetch(
-            `/api/session/${testId}?sessionId=${currentSessionId}`,
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              cache: "no-store",
-
-              body: JSON.stringify({
-                sessionId:
-                  currentSessionId,
-
-                currentQuestion:
-                  questionToSave,
-              }),
+            if (
+              serverTime > 0 &&
+              !session.blocked
+            ) {
+              startTimer();
             }
-          );
+          } else {
+            const difference =
+              Math.abs(
+                serverTime -
+                  previousServerTime
+              );
 
-        if (!saveResponse.ok) {
-          console.error(
-            "SessionMonitor POST error:",
-            saveResponse.status
-          );
-        }
+            // -------------------------------------------
+            // Якщо серверне значення змінилося
+            // більше ніж на 2 секунди.
+            //
+            // Це означає, що:
+            //
+            // + адміністратор додав час;
+            // або
+            // + сервер змінив час.
+            // -------------------------------------------
 
-        // =================================================
-        // 6. ЗАВЕРШЕННЯ СЕСІЇ
-        // =================================================
+            if (difference > 2) {
+              lastServerTimeRef.current =
+                serverTime;
 
-        if (session.finished) {
-          stopTimer();
+              timeLeftRef.current =
+                serverTime;
 
-          // ------------------------------------------------
-          // Не запускаємо повторний redirect.
-          // ------------------------------------------------
+              setTimeLeft(
+                serverTime
+              );
 
-          if (
-            !redirectingRef.current
-          ) {
-            redirectingRef.current =
-              true;
+              if (
+                serverTime > 0 &&
+                !session.blocked
+              ) {
+                startTimer();
+              }
 
-            /*
-             * Звичайне завершення через finishTest()
-             * вже виконує router.replace("/result/ID").
-             *
-             * Якщо ж сесію завершив адміністратор
-             * через "Анулювати результат", result ID
-             * потрібно отримати окремим API-запитом.
-             *
-             * Поки що зупиняємо тестування.
-             */
+              console.log(
+                "SERVER TIME SYNCHRONIZED:",
+                {
+                  previous:
+                    previousServerTime,
+
+                  current:
+                    serverTime,
+                }
+              );
+            } else {
+              // -----------------------------------------
+              // Нормальний локальний відлік.
+              //
+              // НЕ викликаємо setTimeLeft().
+              // -----------------------------------------
+
+              lastServerTimeRef.current =
+                serverTime;
+            }
           }
         }
       } catch (error) {
         console.error(
-          "Помилка синхронізації сесії:",
+          "Помилка моніторингу сесії:",
           error
         );
       } finally {
@@ -347,21 +443,25 @@ export default function SessionMonitor() {
       }
     }
 
-    // =====================================================
-    // Перша перевірка одразу після появи sessionId
-    // =====================================================
+    // ===================================================
+    // Перша перевірка одразу
+    // ===================================================
 
-    checkAndSyncSession();
+    checkSession();
 
-    // =====================================================
-    // Подальша синхронізація кожні 2 секунди
-    // =====================================================
+    // ===================================================
+    // Подальші перевірки кожні 2 секунди
+    // ===================================================
 
     const interval =
       setInterval(
-        checkAndSyncSession,
+        checkSession,
         2000
       );
+
+    // ===================================================
+    // Cleanup
+    // ===================================================
 
     return () => {
       cancelled = true;
@@ -377,10 +477,25 @@ export default function SessionMonitor() {
     setTimeLeft,
     setCurrentQuestion,
     stopTimer,
+    startTimer,
+    router,
   ]);
 
   // =====================================================
-  // Поки виконується перша перевірка
+  // Якщо часу залишилося 0
+  // =====================================================
+
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      return;
+    }
+
+    timeLeftRef.current =
+      timeLeft;
+  }, [timeLeft]);
+
+  // =====================================================
+  // Поки не отримали перший стан
   // =====================================================
 
   if (checking) {
@@ -388,14 +503,20 @@ export default function SessionMonitor() {
   }
 
   // =====================================================
-  // СЕСІЯ ЗАБЛОКОВАНА
+  // ЗАБЛОКОВАНО
+  //
+  // ВАЖЛИВО:
+  //
+  // finished перевіряється вище.
+  //
+  // Тому анульована сесія сюди
+  // не повинна потрапляти.
   // =====================================================
 
   if (blocked) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-6">
         <div className="w-full max-w-lg rounded-2xl bg-white p-8 text-center shadow-2xl">
-
           <div className="text-6xl">
             🔒
           </div>
@@ -410,8 +531,8 @@ export default function SessionMonitor() {
           </p>
 
           <div className="mt-6 rounded-lg bg-gray-100 p-4 text-sm text-gray-600">
-            Подальше виконання завдань
-            недоступне.
+            Подальше виконання
+            завдань недоступне.
           </div>
         </div>
       </div>

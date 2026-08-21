@@ -86,16 +86,14 @@ function getAnswerIds(value: unknown): number[] {
 function isSameAnswers(
   userAnswer: number[],
   correctAnswers: number[]
-) {
-  const normalizedUserAnswer =
-    [...userAnswer].sort(
-      (a, b) => a - b
-    );
+): boolean {
+  const normalizedUserAnswer = [
+    ...userAnswer,
+  ].sort((a, b) => a - b);
 
-  const normalizedCorrectAnswers =
-    [...correctAnswers].sort(
-      (a, b) => a - b
-    );
+  const normalizedCorrectAnswers = [
+    ...correctAnswers,
+  ].sort((a, b) => a - b);
 
   if (
     normalizedUserAnswer.length !==
@@ -113,7 +111,7 @@ function isSameAnswers(
 // =====================================================
 // MATCHING
 //
-// Формат спеціальних options для matching:
+// Формат спеціальних AnswerOption для matching:
 //
 // L|1|Текст лівого елемента|25
 //
@@ -173,7 +171,7 @@ function isMatchingCorrect(
     text: string;
     correctRightId: number;
   }>
-) {
+): boolean {
   if (leftItems.length === 0) {
     return false;
   }
@@ -193,10 +191,71 @@ function isMatchingCorrect(
 }
 
 // =====================================================
+// ОТРИМАННЯ ANSWERS
+//
+// Prisma Json може повертати:
+// - об'єкт;
+// - масив;
+// - null;
+// - інше JSON-значення.
+//
+// Для аналітики очікуємо об'єкт:
+//
+// {
+//   "629": [1],
+//   "630": [4, 5]
+// }
+// =====================================================
+
+function getAnswersRecord(
+  value: unknown
+): Record<string, unknown> {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<
+      string,
+      unknown
+    >;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed =
+        JSON.parse(value);
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed as Record<
+          string,
+          unknown
+        >;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+// =====================================================
 // GET
 //
 // /api/analytics?testId=1
+//
+// або:
+//
 // /api/analytics?testId=1&participantIds=1,2,3
+//
+// або:
+//
+// /api/analytics?testId=1&participantIds=[1,2,3]
 // =====================================================
 
 export async function GET(
@@ -245,14 +304,6 @@ export async function GET(
 
     // =================================================
     // СПИСОК УЧАСНИКІВ
-    //
-    // Підтримуються:
-    //
-    // ?participantIds=1,2,3
-    //
-    // та
-    //
-    // ?participantIds=[1,2,3]
     // =================================================
 
     const participantIdsParam =
@@ -283,11 +334,8 @@ export async function GET(
           parsed =
             participantIdsParam
               .split(",")
-              .map(
-                (id) =>
-                  Number(
-                    id.trim()
-                  )
+              .map((id) =>
+                Number(id.trim())
               );
         }
 
@@ -305,9 +353,7 @@ export async function GET(
 
         participantIds =
           parsed
-            .map((id) =>
-              Number(id)
-            )
+            .map((id) => Number(id))
             .filter(
               (id) =>
                 Number.isInteger(id) &&
@@ -342,6 +388,16 @@ export async function GET(
 
     // =================================================
     // ЗАВАНТАЖЕННЯ ТЕСТУ
+    //
+    // ВАЖЛИВО:
+    //
+    // Test
+    //   └── questions: TestQuestion[]
+    //          └── question: Question
+    //                 └── answerOptions: AnswerOption[]
+    //
+    // Тому type/text/points/options НЕ можна
+    // вибирати безпосередньо з TestQuestion.
     // =================================================
 
     const test =
@@ -364,20 +420,26 @@ export async function GET(
             select: {
               id: true,
               order: true,
-              type: true,
-              text: true,
-              points: true,
 
-              options: {
-                orderBy: {
-                  order: "asc",
-                },
-
+              question: {
                 select: {
                   id: true,
-                  order: true,
+                  type: true,
                   text: true,
-                  isCorrect: true,
+                  points: true,
+
+                  answerOptions: {
+                    orderBy: {
+                      order: "asc",
+                    },
+
+                    select: {
+                      id: true,
+                      order: true,
+                      text: true,
+                      isCorrect: true,
+                    },
+                  },
                 },
               },
             },
@@ -399,6 +461,16 @@ export async function GET(
 
     // =================================================
     // РЕЗУЛЬТАТИ
+    //
+    // TestResult НЕ має participantId.
+    //
+    // Зв'язок:
+    //
+    // TestResult
+    //    └── session
+    //          └── participantId
+    //
+    // Тому фільтруємо через session.
     // =================================================
 
     const results =
@@ -409,8 +481,10 @@ export async function GET(
           ...(participantIds &&
           participantIds.length > 0
             ? {
-                id: {
-                  in: participantIds,
+                session: {
+                  participantId: {
+                    in: participantIds,
+                  },
                 },
               }
             : {}),
@@ -434,6 +508,13 @@ export async function GET(
           middleName: true,
 
           createdAt: true,
+
+          session: {
+            select: {
+              id: true,
+              participantId: true,
+            },
+          },
         },
 
         orderBy: {
@@ -442,12 +523,19 @@ export async function GET(
       });
 
     // =================================================
-    // УЧАСНИКИ
+    // УЧАСНИКИ / РЕЗУЛЬТАТИ
     // =================================================
 
     const participants =
       results.map((result) => ({
         id: result.id,
+
+        participantId:
+          result.session
+            ?.participantId ?? null,
+
+        sessionId:
+          result.session.id,
 
         lastName:
           result.lastName,
@@ -489,7 +577,10 @@ export async function GET(
 
     const questionStatistics =
       test.questions.map(
-        (question) => {
+        (testQuestion) => {
+          const question =
+            testQuestion.question;
+
           let correct = 0;
           let incorrect = 0;
           let skipped = 0;
@@ -499,7 +590,7 @@ export async function GET(
           // -------------------------------------------
 
           const correctAnswers =
-            question.options
+            question.answerOptions
               .filter(
                 (option) =>
                   option.isCorrect ===
@@ -516,7 +607,7 @@ export async function GET(
 
           const matchingLeftItems =
             getMatchingLeftItems(
-              question.options
+              question.answerOptions
             );
 
           // -------------------------------------------
@@ -525,36 +616,25 @@ export async function GET(
 
           results.forEach(
             (result) => {
-              let answers:
-                Record<
-                  string,
-                  unknown
-                > = {};
-
-              // ---------------------------------------
-              // Отримуємо answers
-              // ---------------------------------------
-
-              if (
-                result.answers &&
-                typeof result.answers ===
-                  "object" &&
-                !Array.isArray(
+              const answers =
+                getAnswersRecord(
                   result.answers
-                )
-              ) {
-                answers =
-                  result.answers as Record<
-                    string,
-                    unknown
-                  >;
-              }
+                );
 
               // ---------------------------------------
               // ВАЖЛИВО:
               //
-              // Використовуємо QUESTION.ID,
-              // а НЕ QUESTION.ORDER.
+              // answers використовує QUESTION.ID,
+              // а НЕ TestQuestion.ID
+              // і НЕ question.order.
+              //
+              // Наприклад:
+              //
+              // {
+              //   "629": [12]
+              // }
+              //
+              // де 629 — Question.id.
               // ---------------------------------------
 
               const answerKey =
@@ -631,9 +711,6 @@ export async function GET(
 
           // -------------------------------------------
           // ВІДСОТОК ПРАВИЛЬНИХ
-          //
-          // Саме ця величина визначає складність
-          // завдання в аналітиці.
           // -------------------------------------------
 
           const correctPercent =
@@ -645,6 +722,10 @@ export async function GET(
                 ) / 100
               : 0;
 
+          // -------------------------------------------
+          // СКЛАДНІСТЬ
+          // -------------------------------------------
+
           const difficulty =
             getDifficulty(
               correctPercent
@@ -653,8 +734,10 @@ export async function GET(
           return {
             id: question.id,
 
+            // Порядок у тесті береться
+            // з TestQuestion.
             order:
-              question.order,
+              testQuestion.order,
 
             type:
               question.type,
