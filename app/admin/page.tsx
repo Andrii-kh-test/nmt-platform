@@ -62,22 +62,14 @@ const sections = [
 export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#f5f5f6]">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
 
-        {/* ============================================================
-            HEADER — АДМІНІСТРАТИВНА ПАНЕЛЬ
-        ============================================================ */}
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
 
-        <header
-          className="
-            relative
-            mb-8
-            overflow-hidden
-            rounded-3xl
-            bg-[#7A1F2B]
-            shadow-xl
-          "
-        >
+        <header className="relative mb-8 overflow-hidden rounded-3xl bg-[#7A1F2B] px-7 py-9 shadow-xl sm:px-10 sm:py-11">
+
           {/* Декоративні кола */}
 
           <div
@@ -85,12 +77,12 @@ export default function AdminPage() {
               pointer-events-none
               absolute
               -right-20
-              -top-28
-              h-80
-              w-80
+              -top-24
+              h-72
+              w-72
               rounded-full
-              bg-white/[0.07]
-              shadow-[0_0_80px_rgba(255,255,255,0.08)]
+              bg-white/[0.06]
+              blur-[1px]
             "
           />
 
@@ -98,13 +90,12 @@ export default function AdminPage() {
             className="
               pointer-events-none
               absolute
-              -bottom-36
-              right-20
-              h-72
-              w-72
+              -bottom-28
+              right-28
+              h-64
+              w-64
               rounded-full
               bg-white/[0.05]
-              shadow-[0_0_70px_rgba(0,0,0,0.15)]
             "
           />
 
@@ -113,12 +104,11 @@ export default function AdminPage() {
               pointer-events-none
               absolute
               -left-24
-              bottom-[-170px]
-              h-96
-              w-96
+              bottom-[-120px]
+              h-72
+              w-72
               rounded-full
-              bg-black/[0.06]
-              shadow-[0_0_90px_rgba(0,0,0,0.12)]
+              bg-black/[0.08]
             "
           />
 
@@ -126,126 +116,53 @@ export default function AdminPage() {
             className="
               pointer-events-none
               absolute
-              left-[42%]
-              top-[-110px]
+              left-[38%]
+              top-[-100px]
               h-56
               w-56
               rounded-full
-              border
-              border-white/[0.06]
+              bg-black/[0.06]
             "
           />
 
-          {/* Основний вміст */}
+          {/* Контент */}
 
-          <div
-            className="
-              relative
-              z-10
-              px-6
-              py-8
-              sm:px-8
-              sm:py-10
-              lg:px-10
-              lg:py-12
-            "
-          >
-            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative z-10">
 
-              <div className="max-w-3xl">
+            {/* Основний напис */}
 
-                <div
-                  className="
-                    mb-3
-                    text-sm
-                    font-semibold
-                    uppercase
-                    tracking-[0.12em]
-                    text-white/65
-                  "
-                >
-                  Адміністративна панель
-                </div>
+            <h1
+              className="
+                text-4xl
+                font-extrabold
+                tracking-tight
+                text-white
+                sm:text-5xl
+              "
+            >
+              Адміністративна панель
+            </h1>
 
-                <h1
-                  className="
-                    text-3xl
-                    font-bold
-                    leading-tight
-                    tracking-tight
-                    text-white
-                    sm:text-4xl
-                    lg:text-5xl
-                  "
-                >
-                  Єдиний центр керування
-                  <span className="block">
-                    платформою тестування
-                  </span>
-                </h1>
+            {/* Другий рівень */}
 
-                <p
-                  className="
-                    mt-4
-                    max-w-2xl
-                    text-sm
-                    leading-6
-                    text-white/75
-                    sm:text-base
-                    sm:leading-7
-                  "
-                >
-                  Створюйте та редагуйте тести, керуйте банком
-                  завдань, переглядайте результати, контролюйте
-                  тестові сесії та аналізуйте роботу платформи.
-                </p>
+            <p
+              className="
+                mt-3
+                text-lg
+                font-medium
+                text-white/80
+                sm:text-xl
+              "
+            >
+              Єдиний центр керування платформою тестування
+            </p>
 
-              </div>
-
-              {/* Кнопка повернення */}
-
-              <div className="shrink-0">
-
-                <Link
-                  href="/"
-                  className="
-                    inline-flex
-                    items-center
-                    justify-center
-                    rounded-xl
-                    border
-                    border-white/25
-                    bg-white/10
-                    px-5
-                    py-3
-                    text-sm
-                    font-semibold
-                    text-white
-                    shadow-sm
-                    backdrop-blur-sm
-                    transition-all
-                    duration-200
-                    hover:bg-white
-                    hover:text-[#7A1F2B]
-                    hover:shadow-lg
-                  "
-                >
-                  <span className="mr-2 text-base">
-                    ←
-                  </span>
-
-                  На головну
-                </Link>
-
-              </div>
-
-            </div>
           </div>
         </header>
 
-        {/* ============================================================
+        {/* =====================================================
             РОЗДІЛИ
-        ============================================================ */}
+        ===================================================== */}
 
         <section>
           <div className="mb-5">
@@ -281,7 +198,8 @@ export default function AdminPage() {
                   hover:shadow-xl
                 "
               >
-                {/* Верхня смуга */}
+
+                {/* Верхня бордова смуга */}
 
                 <div
                   className="
@@ -299,6 +217,8 @@ export default function AdminPage() {
 
                 <div className="flex items-start justify-between">
 
+                  {/* Іконка */}
+
                   <div
                     className="
                       flex
@@ -315,15 +235,12 @@ export default function AdminPage() {
                       group-hover:bg-[#7A1F2B]
                     "
                   >
-                    <span
-                      className="
-                        transition-transform
-                        group-hover:scale-110
-                      "
-                    >
+                    <span className="transition-transform group-hover:scale-110">
                       {section.icon}
                     </span>
                   </div>
+
+                  {/* Стрілка */}
 
                   <span
                     className="
@@ -340,6 +257,8 @@ export default function AdminPage() {
 
                 </div>
 
+                {/* Назва */}
+
                 <h3
                   className="
                     mt-5
@@ -353,26 +272,15 @@ export default function AdminPage() {
                   {section.title}
                 </h3>
 
-                <p
-                  className="
-                    mt-2
-                    min-h-[72px]
-                    text-sm
-                    leading-6
-                    text-gray-500
-                  "
-                >
+                {/* Опис */}
+
+                <p className="mt-2 min-h-[72px] text-sm leading-6 text-gray-500">
                   {section.description}
                 </p>
 
-                <div
-                  className="
-                    mt-5
-                    text-sm
-                    font-semibold
-                    text-[#7A1F2B]
-                  "
-                >
+                {/* Посилання */}
+
+                <div className="mt-5 text-sm font-semibold text-[#7A1F2B]">
                   Відкрити розділ →
                 </div>
 
@@ -382,9 +290,9 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* ============================================================
+        {/* =====================================================
             ШВИДКІ ДІЇ
-        ============================================================ */}
+        ===================================================== */}
 
         <section
           className="
@@ -411,6 +319,8 @@ export default function AdminPage() {
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 
+            {/* Створити тест */}
+
             <Link
               href="/admin/tests/new"
               className="
@@ -436,6 +346,8 @@ export default function AdminPage() {
 
               Створити тест
             </Link>
+
+            {/* Переглянути тести */}
 
             <Link
               href="/admin/tests"
@@ -467,6 +379,8 @@ export default function AdminPage() {
               </span>
             </Link>
 
+            {/* Переглянути результати */}
+
             <Link
               href="/admin/results"
               className="
@@ -496,6 +410,8 @@ export default function AdminPage() {
                 Переглянути результати
               </span>
             </Link>
+
+            {/* Моніторинг */}
 
             <Link
               href="/admin/monitoring"
@@ -530,18 +446,11 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* ============================================================
+        {/* =====================================================
             FOOTER
-        ============================================================ */}
+        ===================================================== */}
 
-        <footer
-          className="
-            py-8
-            text-center
-            text-xs
-            text-gray-400
-          "
-        >
+        <footer className="py-8 text-center text-xs text-gray-400">
           Платформа тестування
         </footer>
 
