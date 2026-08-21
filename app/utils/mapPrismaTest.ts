@@ -20,8 +20,6 @@ export function mapPrismaTest(test: any): Test {
 
     maxPoints: test.maxPoints,
 
-    // Номер розташування тесту
-    // на головній сторінці
     displayOrder: test.displayOrder,
 
     isPublished:
@@ -33,13 +31,29 @@ export function mapPrismaTest(test: any): Test {
     accessCode:
       test.accessCode ?? "",
 
-    questions: test.questions.map(
-      (question: any): Question => {
+    questions: (test.questions ?? []).map(
+      (testQuestion: any): Question => {
+        /*
+         * Актуальна структура Prisma:
+         *
+         * TestQuestion
+         *   └── question
+         *        └── answerOptions
+         *
+         * Підтримуємо також стару структуру,
+         * якщо вона ще десь використовується.
+         */
+
+        const prismaQuestion =
+          testQuestion.question ?? testQuestion;
+
         const options =
-          question.options ?? [];
+          prismaQuestion.answerOptions ??
+          prismaQuestion.options ??
+          [];
 
         const isMatching =
-          question.type === "matching";
+          prismaQuestion.type === "matching";
 
         // =====================================
         // ЛІВА ЧАСТИНА MATCHING
@@ -49,9 +63,7 @@ export function mapPrismaTest(test: any): Test {
           isMatching
             ? options
                 .filter((option: any) =>
-                  option.text?.startsWith(
-                    "L|"
-                  )
+                  option.text?.startsWith("L|")
                 )
                 .map((option: any) => {
                   const parts =
@@ -71,8 +83,7 @@ export function mapPrismaTest(test: any): Test {
                   (
                     a: any,
                     b: any
-                  ) =>
-                    a.id - b.id
+                  ) => a.id - b.id
                 )
             : [];
 
@@ -84,9 +95,7 @@ export function mapPrismaTest(test: any): Test {
           isMatching
             ? options
                 .filter((option: any) =>
-                  option.text?.startsWith(
-                    "R|"
-                  )
+                  option.text?.startsWith("R|")
                 )
                 .map((option: any) => {
                   const parts =
@@ -105,8 +114,7 @@ export function mapPrismaTest(test: any): Test {
                   (
                     a: any,
                     b: any
-                  ) =>
-                    a.id - b.id
+                  ) => a.id - b.id
                 )
             : [];
 
@@ -115,22 +123,23 @@ export function mapPrismaTest(test: any): Test {
         // =====================================
 
         return {
-          id: question.id,
+          id: prismaQuestion.id,
 
           order:
-            question.order,
+            testQuestion.order ??
+            prismaQuestion.order,
 
           type:
-            question.type,
+            prismaQuestion.type,
 
           text:
-            question.text,
+            prismaQuestion.text,
 
           points:
-            question.points,
+            prismaQuestion.points,
 
           shuffleQuestion:
-            question.shuffleQuestion ??
+            prismaQuestion.shuffleQuestion ??
             true,
 
           options: isMatching
