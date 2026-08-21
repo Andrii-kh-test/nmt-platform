@@ -25,37 +25,24 @@ const cards = [
     href: "/admin/users",
     icon: "👥",
   },
-  {
-  title: "Результати",
-  description: "Перегляд результатів",
-  href: "/admin/results",
-  icon: "📊",
+{ 
+  title: "Результати", 
+  description: "Перегляд результатів", 
+  href: "/admin/results", 
+  icon: "📊", 
+}, 
+{ 
+  title: "Аналітика", 
+  description: "Статистика виконання тестів та аналіз завдань", 
+  href: "/admin/analytics", 
+  icon: "📈", 
+}, 
+{ 
+  title: "Налаштування", 
+  description: "Параметри системи", 
+  href: "/admin/settings", 
+  icon: "⚙️", 
 },
-{
-  title: "Аналітика",
-  description: "Статистика виконання тестів",
-  href: "/admin/analytics",
-  icon: "📈",
-},
-{
-  title: "Налаштування",
-  description: "Параметри системи",
-  href: "/admin/settings",
-  icon: "⚙️",
-},
-  {
-    title: "Аналітика",
-    description:
-      "Статистика виконання тестів та аналіз завдань",
-    href: "/admin/analytics",
-    icon: "📈",
-  },
-  {
-    title: "Налаштування",
-    description: "Параметри системи",
-    href: "/admin/settings",
-    icon: "⚙️",
-  },
 ];
 
 export default function AdminPage() {
