@@ -2,6 +2,23 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
+// =====================================================
+// API МОНІТОРИНГУ
+//
+// Повертає тільки незавершені сесії.
+//
+// finished = true
+// → сесія не повертається.
+//
+// Це стосується:
+// - звичайно завершених тестів;
+// - анульованих результатів;
+// - автоматично завершених сесій.
+// =====================================================
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   try {
     const sessions =
@@ -28,7 +45,15 @@ export async function GET() {
         },
       });
 
-    return NextResponse.json(sessions);
+    return NextResponse.json(
+      sessions,
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error(
       "MONITORING API ERROR:",

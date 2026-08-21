@@ -129,7 +129,10 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-        error: "Не вдалося отримати сесію.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Не вдалося отримати сесію.",
       },
       {
         status: 500,
@@ -140,6 +143,8 @@ export async function GET(
 
 // =====================================================
 // POST — керування сесією
+//
+// Підтримуються:
 //
 // block
 // unblock
@@ -185,12 +190,9 @@ export async function POST(
     let action = body.action;
 
     // =================================================
-    // Сумісність:
+    // Сумісність старих назв
     //
-    // старий MonitoringControls може передавати
-    // "invalidate", а API раніше очікував "annul".
-    //
-    // Приводимо обидва варіанти до annul.
+    // invalidate -> annul
     // =================================================
 
     if (action === "invalidate") {
@@ -198,7 +200,7 @@ export async function POST(
     }
 
     // =================================================
-    // Отримання сесії
+    // Отримання існуючої сесії
     // =================================================
 
     const existingSession =
@@ -318,8 +320,7 @@ export async function POST(
 
     if (action === "unblock") {
       // -------------------------------------------------
-      // Якщо результат уже створений,
-      // розблоковувати сесію не можна.
+      // Завершену сесію не можна розблокувати
       // -------------------------------------------------
 
       if (existingSession.finished) {
@@ -389,71 +390,66 @@ export async function POST(
     //
     // invalidate
     // annul
-    //
-    // Обидва варіанти виконують одну операцію.
     // =================================================
 
     if (action === "annul") {
       // -------------------------------------------------
-      // Якщо результат уже існує,
-      // повторно його не створюємо.
+      // Якщо результат уже існує
       // -------------------------------------------------
 
       if (existingSession.result) {
-        return NextResponse.json(
-          {
-            success: true,
+        return NextResponse.json({
+          success: true,
 
-            action: "annul",
+          action: "annul",
 
-            message:
-              "Результат цієї сесії вже анульовано.",
+          message:
+            "Результат цієї сесії вже анульовано.",
 
-            finishReason:
-              existingSession.result.finishReason,
+          finishReason:
+            existingSession.result.finishReason,
 
-            finishMessage:
-              "Порушення правил тестування",
+          finishMessage:
+            "Порушення правил тестування",
 
-            sessionId,
+          sessionId,
 
-            resultId:
-              existingSession.result.id,
+          resultId:
+            existingSession.result.id,
 
-            result: {
-              earnedPoints:
-                existingSession.result
-                  .earnedPoints,
+          result: {
+            earnedPoints:
+              existingSession.result
+                .earnedPoints,
 
-              maxPoints:
-                existingSession.result
-                  .maxPoints,
+            maxPoints:
+              existingSession.result
+                .maxPoints,
 
-              percent:
-                existingSession.result
-                  .percent,
+            percent:
+              existingSession.result
+                .percent,
 
-              correct:
-                existingSession.result
-                  .correct,
+            correct:
+              existingSession.result
+                .correct,
 
-              incorrect:
-                existingSession.result
-                  .incorrect,
+            incorrect:
+              existingSession.result
+                .incorrect,
 
-              skipped:
-                existingSession.result
-                  .skipped,
+            skipped:
+              existingSession.result
+                .skipped,
 
-              timeSpent:
-                existingSession.result
-                  .timeSpent,
-            },
-
-            session:
-              existingSession,
+            timeSpent:
+              existingSession.result
+                .timeSpent,
           },
-        );
+
+          session:
+            existingSession,
+        });
       }
 
       const now = new Date();
@@ -473,14 +469,15 @@ export async function POST(
         existingSession.test.maxPoints;
 
       // -------------------------------------------------
-      // Загальний час
+      // Загальний час тесту
       // -------------------------------------------------
 
       const totalTime =
         Math.max(
           0,
           Math.floor(
-            existingSession.test.duration * 60
+            existingSession.test.duration *
+              60
           )
         );
 
@@ -547,10 +544,6 @@ export async function POST(
 
             // -------------------------------------------
             // Створюємо результат
-            //
-            // КРИТИЧНО:
-            // sessionId зв'язує результат
-            // саме з цією сесією.
             // -------------------------------------------
 
             const createdResult =
@@ -593,19 +586,23 @@ export async function POST(
                     existingSession.startedAt,
 
                   firstName:
-                    existingSession.participant
+                    existingSession
+                      .participant
                       ?.firstName ?? null,
 
                   lastName:
-                    existingSession.participant
+                    existingSession
+                      .participant
                       ?.lastName ?? null,
 
                   middleName:
-                    existingSession.participant
+                    existingSession
+                      .participant
                       ?.middleName ?? null,
 
                   accessCode:
-                    existingSession.participant
+                    existingSession
+                      .participant
                       ?.accessCode ?? null,
                 },
               });
@@ -621,7 +618,7 @@ export async function POST(
         );
 
       // =================================================
-      // ВІДПОВІДЬ
+      // Відповідь
       // =================================================
 
       return NextResponse.json({
@@ -665,6 +662,13 @@ export async function POST(
 
     // =================================================
     // ДОДАВАННЯ ЧАСУ
+    //
+    // КРИТИЧНО:
+    //
+    // Тут НЕ перераховуємо час через startedAt.
+    //
+    // Беремо актуальний timeLeft із БД
+    // і просто додаємо до нього новий час.
     // =================================================
 
     if (action === "addTime") {
@@ -726,23 +730,21 @@ export async function POST(
         );
       }
 
+      // -------------------------------------------------
+      // Перетворюємо хвилини в секунди
+      // -------------------------------------------------
+
       const secondsToAdd =
         Math.floor(
           minutes * 60
         );
 
-      // -------------------------------------------------
-      // Перевірка startedAt
-      // -------------------------------------------------
-
-      if (
-        !existingSession.startedAt
-      ) {
+      if (secondsToAdd <= 0) {
         return NextResponse.json(
           {
             success: false,
             error:
-              "У сесії відсутній час початку тестування.",
+              "Кількість доданого часу повинна бути більшою за 0.",
           },
           {
             status: 400,
@@ -751,94 +753,58 @@ export async function POST(
       }
 
       // -------------------------------------------------
-      // Базовий час тесту
-      // -------------------------------------------------
-
-      const baseTime =
-        Math.max(
-          0,
-          Math.floor(
-            existingSession.test.duration *
-              60
-          )
-        );
-
-      // -------------------------------------------------
-      // Попередній додатковий час
-      // -------------------------------------------------
-
-      const previousExtraTime =
-        Math.max(
-          0,
-          Math.floor(
-            existingSession.extraTime
-          )
-        );
-
-      // -------------------------------------------------
-      // Час початку
-      // -------------------------------------------------
-
-      const startedAt =
-        existingSession.startedAt.getTime();
-
-      // -------------------------------------------------
-      // Поточний момент
-      // -------------------------------------------------
-
-      const nowTimestamp =
-        Date.now();
-
-      // -------------------------------------------------
-      // Скільки часу минуло
-      // -------------------------------------------------
-
-      const elapsedSeconds =
-        Math.max(
-          0,
-          Math.floor(
-            (nowTimestamp -
-              startedAt) /
-              1000
-          )
-        );
-
-      // -------------------------------------------------
-      // Розрахований залишок
+      // Поточний timeLeft
       //
-      // Базовий час
-      // +
-      // попередній додатковий час
-      // -
-      // фактично минулий час
+      // БЕРЕМО САМЕ З БАЗИ.
+      //
+      // Не використовуємо startedAt.
       // -------------------------------------------------
 
-      const calculatedTimeLeft =
+      const currentTimeLeft =
         Math.max(
           0,
-          baseTime +
-            previousExtraTime -
-            elapsedSeconds
+          Math.floor(
+            Number(
+              existingSession.timeLeft
+            )
+          )
         );
 
       // -------------------------------------------------
-      // Новий залишок
+      // Поточний extraTime
+      // -------------------------------------------------
+
+      const currentExtraTime =
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              existingSession.extraTime ??
+                0
+            )
+          )
+        );
+
+      // -------------------------------------------------
+      // Новий timeLeft
       // -------------------------------------------------
 
       const newTimeLeft =
-        calculatedTimeLeft +
+        currentTimeLeft +
         secondsToAdd;
 
       // -------------------------------------------------
-      // Новий загальний додатковий час
+      // Новий extraTime
       // -------------------------------------------------
 
       const newExtraTime =
-        previousExtraTime +
+        currentExtraTime +
         secondsToAdd;
 
+      const now = new Date();
+
       // -------------------------------------------------
-      // Оновлення
+      // Оновлення сесії
       // -------------------------------------------------
 
       const session =
@@ -855,7 +821,7 @@ export async function POST(
               newExtraTime,
 
             lastActivityAt:
-              new Date(),
+              now,
           },
 
           include: {
@@ -890,10 +856,14 @@ export async function POST(
         addedSeconds:
           secondsToAdd,
 
-        calculatedTimeLeft,
+        previousTimeLeft:
+          currentTimeLeft,
 
         timeLeft:
           session.timeLeft,
+
+        previousExtraTime:
+          currentExtraTime,
 
         extraTime:
           session.extraTime,
@@ -913,6 +883,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
+
         error:
           "Невідома операція керування сесією.",
       },
@@ -921,6 +892,10 @@ export async function POST(
       }
     );
   } catch (error) {
+    // =================================================
+    // Детальна помилка для налагодження
+    // =================================================
+
     console.error(
       "POST SESSION MANAGE ERROR:",
       error
@@ -929,8 +904,11 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
+
         error:
-          "Не вдалося змінити сесію.",
+          error instanceof Error
+            ? error.message
+            : "Не вдалося змінити сесію.",
       },
       {
         status: 500,

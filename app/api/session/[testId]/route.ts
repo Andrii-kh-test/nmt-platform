@@ -837,17 +837,22 @@ export async function POST(
     }
 
     // ===================================================
-    // Завершення
+    // ЗАВЕРШЕННЯ СЕСІЇ
+    //
+    // ВАЖЛИВО:
+    //
+    // finished = false від клієнта
+    // НІКОЛИ не повертає завершену сесію
+    // у незавершений стан.
+    //
+    // finished = true дозволяється тільки
+    // для сесії, яка ще не була завершена.
     // ===================================================
 
-    if (
-      typeof finished ===
-      "boolean"
-    ) {
-      updateData.finished =
-        finished;
+    if (finished === true) {
+      if (!session.finished) {
+        updateData.finished = true;
 
-      if (finished) {
         updateData.finishedAt =
           session.finishedAt ??
           now;
