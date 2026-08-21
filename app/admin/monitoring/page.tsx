@@ -2,8 +2,16 @@ import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
 import MonitoringRefresh from "./MonitoringRefresh";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const INACTIVITY_TIMEOUT = 90;
+
+// =====================================================
+// ФОРМАТУВАННЯ ДАТИ
+// =====================================================
+
 function formatDate(date: Date | null) {
   if (!date) {
     return "—";
@@ -15,13 +23,35 @@ function formatDate(date: Date | null) {
   });
 }
 
+// =====================================================
+// ФОРМАТУВАННЯ ЧАСУ
+// =====================================================
+
 function formatTime(seconds: number) {
   if (seconds <= 0) {
     return "00:00";
   }
 
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+
+  const minutes = Math.floor(
+    (seconds % 3600) / 60
+  );
+
   const remainingSeconds = seconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(
+      2,
+      "0"
+    )}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(remainingSeconds).padStart(
+      2,
+      "0"
+    )}`;
+  }
 
   return `${String(minutes).padStart(
     2,
@@ -31,6 +61,84 @@ function formatTime(seconds: number) {
     "0"
   )}`;
 }
+
+// =====================================================
+// РОЗРАХУНОК АКТУАЛЬНОГО ЗАЛИШКУ ЧАСУ
+//
+// Не покладаємося тільки на session.timeLeft,
+// оскільки це значення не обов'язково записується
+// в БД щосекунди.
+//
+// Рахуємо:
+//
+// duration * 60
+// + extraTime
+// - час від початку
+// =====================================================
+
+function getCurrentTimeLeft(session: {
+  startedAt: Date;
+  timeLeft: number;
+  extraTime: number;
+  test: {
+    duration: number;
+  };
+}) {
+  const baseTime =
+    Math.max(
+      0,
+      Math.floor(
+        session.test.duration * 60
+      )
+    );
+
+  const extraTime =
+    Math.max(
+      0,
+      Math.floor(session.extraTime)
+    );
+
+  const startedAt =
+    new Date(
+      session.startedAt
+    ).getTime();
+
+  const elapsedSeconds =
+    Math.max(
+      0,
+      Math.floor(
+        (Date.now() - startedAt) /
+          1000
+      )
+    );
+
+  const calculatedTimeLeft =
+    Math.max(
+      0,
+      baseTime +
+        extraTime -
+        elapsedSeconds
+    );
+
+  // Якщо серверне timeLeft менше за розраховане,
+  // використовуємо менше значення.
+  //
+  // Це захищає від ситуації, коли timeLeft уже
+  // було зменшено іншою серверною логікою.
+  if (
+    session.timeLeft >= 0 &&
+    session.timeLeft <
+      calculatedTimeLeft
+  ) {
+    return session.timeLeft;
+  }
+
+  return calculatedTimeLeft;
+}
+
+// =====================================================
+// ПІБ УЧАСНИКА
+// =====================================================
 
 function getParticipantName(
   participant: {
@@ -52,11 +160,20 @@ function getParticipantName(
     .join(" ");
 }
 
+// =====================================================
+// СТАТУС СЕСІЇ
+// =====================================================
+
 function getStatus(session: {
   blocked: boolean;
   blockReason: string | null;
+  finished: boolean;
   lastActivityAt: Date;
 }) {
+  // ---------------------------------------------------
+  // Заблоковано
+  // ---------------------------------------------------
+
   if (session.blocked) {
     return {
       label: "Заблоковано",
@@ -64,6 +181,22 @@ function getStatus(session: {
         "bg-red-100 text-red-800",
     };
   }
+
+  // ---------------------------------------------------
+  // Завершено
+  // ---------------------------------------------------
+
+  if (session.finished) {
+    return {
+      label: "Завершено",
+      className:
+        "bg-gray-100 text-gray-800",
+    };
+  }
+
+  // ---------------------------------------------------
+  // Час останньої активності
+  // ---------------------------------------------------
 
   const lastActivity =
     new Date(
@@ -77,13 +210,24 @@ function getStatus(session: {
       (now - lastActivity) / 1000
     );
 
-  if (secondsSinceActivity > 60) {
+  // ---------------------------------------------------
+  // Немає активності
+  // ---------------------------------------------------
+
+  if (
+    secondsSinceActivity >
+    INACTIVITY_TIMEOUT
+  ) {
     return {
       label: "Немає активності",
       className:
         "bg-orange-100 text-orange-800",
     };
   }
+
+  // ---------------------------------------------------
+  // Активне
+  // ---------------------------------------------------
 
   return {
     label: "Активне",
@@ -92,18 +236,42 @@ function getStatus(session: {
   };
 }
 
+// =====================================================
+// СТОРІНКА МОНІТОРИНГУ
+// =====================================================
+
 export default async function MonitoringPage() {
   const sessions =
     await prisma.testSession.findMany({
       where: {
-  finished: false,
+        finished: false,
 
-  lastActivityAt: {
-    gte: new Date(
-      Date.now() - 30 * 1000
-    ),
-  },
-},
+        OR: [
+          // ------------------------------------------------
+          // Активні / нещодавно активні сесії
+          // ------------------------------------------------
+
+          {
+            lastActivityAt: {
+              gte: new Date(
+                Date.now() -
+                  INACTIVITY_TIMEOUT *
+                    1000
+              ),
+            },
+          },
+
+          // ------------------------------------------------
+          // Заблоковані сесії також залишаємо
+          // в моніторингу, навіть якщо heartbeat
+          // більше не надходить.
+          // ------------------------------------------------
+
+          {
+            blocked: true,
+          },
+        ],
+      },
 
       orderBy: {
         updatedAt: "desc",
@@ -123,11 +291,38 @@ export default async function MonitoringPage() {
       },
     });
 
+  // =====================================================
+  // КІЛЬКІСТЬ АКТИВНИХ
+  // =====================================================
+
+  const activeCount =
+    sessions.filter(
+      (session) =>
+        !session.blocked
+    ).length;
+
+  // =====================================================
+  // КІЛЬКІСТЬ ЗАБЛОКОВАНИХ
+  // =====================================================
+
+  const blockedCount =
+    sessions.filter(
+      (session) =>
+        session.blocked
+    ).length;
+
   return (
     <main className="min-h-screen bg-gray-100 p-6">
-        <MonitoringRefresh />
+      {/* =================================================
+          АВТООНОВЛЕННЯ
+      ================================================= */}
+
+      <MonitoringRefresh />
+
       <div className="mx-auto max-w-7xl">
-        {/* Заголовок */}
+        {/* =================================================
+            ЗАГОЛОВОК
+        ================================================= */}
 
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -164,9 +359,13 @@ export default async function MonitoringPage() {
           </Link>
         </div>
 
-        {/* Лічильник */}
+        {/* =================================================
+            ЛІЧИЛЬНИКИ
+        ================================================= */}
 
         <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          {/* Загальна кількість */}
+
           <div className="rounded-xl bg-white p-6 shadow-lg">
             <div className="text-sm text-gray-500">
               Активних проходжень
@@ -177,20 +376,19 @@ export default async function MonitoringPage() {
             </div>
           </div>
 
+          {/* Активні */}
+
           <div className="rounded-xl bg-white p-6 shadow-lg">
             <div className="text-sm text-gray-500">
               Активні
             </div>
 
             <div className="mt-2 text-3xl font-bold text-green-600">
-              {
-                sessions.filter(
-                  (session) =>
-                    !session.blocked
-                ).length
-              }
+              {activeCount}
             </div>
           </div>
+
+          {/* Заблоковані */}
 
           <div className="rounded-xl bg-white p-6 shadow-lg">
             <div className="text-sm text-gray-500">
@@ -198,17 +396,14 @@ export default async function MonitoringPage() {
             </div>
 
             <div className="mt-2 text-3xl font-bold text-red-600">
-              {
-                sessions.filter(
-                  (session) =>
-                    session.blocked
-                ).length
-              }
+              {blockedCount}
             </div>
           </div>
         </div>
 
-        {/* Таблиця */}
+        {/* =================================================
+            ТАБЛИЦЯ
+        ================================================= */}
 
         <div className="overflow-hidden rounded-xl bg-white shadow-lg">
           {sessions.length === 0 ? (
@@ -227,6 +422,10 @@ export default async function MonitoringPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
+                {/* =================================================
+                    ЗАГОЛОВОК ТАБЛИЦІ
+                ================================================= */}
+
                 <thead className="bg-[#7A1F2B] text-white">
                   <tr>
                     <th className="whitespace-nowrap p-4 text-left">
@@ -263,11 +462,24 @@ export default async function MonitoringPage() {
                   </tr>
                 </thead>
 
+                {/* =================================================
+                    ТІЛО ТАБЛИЦІ
+                ================================================= */}
+
                 <tbody>
                   {sessions.map(
                     (session, index) => {
                       const status =
-                        getStatus(session);
+                        getStatus(
+                          session
+                        );
+
+                      const currentTimeLeft =
+                        session.finished
+                          ? 0
+                          : getCurrentTimeLeft(
+                              session
+                            );
 
                       return (
                         <tr
@@ -278,9 +490,13 @@ export default async function MonitoringPage() {
                             hover:bg-gray-50
                           "
                         >
+                          {/* № */}
+
                           <td className="p-4">
                             {index + 1}
                           </td>
+
+                          {/* Учасник */}
 
                           <td className="p-4">
                             <div className="font-semibold">
@@ -295,21 +511,27 @@ export default async function MonitoringPage() {
                             </div>
                           </td>
 
+                          {/* Тест */}
+
                           <td className="p-4">
                             <div className="font-semibold">
                               {
-                                session.test
+                                session
+                                  .test
                                   .title
                               }
                             </div>
 
                             <div className="mt-1 text-sm text-gray-500">
                               {
-                                session.test
+                                session
+                                  .test
                                   .subject
                               }
                             </div>
                           </td>
+
+                          {/* Поточне питання */}
 
                           <td className="p-4">
                             <span className="font-semibold">
@@ -318,13 +540,17 @@ export default async function MonitoringPage() {
                             </span>
                           </td>
 
+                          {/* Залишок часу */}
+
                           <td className="p-4">
                             <span className="font-mono font-semibold">
                               {formatTime(
-                                session.timeLeft
+                                currentTimeLeft
                               )}
                             </span>
                           </td>
+
+                          {/* Статус */}
 
                           <td className="p-4">
                             <span
@@ -353,11 +579,15 @@ export default async function MonitoringPage() {
                               )}
                           </td>
 
+                          {/* Остання активність */}
+
                           <td className="p-4 text-sm">
                             {formatDate(
                               session.lastActivityAt
                             )}
                           </td>
+
+                          {/* Дія */}
 
                           <td className="p-4 text-center">
                             <Link

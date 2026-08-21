@@ -13,6 +13,7 @@ type Action =
   | "block"
   | "unblock"
   | "addTime"
+  | "annul"
   | "invalidate";
 
 export default function MonitoringControls({
@@ -60,6 +61,28 @@ export default function MonitoringControls({
         }
       );
 
+      // =================================================
+      // Формуємо body без складної вкладеної
+      // конструкції spread + ternary.
+      // =================================================
+
+      const body: {
+        action: Action;
+        minutes?: number;
+        reason?: string;
+      } = {
+        action,
+      };
+
+      if (minutes !== undefined) {
+        body.minutes = minutes;
+      }
+
+      if (action === "block") {
+        body.reason =
+          "Тестування заблоковано через порушення правил тестування";
+      }
+
       const response = await fetch(
         `/api/session/manage/${sessionId}`,
         {
@@ -70,22 +93,7 @@ export default function MonitoringControls({
               "application/json",
           },
 
-          body: JSON.stringify({
-            action,
-
-            ...(minutes !== undefined
-              ? {
-                  minutes,
-                }
-              : {}),
-
-            ...(action === "block"
-              ? {
-                  reason:
-                    "Тестування заблоковано через порушення правил тестування",
-                }
-              : {}),
-          }),
+          body: JSON.stringify(body),
         }
       );
 
@@ -144,6 +152,29 @@ export default function MonitoringControls({
 
       // =================================================
       // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
+      //
+      // API використовує action = "annul".
+      // =================================================
+
+      if (action === "annul") {
+        setInvalidated(true);
+
+        setBlocked(true);
+
+        setMessage(
+          "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
+        );
+
+        setTimeout(() => {
+          router.refresh();
+        }, 1000);
+      }
+
+      // =================================================
+      // Сумісність із можливим старим action
+      // "invalidate".
+      //
+      // Основна кнопка нижче використовує "annul".
       // =================================================
 
       if (action === "invalidate") {
@@ -155,8 +186,6 @@ export default function MonitoringControls({
           "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
         );
 
-        // Даємо повідомленню відобразитися,
-        // після чого оновлюємо сторінку адміністратора.
         setTimeout(() => {
           router.refresh();
         }, 1000);
@@ -193,7 +222,7 @@ export default function MonitoringControls({
       return;
     }
 
-    manageSession("invalidate");
+    manageSession("annul");
   }
 
   // =====================================================
@@ -245,8 +274,8 @@ export default function MonitoringControls({
           </div>
 
           <p className="mt-2 text-sm leading-6 text-red-600">
-            Результат учасника збережено як
-            0 балів. Причина завершення:
+            Результат учасника збережено
+            як 0 балів. Причина завершення:
             «Порушення правил тестування».
           </p>
         </div>
