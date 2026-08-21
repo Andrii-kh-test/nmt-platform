@@ -16,17 +16,28 @@ export async function POST(request: NextRequest) {
 
     const numericTestId = Number(testId);
 
-    if (!numericTestId || numericTestId <= 0) {
+    // =====================================================
+    // ПЕРЕВІРКА TEST ID
+    // =====================================================
+
+    if (
+      !Number.isInteger(numericTestId) ||
+      numericTestId <= 0
+    ) {
       return NextResponse.json(
         {
           success: false,
-          message: "Некоректний id тесту",
+          message: "Некоректний id тесту.",
         },
         {
           status: 400,
         }
       );
     }
+
+    // =====================================================
+    // ПЕРЕВІРКА ТЕСТУ
+    // =====================================================
 
     const test = await prisma.test.findUnique({
       where: {
@@ -38,7 +49,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Тест не знайдено",
+          message: "Тест не знайдено.",
         },
         {
           status: 404,
@@ -46,17 +57,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // =====================================================
+    // ПЕРЕВІРКА ПУБЛІКАЦІЇ
+    // =====================================================
+
     if (!test.isPublished) {
       return NextResponse.json(
         {
           success: false,
-          message: "Тест ще не опублікований",
+          message: "Тест ще не опублікований.",
         },
         {
           status: 403,
         }
       );
     }
+
+    // =====================================================
+    // ПЕРЕВІРКА КОДУ ДОСТУПУ
+    // =====================================================
 
     if (
       test.codeRequired &&
@@ -65,7 +84,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Невірний код доступу",
+          message: "Невірний код доступу.",
         },
         {
           status: 403,
@@ -73,23 +92,68 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ==========================
-    // Створюємо учасника
-    // ==========================
+    // =====================================================
+    // ПЕРЕВІРКА ДАНИХ УЧАСНИКА
+    // =====================================================
+
+    if (
+      typeof lastName !== "string" ||
+      !lastName.trim()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Не вказано прізвище.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      typeof firstName !== "string" ||
+      !firstName.trim()
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Не вказано ім'я.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // =====================================================
+    // СТВОРЕННЯ УЧАСНИКА
+    // =====================================================
 
     const participant =
       await prisma.participant.create({
         data: {
-          lastName,
-          firstName,
+          lastName: lastName.trim(),
+
+          firstName: firstName.trim(),
+
           middleName:
-            middleName || null,
+            typeof middleName === "string" &&
+            middleName.trim()
+              ? middleName.trim()
+              : null,
+
+          accessCode:
+            typeof accessCode === "string" &&
+            accessCode.trim()
+              ? accessCode.trim()
+              : null,
         },
       });
 
-    // ==========================
-    // Створюємо сесію
-    // ==========================
+    // =====================================================
+    // СТВОРЕННЯ ЄДИНОЇ СЕСІЇ
+    // =====================================================
 
     const session =
       await prisma.testSession.create({
@@ -97,14 +161,20 @@ export async function POST(request: NextRequest) {
           participantId:
             participant.id,
 
-          testId: test.id,
+          testId:
+            test.id,
 
           currentQuestion: 0,
 
           savedAnswers: {},
 
           timeLeft:
-            test.duration * 60,
+            Math.max(
+              0,
+              Math.floor(
+                test.duration * 60
+              )
+            ),
 
           extraTime: 0,
 
@@ -114,18 +184,24 @@ export async function POST(request: NextRequest) {
 
           blockReason: null,
 
-          // startedAt встановлюється
-          // автоматично через
-          // @default(now())
+          blockedAt: null,
 
-          // finishedAt залишається null
-          // до моменту завершення тесту.
+          finishedAt: null,
+
+          lastActivityAt:
+            new Date(),
         },
       });
 
+    // =====================================================
+    // ВІДПОВІДЬ
+    // =====================================================
+
     return NextResponse.json({
       success: true,
+
       participant,
+
       session,
     });
   } catch (error) {
@@ -137,7 +213,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: "Помилка запуску тесту",
+        message:
+          "Помилка запуску тесту.",
       },
       {
         status: 500,

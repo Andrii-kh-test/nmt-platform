@@ -3,27 +3,9 @@ import {
   NextResponse,
 } from "next/server";
 
-import { prisma } from "@/app/lib/prisma";
+import { Prisma } from "@prisma/client";
 
-// =====================================================
-// POST — створення / оновлення сесії учасником
-//
-// ВАЖЛИВО:
-//
-// Учасник може змінювати:
-// - currentQuestion
-// - savedAnswers
-// - finished
-//
-// Учасник НЕ може через цей маршрут змінювати:
-// - timeLeft
-// - extraTime
-// - blocked
-// - blockReason
-//
-// Ці поля контролюються сервером та
-// адміністративною панеллю.
-// =====================================================
+import { prisma } from "@/app/lib/prisma";
 
 export async function POST(
   req: NextRequest
@@ -33,161 +15,30 @@ export async function POST(
 
     const {
       sessionId,
-      testId,
       currentQuestion,
       savedAnswers,
       finished,
+      heartbeat,
     } = body;
 
     // =====================================================
-    // Перетворення ID
+    // SESSION ID
     // =====================================================
 
     const numericSessionId =
-      sessionId !== undefined &&
-      sessionId !== null
-        ? Number(sessionId)
-        : null;
-
-    const numericTestId =
-      testId !== undefined &&
-      testId !== null
-        ? Number(testId)
-        : null;
-
-    // =====================================================
-    // 1. Якщо передано sessionId
-    // =====================================================
+      Number(sessionId);
 
     if (
-      numericSessionId !== null &&
-      Number.isInteger(
-        numericSessionId
-      ) &&
-      numericSessionId > 0
-    ) {
-      const session =
-        await prisma.testSession.findUnique({
-          where: {
-            id: numericSessionId,
-          },
-        });
-
-      if (!session) {
-        return NextResponse.json(
-          {
-            error:
-              "Сесію тестування не знайдено.",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      // ===================================================
-      // Дані, які дозволено змінювати учаснику
-      // ===================================================
-
-      const updateData: {
-        currentQuestion?: number;
-        savedAnswers?: any;
-        finished?: boolean;
-        finishedAt?: Date | null;
-        lastActivityAt: Date;
-      } = {
-        lastActivityAt: new Date(),
-      };
-
-      // ===================================================
-      // Поточне питання
-      // ===================================================
-
-      if (
-        typeof currentQuestion ===
-          "number" &&
-        Number.isInteger(
-          currentQuestion
-        ) &&
-        currentQuestion >= 0
-      ) {
-        updateData.currentQuestion =
-          currentQuestion;
-      }
-
-      // ===================================================
-      // Збережені відповіді
-      // ===================================================
-
-      if (
-        savedAnswers !== undefined
-      ) {
-        updateData.savedAnswers =
-          savedAnswers;
-      }
-
-      // ===================================================
-      // Завершення тестування
-      // ===================================================
-
-      if (
-        typeof finished === "boolean"
-      ) {
-        updateData.finished =
-          finished;
-
-        if (finished) {
-          updateData.finishedAt =
-            session.finishedAt ??
-            new Date();
-        }
-      }
-
-      // ===================================================
-      // Оновлення сесії
-      //
-      // КРИТИЧНО:
-      //
-      // тут НЕ змінюються:
-      //
-      // timeLeft
-      // extraTime
-      // blocked
-      // blockReason
-      //
-      // тому адміністративні зміни не
-      // перезаписуються браузером.
-      // ===================================================
-
-      const updatedSession =
-        await prisma.testSession.update({
-          where: {
-            id: session.id,
-          },
-
-          data: updateData,
-        });
-
-      return NextResponse.json(
-        updatedSession
-      );
-    }
-
-    // =====================================================
-    // 2. Якщо sessionId немає — працюємо через testId
-    // =====================================================
-
-    if (
-      numericTestId === null ||
       !Number.isInteger(
-        numericTestId
+        numericSessionId
       ) ||
-      numericTestId <= 0
+      numericSessionId <= 0
     ) {
       return NextResponse.json(
         {
+          success: false,
           error:
-            "Не передано коректний sessionId або testId.",
+            "Не передано коректний sessionId.",
         },
         {
           status: 400,
@@ -196,86 +47,114 @@ export async function POST(
     }
 
     // =====================================================
-    // 3. Шукаємо активну сесію тесту
+    // ЗНАХОДИМО КОНКРЕТНУ СЕСІЮ
     // =====================================================
 
-    let session =
-      await prisma.testSession.findFirst({
+    const session =
+      await prisma.testSession.findUnique({
         where: {
-          testId: numericTestId,
-          finished: false,
-        },
-
-        orderBy: {
-          createdAt: "desc",
+          id: numericSessionId,
         },
       });
 
-    // =====================================================
-    // 4. Якщо сесії немає — створюємо
-    // =====================================================
-
     if (!session) {
-      session =
-        await prisma.testSession.create({
-          data: {
-            testId:
-              numericTestId,
-
-            currentQuestion:
-              typeof currentQuestion ===
-                "number" &&
-              Number.isInteger(
-                currentQuestion
-              )
-                ? currentQuestion
-                : 0,
-
-            savedAnswers:
-              savedAnswers ?? {},
-
-            // Початковий час повинен
-            // встановлюватися під час
-            // запуску тесту.
-            timeLeft: 0,
-
-            finished:
-              typeof finished ===
-              "boolean"
-                ? finished
-                : false,
-
-            finishedAt:
-              finished === true
-                ? new Date()
-                : null,
-
-            lastActivityAt:
-              new Date(),
-          },
-        });
-
       return NextResponse.json(
-        session
+        {
+          success: false,
+          error:
+            "Сесію тестування не знайдено.",
+        },
+        {
+          status: 404,
+        }
       );
     }
 
     // =====================================================
-    // 5. Оновлюємо існуючу сесію
+    // HEARTBEAT
     // =====================================================
 
-    const updateData: {
-      currentQuestion?: number;
-      savedAnswers?: any;
-      finished?: boolean;
-      finishedAt?: Date | null;
-      lastActivityAt: Date;
-    } = {
-      lastActivityAt: new Date(),
-    };
+    if (heartbeat === true) {
+      const updatedSession =
+        await prisma.testSession.update({
+          where: {
+            id: session.id,
+          },
+
+          data: {
+            lastActivityAt:
+              new Date(),
+          },
+
+          select: {
+            id: true,
+            currentQuestion: true,
+            timeLeft: true,
+            extraTime: true,
+            blocked: true,
+            blockReason: true,
+            finished: true,
+            finishedAt: true,
+            lastActivityAt: true,
+          },
+        });
+
+      return NextResponse.json({
+        success: true,
+        session: updatedSession,
+      });
+    }
 
     // =====================================================
-    // Поточне питання
+    // ЯКЩО СЕСІЮ ВЖЕ ЗАВЕРШЕНО
+    // =====================================================
+
+    if (session.finished) {
+      return NextResponse.json({
+        success: true,
+
+        session: {
+          id: session.id,
+
+          currentQuestion:
+            session.currentQuestion,
+
+          savedAnswers:
+            session.savedAnswers,
+
+          timeLeft:
+            session.timeLeft,
+
+          extraTime:
+            session.extraTime,
+
+          blocked:
+            session.blocked,
+
+          blockReason:
+            session.blockReason,
+
+          finished:
+            session.finished,
+
+          finishedAt:
+            session.finishedAt,
+        },
+      });
+    }
+
+    // =====================================================
+    // ДАНІ ДЛЯ ОНОВЛЕННЯ
+    // =====================================================
+
+    const updateData: Prisma.TestSessionUpdateInput =
+      {
+        lastActivityAt:
+          new Date(),
+      };
+
+    // =====================================================
+    // CURRENT QUESTION
     // =====================================================
 
     if (
@@ -291,27 +170,30 @@ export async function POST(
     }
 
     // =====================================================
-    // Збережені відповіді
+    // SAVED ANSWERS
     // =====================================================
 
     if (
       savedAnswers !== undefined
     ) {
       updateData.savedAnswers =
-        savedAnswers;
+        savedAnswers === null
+          ? Prisma.JsonNull
+          : savedAnswers;
     }
 
     // =====================================================
-    // Завершення
+    // FINISHED
     // =====================================================
 
     if (
-      typeof finished === "boolean"
+      typeof finished ===
+      "boolean"
     ) {
-      updateData.finished =
-        finished;
-
       if (finished) {
+        updateData.finished =
+          true;
+
         updateData.finishedAt =
           session.finishedAt ??
           new Date();
@@ -319,20 +201,22 @@ export async function POST(
     }
 
     // =====================================================
-    // КРИТИЧНО:
+    // ОНОВЛЕННЯ
     //
-    // Тут НЕ повинно бути:
+    // ВАЖЛИВО:
     //
-    // timeLeft: ...
-    // extraTime: ...
-    // blocked: ...
-    // blockReason: ...
+    // НЕ змінюємо:
     //
-    // Інакше автозбереження може
-    // скасувати адміністративні зміни.
+    // timeLeft
+    // extraTime
+    // blocked
+    // blockReason
+    // blockedAt
+    //
+    // Ці поля контролює сервер / адміністратор.
     // =====================================================
 
-    session =
+    const updatedSession =
       await prisma.testSession.update({
         where: {
           id: session.id,
@@ -341,9 +225,44 @@ export async function POST(
         data: updateData,
       });
 
-    return NextResponse.json(
-      session
-    );
+    // =====================================================
+    // ПОВЕРТАЄМО АКТУАЛЬНИЙ СТАН
+    // =====================================================
+
+    return NextResponse.json({
+      success: true,
+
+      session: {
+        id: updatedSession.id,
+
+        currentQuestion:
+          updatedSession.currentQuestion,
+
+        savedAnswers:
+          updatedSession.savedAnswers,
+
+        timeLeft:
+          updatedSession.timeLeft,
+
+        extraTime:
+          updatedSession.extraTime,
+
+        blocked:
+          updatedSession.blocked,
+
+        blockReason:
+          updatedSession.blockReason,
+
+        finished:
+          updatedSession.finished,
+
+        finishedAt:
+          updatedSession.finishedAt,
+
+        lastActivityAt:
+          updatedSession.lastActivityAt,
+      },
+    });
   } catch (error) {
     console.error(
       "SESSION API ERROR:",
@@ -352,6 +271,7 @@ export async function POST(
 
     return NextResponse.json(
       {
+        success: false,
         error:
           "Помилка збереження сесії.",
       },
