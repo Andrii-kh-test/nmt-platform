@@ -9,6 +9,7 @@ export async function GET() {
         orderBy: {
           createdAt: "desc",
         },
+
         include: {
           test: {
             include: {
@@ -16,14 +17,25 @@ export async function GET() {
                 orderBy: {
                   order: "asc",
                 },
+
                 include: {
-                  options: {
-                    orderBy: {
-                      order: "asc",
+                  question: {
+                    include: {
+                      answerOptions: {
+                        orderBy: {
+                          order: "asc",
+                        },
+                      },
                     },
                   },
                 },
               },
+            },
+          },
+
+          session: {
+            include: {
+              participant: true,
             },
           },
         },
@@ -31,7 +43,10 @@ export async function GET() {
 
     return NextResponse.json(results);
   } catch (error) {
-    console.error(error);
+    console.error(
+      "GET RESULTS ERROR:",
+      error
+    );
 
     return NextResponse.json(
       {
@@ -55,7 +70,6 @@ export async function POST(
       await prisma.testResult.create({
         data: {
           testId: body.testId,
-
 
           earnedPoints:
             body.earnedPoints,
@@ -82,7 +96,8 @@ export async function POST(
             body.answers,
 
           finishReason:
-            body.finishReason ?? "manual",
+            body.finishReason ??
+            "manual",
 
           lastName:
             body.lastName ?? null,
@@ -110,7 +125,10 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error(error);
+    console.error(
+      "POST RESULTS ERROR:",
+      error
+    );
 
     return NextResponse.json(
       {

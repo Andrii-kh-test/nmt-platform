@@ -1,7 +1,9 @@
 import Link from "next/link";
+
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
+
 import HtmlContent from "@/app/components/common/HtmlContent";
 
 type Props = {
@@ -10,14 +12,8 @@ type Props = {
   }>;
 };
 
-/* ============================================================
-   ДОПОМІЖНІ ФУНКЦІЇ
-============================================================ */
-
 function formatDate(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
+  if (!date) return "—";
 
   return new Date(date).toLocaleString("uk-UA", {
     dateStyle: "short",
@@ -26,20 +22,17 @@ function formatDate(date: Date | null) {
 }
 
 function formatDuration(seconds: number) {
-  if (seconds <= 0) {
-    return "00:00";
-  }
+  if (seconds <= 0) return "00:00";
 
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = seconds % 60;
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(
-      minutes
-    ).padStart(2, "0")}:${String(
-      remainingSeconds
-    ).padStart(2, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(remainingSeconds).padStart(2, "0")}`;
   }
 
   return `${String(minutes).padStart(2, "0")}:${String(
@@ -47,14 +40,8 @@ function formatDuration(seconds: number) {
   ).padStart(2, "0")}`;
 }
 
-/* ============================================================
-   ОЧИЩЕННЯ HTML
-============================================================ */
-
 function stripHtml(html: string | null | undefined) {
-  if (!html) {
-    return "";
-  }
+  if (!html) return "";
 
   return html
     .replace(/<br\s*\/?>/gi, "\n")
@@ -81,9 +68,7 @@ function getParticipantName(result: {
     result.middleName,
   ].filter(Boolean);
 
-  return parts.length > 0
-    ? parts.join(" ")
-    : "Не вказано";
+  return parts.length > 0 ? parts.join(" ") : "Не вказано";
 }
 
 function getFinishReason(reason: string) {
@@ -91,40 +76,32 @@ function getFinishReason(reason: string) {
     case "manual":
       return {
         label: "Завершено вручну",
-        className:
-          "bg-green-100 text-green-800 border-green-200",
+        className: "bg-green-100 text-green-800 border-green-200",
         icon: "✓",
       };
 
     case "timeout":
       return {
         label: "Час вичерпано",
-        className:
-          "bg-orange-100 text-orange-800 border-orange-200",
+        className: "bg-orange-100 text-orange-800 border-orange-200",
         icon: "⏱",
       };
 
     case "security":
       return {
         label: "Порушення правил",
-        className:
-          "bg-red-100 text-red-800 border-red-200",
+        className: "bg-red-100 text-red-800 border-red-200",
         icon: "!",
       };
 
     default:
       return {
         label: reason || "Не вказано",
-        className:
-          "bg-gray-100 text-gray-800 border-gray-200",
+        className: "bg-gray-100 text-gray-800 border-gray-200",
         icon: "•",
       };
   }
 }
-
-/* ============================================================
-   ОТРИМАННЯ ЗБЕРЕЖЕНОЇ ВІДПОВІДІ
-============================================================ */
 
 function getSavedAnswer(
   answers: unknown,
@@ -142,29 +119,23 @@ function getSavedAnswer(
   }
 
   return answer.filter(
-    (value): value is number =>
-      typeof value === "number"
+    (value): value is number => typeof value === "number"
   );
 }
 
-/* ============================================================
-   ЗВИЧАЙНЕ ПИТАННЯ
-============================================================ */
-
 function getQuestionStatus(
   question: {
-    answerOptions: {
+    answerOptions: Array<{
       id: number;
       isCorrect: boolean;
-    }[];
+    }>;
   },
   selectedAnswers: number[]
 ) {
   if (selectedAnswers.length === 0) {
     return {
       label: "Без відповіді",
-      className:
-        "bg-gray-100 text-gray-600 border-gray-200",
+      className: "bg-gray-100 text-gray-600 border-gray-200",
       pointsClass: "text-gray-500",
       icon: "—",
     };
@@ -188,8 +159,7 @@ function getQuestionStatus(
   if (isCorrect) {
     return {
       label: "Правильно",
-      className:
-        "bg-green-100 text-green-700 border-green-200",
+      className: "bg-green-100 text-green-700 border-green-200",
       pointsClass: "text-green-600",
       icon: "✓",
     };
@@ -197,28 +167,21 @@ function getQuestionStatus(
 
   return {
     label: "Неправильно",
-    className:
-      "bg-red-100 text-red-700 border-red-200",
+    className: "bg-red-100 text-red-700 border-red-200",
     pointsClass: "text-red-600",
     icon: "×",
   };
 }
 
-/* ============================================================
-   MATCHING — ОТРИМАННЯ ДАНИХ
-============================================================ */
-
 function getMatchingData(question: {
-  answerOptions: {
+  answerOptions: Array<{
     id: number;
     text: string;
-    order?: number;
-  }[];
+    order: number;
+  }>;
 }) {
   const leftItems = question.answerOptions
-    .filter((option) =>
-      option.text?.startsWith("L|")
-    )
+    .filter((option) => option.text.startsWith("L|"))
     .map((option) => {
       const parts = option.text.split("|");
 
@@ -231,9 +194,7 @@ function getMatchingData(question: {
     .sort((a, b) => a.id - b.id);
 
   const rightItems = question.answerOptions
-    .filter((option) =>
-      option.text?.startsWith("R|")
-    )
+    .filter((option) => option.text.startsWith("R|"))
     .map((option) => {
       const parts = option.text.split("|");
 
@@ -250,16 +211,13 @@ function getMatchingData(question: {
   };
 }
 
-/* ============================================================
-   MATCHING — СТАТУС
-============================================================ */
-
 function getMatchingStatus(
   question: {
-    answerOptions: {
+    answerOptions: Array<{
       id: number;
       text: string;
-    }[];
+      order: number;
+    }>;
   },
   selectedAnswers: number[]
 ) {
@@ -274,14 +232,17 @@ function getMatchingStatus(
         selectedAnswers.length === 0
           ? "Без відповіді"
           : "Неправильно",
+
       className:
         selectedAnswers.length === 0
           ? "bg-gray-100 text-gray-600 border-gray-200"
           : "bg-red-100 text-red-700 border-red-200",
+
       pointsClass:
         selectedAnswers.length === 0
           ? "text-gray-500"
           : "text-red-600",
+
       icon:
         selectedAnswers.length === 0
           ? "—"
@@ -319,16 +280,13 @@ function getMatchingStatus(
   };
 }
 
-/* ============================================================
-   MATCHING — КІЛЬКІСТЬ ПРАВИЛЬНИХ ПАР
-============================================================ */
-
 function getMatchingCorrectPairs(
   question: {
-    answerOptions: {
+    answerOptions: Array<{
       id: number;
       text: string;
-    }[];
+      order: number;
+    }>;
   },
   selectedAnswers: number[]
 ) {
@@ -351,10 +309,6 @@ function getMatchingCorrectPairs(
   };
 }
 
-/* ============================================================
-   ОСНОВНА СТОРІНКА
-============================================================ */
-
 export default async function ResultDetailsPage({
   params,
 }: Props) {
@@ -362,34 +316,29 @@ export default async function ResultDetailsPage({
 
   const resultId = Number(id);
 
-  if (
-    !Number.isInteger(resultId) ||
-    resultId <= 0
-  ) {
+  if (!Number.isInteger(resultId) || resultId <= 0) {
     notFound();
   }
 
-  const result =
-    await prisma.testResult.findUnique({
-      where: {
-        id: resultId,
-      },
+  const result = await prisma.testResult.findUnique({
+    where: {
+      id: resultId,
+    },
 
-      include: {
-        test: {
-          include: {
-            questions: {
-              orderBy: {
-                order: "asc",
-              },
+    include: {
+      test: {
+        include: {
+          questions: {
+            orderBy: {
+              order: "asc",
+            },
 
-              include: {
-                question: {
-                  include: {
-                    answerOptions: {
-                      orderBy: {
-                        order: "asc",
-                      },
+            include: {
+              question: {
+                include: {
+                  answerOptions: {
+                    orderBy: {
+                      order: "asc",
                     },
                   },
                 },
@@ -398,39 +347,40 @@ export default async function ResultDetailsPage({
           },
         },
       },
-    });
+    },
+  });
 
   if (!result) {
     notFound();
   }
 
-  const participantName =
-    getParticipantName(result);
+  const participantName = getParticipantName(result);
 
   const finishReason = getFinishReason(
     result.finishReason
   );
 
   /*
-   * У Test.questions зберігаються зв'язки
-   * TestQuestion -> Question.
+   * АКТУАЛЬНА СТРУКТУРА PRISMA:
    *
-   * Для відображення результату нам потрібні
-   * безпосередньо Question.
+   * Test
+   *   └── questions (TestQuestion[])
+   *         └── question (Question)
+   *               └── answerOptions (AnswerOption[])
+   *
+   * Тому для відображення завдань використовуємо
+   * result.test.questions.map(item => item.question)
    */
-  const questions =
-    result.test.questions.map(
-      (testQuestion) => testQuestion.question
-    );
+
+  const questions = result.test.questions.map(
+    (testQuestion) => testQuestion.question
+  );
 
   return (
     <main className="min-h-screen bg-[#f5f5f6]">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
-        {/* ==================================================
-            ВЕРХНЯ ПАНЕЛЬ
-        ================================================== */}
-
+        {/* HEADER */}
         <header className="mb-6 overflow-hidden rounded-2xl bg-[#7A1F2B] shadow-lg">
           <div className="flex flex-col gap-5 px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-8">
             <div>
@@ -449,38 +399,17 @@ export default async function ResultDetailsPage({
 
             <Link
               href="/admin/results"
-              className="
-                inline-flex
-                items-center
-                justify-center
-                rounded-xl
-                border
-                border-white/30
-                bg-white/10
-                px-5
-                py-3
-                text-sm
-                font-semibold
-                text-white
-                backdrop-blur
-                transition
-                hover:bg-white
-                hover:text-[#7A1F2B]
-              "
+              className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white hover:text-[#7A1F2B]"
             >
               ← До журналу
             </Link>
           </div>
         </header>
 
-        {/* ==================================================
-            УЧАСНИК + ТЕСТ
-        ================================================== */}
-
+        {/* УЧАСНИК + ТЕСТ */}
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
 
           {/* УЧАСНИК */}
-
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
@@ -530,7 +459,6 @@ export default async function ResultDetailsPage({
           </section>
 
           {/* ТЕСТ */}
-
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
@@ -568,14 +496,21 @@ export default async function ResultDetailsPage({
                   {result.test.subject}
                 </div>
               </div>
+
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                  Кількість завдань
+                </div>
+
+                <div className="mt-1 font-semibold text-gray-900">
+                  {questions.length}
+                </div>
+              </div>
             </div>
           </section>
         </div>
 
-        {/* ==================================================
-            ЧАС
-        ================================================== */}
-
+        {/* ЧАС */}
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-xl">
@@ -626,10 +561,7 @@ export default async function ResultDetailsPage({
           </div>
         </section>
 
-        {/* ==================================================
-            РЕЗУЛЬТАТ
-        ================================================== */}
-
+        {/* РЕЗУЛЬТАТ */}
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
@@ -706,13 +638,11 @@ export default async function ResultDetailsPage({
                 {result.skipped}
               </div>
             </div>
+
           </div>
         </section>
 
-        {/* ==================================================
-            ПРИЧИНА ЗАВЕРШЕННЯ
-        ================================================== */}
-
+        {/* ПРИЧИНА ЗАВЕРШЕННЯ */}
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -726,19 +656,7 @@ export default async function ResultDetailsPage({
             </div>
 
             <span
-              className={`
-                inline-flex
-                w-fit
-                items-center
-                gap-2
-                rounded-full
-                border
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                ${finishReason.className}
-              `}
+              className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${finishReason.className}`}
             >
               <span className="font-bold">
                 {finishReason.icon}
@@ -749,12 +667,8 @@ export default async function ResultDetailsPage({
           </div>
         </section>
 
-        {/* ==================================================
-            ЖУРНАЛ ВІДПОВІДЕЙ
-        ================================================== */}
-
+        {/* ЖУРНАЛ ВІДПОВІДЕЙ */}
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
           <div className="mb-7">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
@@ -776,19 +690,15 @@ export default async function ResultDetailsPage({
           <div className="space-y-6">
 
             {questions.map((question, index) => {
-              const selectedAnswers =
-                getSavedAnswer(
-                  result.answers,
-                  question.id
-                );
+              const selectedAnswers = getSavedAnswer(
+                result.answers,
+                question.id
+              );
 
               const isMatching =
                 question.type === "matching";
 
-              /* ==================================================
-                 MATCHING
-              ================================================== */
-
+              /* MATCHING */
               if (isMatching) {
                 const {
                   leftItems,
@@ -803,43 +713,21 @@ export default async function ResultDetailsPage({
                   selectedAnswers
                 );
 
-                const status =
-                  getMatchingStatus(
-                    question,
-                    selectedAnswers
-                  );
+                const status = getMatchingStatus(
+                  question,
+                  selectedAnswers
+                );
 
                 return (
                   <article
                     key={question.id}
-                    className="
-                      overflow-hidden
-                      rounded-2xl
-                      border
-                      border-gray-200
-                      bg-white
-                    "
+                    className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
                   >
-                    {/* HEADER */}
-
                     <div className="bg-gray-50 p-5">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                         <div className="flex items-center gap-4">
-                          <div
-                            className="
-                              flex
-                              h-11
-                              w-11
-                              shrink-0
-                              items-center
-                              justify-center
-                              rounded-full
-                              bg-[#7A1F2B]
-                              font-bold
-                              text-white
-                            "
-                          >
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#7A1F2B] font-bold text-white">
                             {index + 1}
                           </div>
 
@@ -858,19 +746,7 @@ export default async function ResultDetailsPage({
                         </div>
 
                         <span
-                          className={`
-                            inline-flex
-                            w-fit
-                            items-center
-                            gap-2
-                            rounded-full
-                            border
-                            px-4
-                            py-2
-                            text-sm
-                            font-semibold
-                            ${status.className}
-                          `}
+                          className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${status.className}`}
                         >
                           <span className="font-bold">
                             {status.icon}
@@ -881,11 +757,7 @@ export default async function ResultDetailsPage({
                       </div>
                     </div>
 
-                    {/* CONTENT */}
-
                     <div className="p-5 sm:p-6">
-
-                      {/* УМОВА */}
 
                       <div className="mb-7">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -897,8 +769,6 @@ export default async function ResultDetailsPage({
                           className="text-lg leading-8 text-gray-900"
                         />
                       </div>
-
-                      {/* MATCHING */}
 
                       <div>
                         <div className="mb-3 text-sm font-semibold text-gray-600">
@@ -913,14 +783,9 @@ export default async function ResultDetailsPage({
                           <div className="overflow-hidden rounded-xl border border-gray-200">
 
                             {leftItems.map(
-                              (
-                                leftItem,
-                                leftIndex
-                              ) => {
+                              (leftItem, leftIndex) => {
                                 const selectedRightId =
-                                  selectedAnswers[
-                                    leftIndex
-                                  ];
+                                  selectedAnswers[leftIndex];
 
                                 const correct =
                                   selectedRightId ===
@@ -943,24 +808,12 @@ export default async function ResultDetailsPage({
                                 return (
                                   <div
                                     key={leftItem.id}
-                                    className={`
-                                      grid
-                                      gap-4
-                                      border-b
-                                      border-gray-200
-                                      p-4
-                                      last:border-b-0
-                                      sm:grid-cols-[1fr_auto_1fr]
-                                      sm:items-center
-                                      ${
-                                        correct
-                                          ? "bg-green-50/60"
-                                          : "bg-red-50/40"
-                                      }
-                                    `}
+                                    className={`grid gap-4 border-b border-gray-200 p-4 last:border-b-0 sm:grid-cols-[1fr_auto_1fr] sm:items-center ${
+                                      correct
+                                        ? "bg-green-50/60"
+                                        : "bg-red-50/40"
+                                    }`}
                                   >
-
-                                    {/* LEFT */}
 
                                     <div className="rounded-lg border border-gray-200 bg-white p-3">
                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -968,44 +821,27 @@ export default async function ResultDetailsPage({
                                       </div>
 
                                       <HtmlContent
-                                        html={
-                                          leftItem.text
-                                        }
+                                        html={leftItem.text}
                                         className="font-medium text-gray-900"
                                       />
                                     </div>
 
-                                    {/* ARROW */}
-
                                     <div
-                                      className={`
-                                        hidden
-                                        text-xl
-                                        font-bold
-                                        sm:block
-                                        ${
-                                          correct
-                                            ? "text-green-500"
-                                            : "text-red-500"
-                                        }
-                                      `}
+                                      className={`hidden text-xl font-bold sm:block ${
+                                        correct
+                                          ? "text-green-500"
+                                          : "text-red-500"
+                                      }`}
                                     >
                                       →
                                     </div>
 
-                                    {/* RIGHT */}
-
                                     <div
-                                      className={`
-                                        rounded-lg
-                                        border
-                                        p-3
-                                        ${
-                                          correct
-                                            ? "border-green-200 bg-green-100"
-                                            : "border-red-200 bg-red-100"
-                                        }
-                                      `}
+                                      className={`rounded-lg border p-3 ${
+                                        correct
+                                          ? "border-green-200 bg-green-100"
+                                          : "border-red-200 bg-red-100"
+                                      }`}
                                     >
                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
                                         Відповідь учасника
@@ -1017,14 +853,11 @@ export default async function ResultDetailsPage({
                                             ? selectedRight.text
                                             : "Без відповіді"
                                         }
-                                        className={`
-                                          font-medium
-                                          ${
-                                            correct
-                                              ? "text-green-800"
-                                              : "text-red-800"
-                                          }
-                                        `}
+                                        className={`font-medium ${
+                                          correct
+                                            ? "text-green-800"
+                                            : "text-red-800"
+                                        }`}
                                       />
 
                                       {!correct &&
@@ -1047,11 +880,10 @@ export default async function ResultDetailsPage({
                                 );
                               }
                             )}
+
                           </div>
                         )}
                       </div>
-
-                      {/* ПІДСУМОК MATCHING */}
 
                       {totalPairs > 0 && (
                         <div className="mt-6 rounded-xl bg-gray-50 p-5">
@@ -1063,97 +895,63 @@ export default async function ResultDetailsPage({
                               </div>
 
                               <div className="mt-1 text-lg font-bold text-gray-900">
-                                {correctPairs} з{" "}
-                                {totalPairs}{" "}
-                                правильних пар
+                                {correctPairs} з {totalPairs} правильних пар
                               </div>
                             </div>
 
                             <div
-                              className={`
-                                text-2xl
-                                font-bold
-                                ${
-                                  correctPairs ===
-                                  totalPairs
-                                    ? "text-green-600"
-                                    : correctPairs > 0
-                                    ? "text-orange-600"
-                                    : "text-red-600"
-                                }
-                              `}
+                              className={`text-2xl font-bold ${
+                                correctPairs === totalPairs
+                                  ? "text-green-600"
+                                  : correctPairs > 0
+                                  ? "text-orange-600"
+                                  : "text-red-600"
+                              }`}
                             >
                               {Math.round(
-                                (correctPairs /
-                                  totalPairs) *
+                                (correctPairs / totalPairs) *
                                   100
                               )}
                               %
                             </div>
+
                           </div>
                         </div>
                       )}
+
                     </div>
                   </article>
                 );
               }
 
-              /* ==================================================
-                 SINGLE / MULTIPLE
-              ================================================== */
+              /* ЗВИЧАЙНЕ ПИТАННЯ */
 
-              const status =
-                getQuestionStatus(
-                  question,
-                  selectedAnswers
-                );
+              const status = getQuestionStatus(
+                question,
+                selectedAnswers
+              );
 
               const correctOptions =
                 question.answerOptions.filter(
-                  (option) =>
-                    option.isCorrect
+                  (option) => option.isCorrect
                 );
 
               const selectedOptions =
                 question.answerOptions.filter(
                   (option) =>
-                    selectedAnswers.includes(
-                      option.id
-                    )
+                    selectedAnswers.includes(option.id)
                 );
 
               return (
                 <article
                   key={question.id}
-                  className="
-                    overflow-hidden
-                    rounded-2xl
-                    border
-                    border-gray-200
-                    bg-white
-                  "
+                  className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
                 >
-
-                  {/* HEADER */}
-
                   <div className="bg-gray-50 p-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                       <div className="flex items-center gap-4">
-                        <div
-                          className="
-                            flex
-                            h-11
-                            w-11
-                            shrink-0
-                            items-center
-                            justify-center
-                            rounded-full
-                            bg-[#7A1F2B]
-                            font-bold
-                            text-white
-                          "
-                        >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#7A1F2B] font-bold text-white">
                           {index + 1}
                         </div>
 
@@ -1172,19 +970,7 @@ export default async function ResultDetailsPage({
                       </div>
 
                       <span
-                        className={`
-                          inline-flex
-                          w-fit
-                          items-center
-                          gap-2
-                          rounded-full
-                          border
-                          px-4
-                          py-2
-                          text-sm
-                          font-semibold
-                          ${status.className}
-                        `}
+                        className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${status.className}`}
                       >
                         <span className="font-bold">
                           {status.icon}
@@ -1195,11 +981,7 @@ export default async function ResultDetailsPage({
                     </div>
                   </div>
 
-                  {/* CONTENT */}
-
                   <div className="p-5 sm:p-6">
-
-                    {/* УМОВА */}
 
                     <div className="mb-7">
                       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -1212,10 +994,7 @@ export default async function ResultDetailsPage({
                       />
                     </div>
 
-                    {/* ВАРІАНТИ */}
-
-                    {question.answerOptions.length >
-                      0 && (
+                    {question.answerOptions.length > 0 && (
                       <div>
                         <div className="mb-3 text-sm font-semibold text-gray-600">
                           Варіанти відповідей
@@ -1242,14 +1021,10 @@ export default async function ResultDetailsPage({
                               ) {
                                 optionClass =
                                   "border-green-300 bg-green-50";
-                              } else if (
-                                correct
-                              ) {
+                              } else if (correct) {
                                 optionClass =
                                   "border-green-200 bg-green-50/70";
-                              } else if (
-                                selected
-                              ) {
+                              } else if (selected) {
                                 optionClass =
                                   "border-red-300 bg-red-50";
                               }
@@ -1257,85 +1032,37 @@ export default async function ResultDetailsPage({
                               return (
                                 <div
                                   key={option.id}
-                                  className={`
-                                    rounded-xl
-                                    border
-                                    p-4
-                                    transition
-                                    ${optionClass}
-                                  `}
+                                  className={`rounded-xl border p-4 transition ${optionClass}`}
                                 >
                                   <div className="flex items-start gap-3">
 
-                                    {/* ЛІТЕРА */}
-
-                                    <div
-                                      className="
-                                        flex
-                                        h-8
-                                        w-8
-                                        shrink-0
-                                        items-center
-                                        justify-center
-                                        rounded-full
-                                        border
-                                        border-gray-300
-                                        bg-white
-                                        text-sm
-                                        font-bold
-                                        text-gray-700
-                                      "
-                                    >
+                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-sm font-bold text-gray-700">
                                       {String.fromCharCode(
-                                        65 +
-                                          (option.order ?? 0)
+                                        65 + option.order
                                       )}
                                     </div>
-
-                                    {/* ТЕКСТ */}
 
                                     <div className="min-w-0 flex-1">
 
                                       <HtmlContent
-                                        html={
-                                          option.text
-                                        }
+                                        html={option.text}
                                         className="text-base leading-7 text-gray-900"
                                       />
 
                                       <div className="mt-3 flex flex-wrap gap-2">
 
                                         {selected && (
-                                          <span
-                                            className="
-                                              rounded-full
-                                              bg-[#7A1F2B]
-                                              px-3
-                                              py-1
-                                              text-xs
-                                              font-semibold
-                                              text-white
-                                            "
-                                          >
+                                          <span className="rounded-full bg-[#7A1F2B] px-3 py-1 text-xs font-semibold text-white">
                                             Відповідь учасника
                                           </span>
                                         )}
 
                                         {correct && (
-                                          <span
-                                            className="
-                                              rounded-full
-                                              bg-green-600
-                                              px-3
-                                              py-1
-                                              text-xs
-                                              font-semibold
-                                              text-white
-                                            "
-                                          >
+                                          <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">
                                             Правильна відповідь
                                           </span>
                                         )}
+
                                       </div>
                                     </div>
                                   </div>
@@ -1343,16 +1070,14 @@ export default async function ResultDetailsPage({
                               );
                             }
                           )}
+
                         </div>
                       </div>
                     )}
 
-                    {/* ПІДСУМОК */}
-
                     <div className="mt-6 border-t border-gray-200 pt-5">
-                      <div className="grid gap-5 md:grid-cols-2">
 
-                        {/* ОБРАНО */}
+                      <div className="grid gap-5 md:grid-cols-2">
 
                         <div className="rounded-xl bg-gray-50 p-4">
                           <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -1360,21 +1085,15 @@ export default async function ResultDetailsPage({
                           </div>
 
                           <div className="mt-2 font-semibold leading-6 text-gray-900">
-                            {selectedOptions.length >
-                            0
+                            {selectedOptions.length > 0
                               ? selectedOptions
-                                  .map(
-                                    (option) =>
-                                      stripHtml(
-                                        option.text
-                                      )
+                                  .map((option) =>
+                                    stripHtml(option.text)
                                   )
                                   .join(", ")
                               : "Без відповіді"}
                           </div>
                         </div>
-
-                        {/* ПРАВИЛЬНА ВІДПОВІДЬ */}
 
                         <div className="rounded-xl bg-gray-50 p-4">
                           <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -1382,58 +1101,34 @@ export default async function ResultDetailsPage({
                           </div>
 
                           <div
-                            className={`
-                              mt-2
-                              font-semibold
-                              leading-6
-                              ${status.pointsClass}
-                            `}
+                            className={`mt-2 font-semibold leading-6 ${status.pointsClass}`}
                           >
-                            {correctOptions.length >
-                            0
+                            {correctOptions.length > 0
                               ? correctOptions
-                                  .map(
-                                    (option) =>
-                                      stripHtml(
-                                        option.text
-                                      )
+                                  .map((option) =>
+                                    stripHtml(option.text)
                                   )
                                   .join(", ")
                               : "Не визначено"}
                           </div>
                         </div>
+
                       </div>
                     </div>
+
                   </div>
                 </article>
               );
             })}
+
           </div>
         </section>
 
-        {/* ==================================================
-            НИЖНЯ КНОПКА
-        ================================================== */}
-
+        {/* НИЖНЯ КНОПКА */}
         <div className="mt-7 flex justify-center">
           <Link
             href="/admin/results"
-            className="
-              inline-flex
-              items-center
-              justify-center
-              rounded-xl
-              bg-[#7A1F2B]
-              px-7
-              py-3.5
-              text-sm
-              font-semibold
-              text-white
-              shadow-sm
-              transition
-              hover:bg-[#651923]
-              hover:shadow-md
-            "
+            className="inline-flex items-center justify-center rounded-xl bg-[#7A1F2B] px-7 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#651923] hover:shadow-md"
           >
             ← Повернутися до журналу
           </Link>
@@ -1442,6 +1137,7 @@ export default async function ResultDetailsPage({
         <div className="py-8 text-center text-xs text-gray-400">
           Адміністративна панель платформи тестування
         </div>
+
       </div>
     </main>
   );

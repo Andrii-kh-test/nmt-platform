@@ -6,7 +6,9 @@ import { prisma } from "@/app/lib/prisma";
 // СКЛАДНІСТЬ
 // =====================================================
 
-function getDifficulty(correctPercent: number) {
+function getDifficulty(
+  correctPercent: number
+) {
   if (correctPercent > 80) {
     return {
       label: "Дуже легке",
@@ -45,10 +47,11 @@ function getDifficulty(correctPercent: number) {
 // ОТРИМАННЯ ID ВІДПОВІДЕЙ
 // =====================================================
 
-function getAnswerIds(value: unknown): number[] {
+function getAnswerIds(
+  value: unknown
+): number[] {
   let source = value;
 
-  // Якщо JSON збережений як рядок
   if (typeof source === "string") {
     try {
       source = JSON.parse(source);
@@ -57,7 +60,6 @@ function getAnswerIds(value: unknown): number[] {
     }
   }
 
-  // Очікуємо масив ID
   if (!Array.isArray(source)) {
     return [];
   }
@@ -73,27 +75,21 @@ function getAnswerIds(value: unknown): number[] {
 
 // =====================================================
 // ПОРІВНЯННЯ SINGLE / MULTIPLE
-//
-// Порядок вибраних відповідей не має значення.
-// Наприклад:
-//
-// [1, 3, 5]
-// [5, 1, 3]
-//
-// вважаються однаковою відповіддю.
 // =====================================================
 
 function isSameAnswers(
   userAnswer: number[],
   correctAnswers: number[]
 ): boolean {
-  const normalizedUserAnswer = [
-    ...userAnswer,
-  ].sort((a, b) => a - b);
+  const normalizedUserAnswer =
+    [...userAnswer].sort(
+      (a, b) => a - b
+    );
 
-  const normalizedCorrectAnswers = [
-    ...correctAnswers,
-  ].sort((a, b) => a - b);
+  const normalizedCorrectAnswers =
+    [...correctAnswers].sort(
+      (a, b) => a - b
+    );
 
   if (
     normalizedUserAnswer.length !==
@@ -104,20 +100,13 @@ function isSameAnswers(
 
   return normalizedCorrectAnswers.every(
     (id, index) =>
-      normalizedUserAnswer[index] === id
+      normalizedUserAnswer[index] ===
+      id
   );
 }
 
 // =====================================================
 // MATCHING
-//
-// Формат спеціальних AnswerOption для matching:
-//
-// L|1|Текст лівого елемента|25
-//
-// де:
-// 1  — ID лівого елемента
-// 25 — ID правильної правої відповіді
 // =====================================================
 
 function getMatchingLeftItems(
@@ -139,7 +128,8 @@ function getMatchingLeftItems(
       return {
         id: Number(parts[1]),
         text: parts[2] ?? "",
-        correctRightId: Number(parts[3]),
+        correctRightId:
+          Number(parts[3]),
       };
     })
     .filter(
@@ -156,12 +146,6 @@ function getMatchingLeftItems(
 
 // =====================================================
 // ПЕРЕВІРКА MATCHING
-//
-// Для matching порядок масиву має значення:
-//
-// userAnswer[0] → відповідь для leftItems[0]
-// userAnswer[1] → відповідь для leftItems[1]
-// і т. д.
 // =====================================================
 
 function isMatchingCorrect(
@@ -192,19 +176,6 @@ function isMatchingCorrect(
 
 // =====================================================
 // ОТРИМАННЯ ANSWERS
-//
-// Prisma Json може повертати:
-// - об'єкт;
-// - масив;
-// - null;
-// - інше JSON-значення.
-//
-// Для аналітики очікуємо об'єкт:
-//
-// {
-//   "629": [1],
-//   "630": [4, 5]
-// }
 // =====================================================
 
 function getAnswersRecord(
@@ -246,16 +217,6 @@ function getAnswersRecord(
 
 // =====================================================
 // GET
-//
-// /api/analytics?testId=1
-//
-// або:
-//
-// /api/analytics?testId=1&participantIds=1,2,3
-//
-// або:
-//
-// /api/analytics?testId=1&participantIds=[1,2,3]
 // =====================================================
 
 export async function GET(
@@ -319,7 +280,6 @@ export async function GET(
       try {
         let parsed: unknown;
 
-        // JSON-масив
         if (
           participantIdsParam.startsWith(
             "["
@@ -330,7 +290,6 @@ export async function GET(
               participantIdsParam
             );
         } else {
-          // Список через кому
           parsed =
             participantIdsParam
               .split(",")
@@ -388,16 +347,6 @@ export async function GET(
 
     // =================================================
     // ЗАВАНТАЖЕННЯ ТЕСТУ
-    //
-    // ВАЖЛИВО:
-    //
-    // Test
-    //   └── questions: TestQuestion[]
-    //          └── question: Question
-    //                 └── answerOptions: AnswerOption[]
-    //
-    // Тому type/text/points/options НЕ можна
-    // вибирати безпосередньо з TestQuestion.
     // =================================================
 
     const test =
@@ -461,16 +410,6 @@ export async function GET(
 
     // =================================================
     // РЕЗУЛЬТАТИ
-    //
-    // TestResult НЕ має participantId.
-    //
-    // Зв'язок:
-    //
-    // TestResult
-    //    └── session
-    //          └── participantId
-    //
-    // Тому фільтруємо через session.
     // =================================================
 
     const results =
@@ -534,8 +473,10 @@ export async function GET(
           result.session
             ?.participantId ?? null,
 
+        // ВАЖЛИВО:
+        // session у TestResult optional.
         sessionId:
-          result.session.id,
+          result.session?.id ?? null,
 
         lastName:
           result.lastName,
@@ -611,7 +552,7 @@ export async function GET(
             );
 
           // -------------------------------------------
-          // ПЕРЕВІРЯЄМО КОЖНОГО УЧАСНИКА
+          // КОЖЕН УЧАСНИК
           // -------------------------------------------
 
           results.forEach(
@@ -620,22 +561,6 @@ export async function GET(
                 getAnswersRecord(
                   result.answers
                 );
-
-              // ---------------------------------------
-              // ВАЖЛИВО:
-              //
-              // answers використовує QUESTION.ID,
-              // а НЕ TestQuestion.ID
-              // і НЕ question.order.
-              //
-              // Наприклад:
-              //
-              // {
-              //   "629": [12]
-              // }
-              //
-              // де 629 — Question.id.
-              // ---------------------------------------
 
               const answerKey =
                 String(
@@ -651,7 +576,7 @@ export async function GET(
                 );
 
               // ---------------------------------------
-              // ПРОПУЩЕНЕ
+              // ПРОПУЩЕНО
               // ---------------------------------------
 
               if (
@@ -688,9 +613,6 @@ export async function GET(
 
               // ---------------------------------------
               // SINGLE / MULTIPLE
-              //
-              // Порядок відповідей
-              // НЕ має значення.
               // ---------------------------------------
 
               const answerIsCorrect =
@@ -710,7 +632,7 @@ export async function GET(
           );
 
           // -------------------------------------------
-          // ВІДСОТОК ПРАВИЛЬНИХ
+          // ВІДСОТОК
           // -------------------------------------------
 
           const correctPercent =
@@ -734,8 +656,6 @@ export async function GET(
           return {
             id: question.id,
 
-            // Порядок у тесті береться
-            // з TestQuestion.
             order:
               testQuestion.order,
 

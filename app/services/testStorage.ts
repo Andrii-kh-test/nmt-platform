@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/app/lib/prisma";
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request
+) {
   try {
     const body = await request.json();
 
@@ -9,9 +12,8 @@ export async function POST(request: Request) {
     // НОМЕР РОЗТАШУВАННЯ ТЕСТУ
     // ========================================
 
-    const displayOrder = Number(
-      body.displayOrder
-    );
+    const displayOrder =
+      Number(body.displayOrder);
 
     if (
       !Number.isInteger(displayOrder) ||
@@ -65,37 +67,43 @@ export async function POST(request: Request) {
     const test =
       await prisma.test.create({
         data: {
-          title: body.title,
+          title:
+            body.title,
 
-          // Обов'язковий номер тесту
           displayOrder,
 
           subject:
             body.subject,
 
           description:
-            body.description ?? "",
+            body.description ??
+            null,
 
           schoolYear:
-            body.schoolYear,
+            body.schoolYear ??
+            "2026",
 
           duration:
-            body.duration,
+            Number(body.duration),
 
           maxPoints:
-            body.maxPoints,
+            Number(body.maxPoints ?? 0),
 
           examType:
-            body.examType ?? "НМТ",
+            body.examType ??
+            "НМТ",
 
           isPublished:
-            body.isPublished ?? false,
+            body.isPublished ??
+            false,
 
           codeRequired:
-            body.codeRequired ?? true,
+            body.codeRequired ??
+            true,
 
           accessCode:
-            body.accessCode || null,
+            body.accessCode ||
+            null,
 
           // ====================================
           // ПИТАННЯ
@@ -111,47 +119,57 @@ export async function POST(request: Request) {
                   index: number
                 ) => ({
                   order:
+                    question.order ??
                     index + 1,
 
-                  type:
-                    question.type,
+                  question: {
+                    create: {
+                      type:
+                        question.type,
 
-                  text:
-                    question.text,
+                      text:
+                        question.text,
 
-                  points:
-                    question.points,
+                      points:
+                        Number(
+                          question.points ??
+                            0
+                        ),
 
-                  shuffleQuestion:
-                    question.shuffleQuestion ??
-                    true,
+                      shuffleQuestion:
+                        question.shuffleQuestion ??
+                        true,
 
-                  options: {
-                    create:
-                      (
-                        question.options ??
-                        []
-                      ).map(
-                        (
-                          option: any,
-                          optionIndex: number
-                        ) => ({
-                          order:
-                            optionIndex + 1,
+                      answerOptions: {
+                        create:
+                          (
+                            question.options ??
+                            []
+                          ).map(
+                            (
+                              option: any,
+                              optionIndex: number
+                            ) => ({
+                              order:
+                                option.order ??
+                                optionIndex + 1,
 
-                          text:
-                            option.text,
+                              text:
+                                option.text,
 
-                          isCorrect:
-  question.correctAnswers?.includes(
-    option.id
-  ) ||
-  question.correctAnswers?.includes(
-    optionIndex + 1
-  ) ||
-  option.isCorrect === true,
-                        })
-                      ),
+                              isCorrect:
+                                question.correctAnswers?.includes(
+                                  option.id
+                                ) ||
+                                question.correctAnswers?.includes(
+                                  optionIndex + 1
+                                ) ||
+                                option.isCorrect ===
+                                  true,
+                            })
+                          ),
+                      },
+                    },
                   },
                 })
               ),
@@ -160,16 +178,20 @@ export async function POST(request: Request) {
 
         include: {
           questions: {
-            include: {
-              options: {
-                orderBy: {
-                  order: "asc",
-                },
-              },
-            },
-
             orderBy: {
               order: "asc",
+            },
+
+            include: {
+              question: {
+                include: {
+                  answerOptions: {
+                    orderBy: {
+                      order: "asc",
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -184,10 +206,6 @@ export async function POST(request: Request) {
       "TEST STORAGE CREATE ERROR:",
       error
     );
-
-    // ========================================
-    // ПОМИЛКА УНІКАЛЬНОСТІ
-    // ========================================
 
     if (
       error?.code === "P2002"

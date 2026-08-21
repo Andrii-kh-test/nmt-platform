@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+
 import { prisma } from "@/app/lib/prisma";
 
 // ==========================================
@@ -7,27 +8,32 @@ import { prisma } from "@/app/lib/prisma";
 
 export async function GET() {
   try {
-    const tests = await prisma.test.findMany({
-      orderBy: {
-        displayOrder: "asc",
-      },
+    const tests =
+      await prisma.test.findMany({
+        orderBy: {
+          displayOrder: "asc",
+        },
 
-      include: {
-        questions: {
-          orderBy: {
-            order: "asc",
-          },
+        include: {
+          questions: {
+            orderBy: {
+              order: "asc",
+            },
 
-          include: {
-            options: {
-              orderBy: {
-                order: "asc",
+            include: {
+              question: {
+                include: {
+                  answerOptions: {
+                    orderBy: {
+                      order: "asc",
+                    },
+                  },
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
     return NextResponse.json(tests);
   } catch (error) {
@@ -118,36 +124,43 @@ export async function POST(
     const test =
       await prisma.test.create({
         data: {
-          title: body.title,
+          title:
+            body.title,
 
-          // Номер на головній сторінці
           displayOrder,
 
-          subject: body.subject,
+          subject:
+            body.subject,
 
           description:
-            body.description,
+            body.description ??
+            null,
 
           schoolYear:
-            body.schoolYear,
+            body.schoolYear ??
+            "2026",
 
           duration:
-            body.duration,
+            Number(body.duration),
 
           maxPoints:
-            body.maxPoints,
+            Number(body.maxPoints ?? 0),
 
           examType:
-            body.examType ?? "НМТ",
+            body.examType ??
+            "НМТ",
 
           isPublished:
-            body.isPublished ?? false,
+            body.isPublished ??
+            false,
 
           codeRequired:
-            body.codeRequired ?? true,
+            body.codeRequired ??
+            true,
 
           accessCode:
-            body.accessCode || null,
+            body.accessCode ||
+            null,
 
           // ====================================
           // ПИТАННЯ
@@ -166,41 +179,48 @@ export async function POST(
                     question.order ??
                     questionIndex + 1,
 
-                  type:
-                    question.type,
+                  question: {
+                    create: {
+                      type:
+                        question.type,
 
-                  text:
-                    question.text,
+                      text:
+                        question.text,
 
-                  points:
-                    question.points,
+                      points:
+                        Number(
+                          question.points ??
+                            0
+                        ),
 
-                  shuffleQuestion:
-                    question.shuffleQuestion ??
-                    true,
+                      shuffleQuestion:
+                        question.shuffleQuestion ??
+                        true,
 
-                  options: {
-                    create:
-                      (
-                        question.options ??
-                        []
-                      ).map(
-                        (
-                          option: any,
-                          optionIndex: number
-                        ) => ({
-                          order:
-                            option.order ??
-                            optionIndex + 1,
+                      answerOptions: {
+                        create:
+                          (
+                            question.options ??
+                            []
+                          ).map(
+                            (
+                              option: any,
+                              optionIndex: number
+                            ) => ({
+                              order:
+                                option.order ??
+                                optionIndex + 1,
 
-                          text:
-                            option.text,
+                              text:
+                                option.text,
 
-                          isCorrect:
-                            option.isCorrect ??
-                            false,
-                        })
-                      ),
+                              isCorrect:
+                                option.isCorrect ??
+                                false,
+                            })
+                          ),
+                      },
+                    },
                   },
                 })
               ),
@@ -209,16 +229,20 @@ export async function POST(
 
         include: {
           questions: {
-            include: {
-              options: {
-                orderBy: {
-                  order: "asc",
-                },
-              },
-            },
-
             orderBy: {
               order: "asc",
+            },
+
+            include: {
+              question: {
+                include: {
+                  answerOptions: {
+                    orderBy: {
+                      order: "asc",
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -233,10 +257,6 @@ export async function POST(
       "CREATE TEST ERROR:",
       error
     );
-
-    // ========================================
-    // ДУБЛІК НОМЕРА
-    // ========================================
 
     if (
       error?.code === "P2002"

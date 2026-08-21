@@ -31,37 +31,46 @@ export default async function TestPage({
 
   const testId = Number(id);
 
-  if (!Number.isInteger(testId) || testId <= 0) {
+  if (
+    !Number.isInteger(testId) ||
+    testId <= 0
+  ) {
     notFound();
   }
 
-  const prismaTest = await prisma.test.findUnique({
-    where: {
-      id: testId,
-    },
+  const prismaTest =
+    await prisma.test.findUnique({
+      where: {
+        id: testId,
+      },
 
-    include: {
-      questions: {
-        include: {
-          options: {
-            orderBy: {
-              order: "asc",
+      include: {
+        questions: {
+          orderBy: {
+            order: "asc",
+          },
+
+          include: {
+            question: {
+              include: {
+                answerOptions: {
+                  orderBy: {
+                    order: "asc",
+                  },
+                },
+              },
             },
           },
         },
-
-        orderBy: {
-          order: "asc",
-        },
       },
-    },
-  });
+    });
 
   if (!prismaTest) {
     notFound();
   }
 
-  const test = mapPrismaTest(prismaTest);
+  const test =
+    mapPrismaTest(prismaTest);
 
   return (
     <main className="min-h-screen bg-[#F8FAFC]">
@@ -79,7 +88,6 @@ export default async function TestPage({
 
       {/* ==========================================
           Синхронізація стану сесії з сервером
-          (блокування, час, поточне питання)
          ========================================== */}
 
       <SessionMonitor />
@@ -118,6 +126,7 @@ export default async function TestPage({
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         <div className="grid grid-cols-12 gap-8">
+
           {/* ======================================
               Питання
              ====================================== */}
@@ -133,6 +142,7 @@ export default async function TestPage({
           <div className="col-span-4">
             <Sidebar />
           </div>
+
         </div>
       </div>
     </main>
