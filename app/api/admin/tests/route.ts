@@ -77,6 +77,7 @@ export async function GET() {
  *   subject: string;
  *   duration: number;
  *   maxPoints?: number;
+ *   schoolYear?: string;
  *   isPublished?: boolean;
  *   codeRequired?: boolean;
  *   accessCode?: string | null;
@@ -170,6 +171,12 @@ export async function POST(
       );
     }
 
+    const schoolYear =
+      typeof body.schoolYear === "string" &&
+      body.schoolYear.trim()
+        ? body.schoolYear.trim()
+        : "2026";
+
     const isPublished =
       typeof body.isPublished === "boolean"
         ? body.isPublished
@@ -195,12 +202,32 @@ export async function POST(
       ? accessCode
       : null;
 
+    /*
+     * displayOrder є обов'язковим і унікальним.
+     *
+     * Визначаємо наступний порядковий номер
+     * на основі максимального існуючого.
+     */
+    const lastTest = await prisma.test.findFirst({
+      orderBy: {
+        displayOrder: "desc",
+      },
+      select: {
+        displayOrder: true,
+      },
+    });
+
+    const displayOrder =
+      (lastTest?.displayOrder ?? 0) + 1;
+
     const test = await prisma.test.create({
       data: {
         title,
         subject,
+        schoolYear,
         duration,
         maxPoints,
+        displayOrder,
         isPublished,
         codeRequired,
         accessCode: finalAccessCode,
