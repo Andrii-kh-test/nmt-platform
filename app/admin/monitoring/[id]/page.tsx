@@ -2,7 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
+
 import MonitoringControls from "./MonitoringControls";
+import MonitoringSessionState from "./MonitoringSessionState";
+
 type Props = {
   params: Promise<{
     id: string;
@@ -18,41 +21,6 @@ function formatDate(date: Date | null) {
     dateStyle: "short",
     timeStyle: "medium",
   });
-}
-
-function formatTime(seconds: number) {
-  if (seconds <= 0) {
-    return "00:00";
-  }
-
-  const hours = Math.floor(seconds / 3600);
-
-  const minutes = Math.floor(
-    (seconds % 3600) / 60
-  );
-
-  const remainingSeconds = seconds % 60;
-
-  if (hours > 0) {
-    return `${String(hours).padStart(
-      2,
-      "0"
-    )}:${String(minutes).padStart(
-      2,
-      "0"
-    )}:${String(remainingSeconds).padStart(
-      2,
-      "0"
-    )}`;
-  }
-
-  return `${String(minutes).padStart(
-    2,
-    "0"
-  )}:${String(remainingSeconds).padStart(
-    2,
-    "0"
-  )}`;
 }
 
 function getParticipantName(
@@ -82,7 +50,10 @@ export default async function MonitoringDetailsPage({
 
   const sessionId = Number(id);
 
-  if (!Number.isInteger(sessionId) || sessionId <= 0) {
+  if (
+    !Number.isInteger(sessionId) ||
+    sessionId <= 0
+  ) {
     notFound();
   }
 
@@ -118,7 +89,9 @@ export default async function MonitoringDetailsPage({
   return (
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="mx-auto max-w-5xl">
-        {/* Верхня панель */}
+        {/* =================================================
+            ВЕРХНЯ ПАНЕЛЬ
+        ================================================= */}
 
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -155,7 +128,9 @@ export default async function MonitoringDetailsPage({
           </Link>
         </div>
 
-        {/* Статус */}
+        {/* =================================================
+            СТАТУС
+        ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
           <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
@@ -195,7 +170,9 @@ export default async function MonitoringDetailsPage({
           )}
         </section>
 
-        {/* Учасник */}
+        {/* =================================================
+            УЧАСНИК
+        ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
           <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
@@ -225,7 +202,9 @@ export default async function MonitoringDetailsPage({
           </div>
         </section>
 
-        {/* Тест */}
+        {/* =================================================
+            ТЕСТ
+        ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
           <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
@@ -255,51 +234,36 @@ export default async function MonitoringDetailsPage({
           </div>
         </section>
 
-        {/* Поточний стан */}
+        {/* =================================================
+            ПОТОЧНИЙ СТАН — LIVE
+        ================================================= */}
 
-        <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
-          <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
-            Поточний стан
-          </h2>
+        <MonitoringSessionState
+          testId={session.testId}
+          sessionId={session.id}
+          initialCurrentQuestion={
+            session.currentQuestion
+          }
+          initialTimeLeft={
+            session.timeLeft
+          }
+          initialExtraTime={
+            session.extraTime
+          }
+          initialBlocked={
+            session.blocked
+          }
+          initialBlockReason={
+            session.blockReason
+          }
+          initialFinished={
+            session.finished
+          }
+        />
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-lg bg-gray-50 p-5 text-center">
-              <div className="text-sm text-gray-500">
-                Поточне питання
-              </div>
-
-              <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-                {session.currentQuestion + 1}
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-gray-50 p-5 text-center">
-              <div className="text-sm text-gray-500">
-                Залишилось часу
-              </div>
-
-              <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
-                {formatTime(
-                  session.timeLeft
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-gray-50 p-5 text-center">
-              <div className="text-sm text-gray-500">
-                Додатковий час
-              </div>
-
-              <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-                {formatTime(
-                  session.extraTime
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Час */}
+        {/* =================================================
+            ЧАС
+        ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
           <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
@@ -345,21 +309,25 @@ export default async function MonitoringDetailsPage({
           </div>
         </section>
 
-        {/* Панель керування */}
+        {/* =================================================
+            ПАНЕЛЬ КЕРУВАННЯ
+        ================================================= */}
 
         <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
-  <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
-    Керування тестуванням
-  </h2>
+          <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
+            Керування тестуванням
+          </h2>
 
-  <MonitoringControls
-    sessionId={session.id}
-    testId={session.testId}
-    blocked={session.blocked}
-  />
-</section>
+          <MonitoringControls
+            sessionId={session.id}
+            testId={session.testId}
+            blocked={session.blocked}
+          />
+        </section>
 
-        {/* Нижня кнопка */}
+        {/* =================================================
+            НИЖНЯ КНОПКА
+        ================================================= */}
 
         <div className="flex justify-center">
           <Link

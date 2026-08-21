@@ -14,7 +14,7 @@ type Props = {
 };
 
 // =====================================================
-// GET — отримання актуального стану конкретної сесії
+// GET — отримання актуального стану сесії
 //
 // Учасник отримує:
 //
@@ -31,12 +31,6 @@ type Props = {
 // ВАЖЛИВО:
 //
 // GET нічого не змінює.
-//
-// resultId береться саме з:
-// TestSession.result
-//
-// Тому результат гарантовано належить
-// конкретній сесії.
 // =====================================================
 
 export async function GET(
@@ -85,7 +79,7 @@ export async function GET(
     // =================================================
 
     if (
-      sessionId === null ||
+      !sessionId ||
       !Number.isInteger(sessionId) ||
       sessionId <= 0
     ) {
@@ -102,15 +96,6 @@ export async function GET(
 
     // =================================================
     // Знаходимо конкретну сесію
-    //
-    // ВАЖЛИВО:
-    //
-    // result.id отримуємо через relation:
-    //
-    // TestSession.result
-    //
-    // а НЕ шукаємо останній результат
-    // конкретного тесту.
     // =================================================
 
     const session =
@@ -118,7 +103,8 @@ export async function GET(
         where: {
           id: sessionId,
 
-          testId: testIdNumber,
+          testId:
+            testIdNumber,
         },
 
         select: {
@@ -157,7 +143,18 @@ export async function GET(
     }
 
     // =================================================
-    // Повертаємо актуальний стан
+    // Результат
+    //
+    // Завдяки sessionId @unique результат
+    // належить саме цій сесії.
+    // =================================================
+
+    const resultId =
+      session.result?.id ??
+      null;
+
+    // =================================================
+    // Повертаємо стан
     // =================================================
 
     return NextResponse.json({
@@ -184,12 +181,7 @@ export async function GET(
       finishedAt:
         session.finishedAt,
 
-      // ===============================================
-      // Результат саме цієї сесії
-      // ===============================================
-
-      resultId:
-        session.result?.id ?? null,
+      resultId,
     });
   } catch (error) {
     console.error(
@@ -227,9 +219,6 @@ export async function GET(
 // - blocked
 // - blockReason
 // - blockedAt
-//
-// Це критично для роботи адміністративної
-// панелі моніторингу.
 // =====================================================
 
 export async function POST(
@@ -297,7 +286,12 @@ export async function POST(
         where: {
           id: sessionId,
 
-          testId: testIdNumber,
+          testId:
+            testIdNumber,
+        },
+
+        include: {
+          result: true,
         },
       });
 
@@ -344,29 +338,69 @@ export async function POST(
             id: true,
 
             lastActivityAt: true,
+
+            currentQuestion: true,
+
+            timeLeft: true,
+
+            extraTime: true,
+
+            blocked: true,
+
+            blockReason: true,
+
+            finished: true,
+
+            finishedAt: true,
+
+            result: {
+              select: {
+                id: true,
+              },
+            },
           },
         });
 
-      return NextResponse.json(
-        updatedSession
-      );
+      return NextResponse.json({
+        id: updatedSession.id,
+
+        lastActivityAt:
+          updatedSession.lastActivityAt,
+
+        currentQuestion:
+          updatedSession.currentQuestion,
+
+        timeLeft:
+          updatedSession.timeLeft,
+
+        extraTime:
+          updatedSession.extraTime,
+
+        blocked:
+          updatedSession.blocked,
+
+        blockReason:
+          updatedSession.blockReason,
+
+        finished:
+          updatedSession.finished,
+
+        finishedAt:
+          updatedSession.finishedAt,
+
+        resultId:
+          updatedSession.result?.id ??
+          null,
+      });
     }
 
     // =================================================
-    // ВАЖЛИВО:
+    // ЗАВЕРШЕНА СЕСІЯ
     //
     // Якщо сесію вже завершено сервером,
-    // учасник не повинен мати можливості
-    // знову її "відкрити" через POST.
+    // учасник не може знову її відкрити.
     //
-    // Це особливо важливо після анулювання:
-    //
-    // finished = true
-    // blocked = true
-    // result існує
-    //
-    // У такому випадку просто повертаємо
-    // актуальний стан.
+    // Повертаємо також resultId.
     // =================================================
 
     if (session.finished) {
@@ -395,6 +429,51 @@ export async function POST(
 
         finishedAt:
           session.finishedAt,
+
+        resultId:
+          session.result?.id ??
+          null,
+      });
+    }
+
+    // =================================================
+    // Якщо сесія заблокована
+    //
+    // Учасник може продовжувати передавати heartbeat,
+    // але не повинен змінювати відповіді або питання
+    // після блокування.
+    // =================================================
+
+    if (session.blocked) {
+      return NextResponse.json({
+        id: session.id,
+
+        currentQuestion:
+          session.currentQuestion,
+
+        savedAnswers:
+          session.savedAnswers,
+
+        timeLeft:
+          session.timeLeft,
+
+        extraTime:
+          session.extraTime,
+
+        blocked: true,
+
+        blockReason:
+          session.blockReason,
+
+        finished:
+          session.finished,
+
+        finishedAt:
+          session.finishedAt,
+
+        resultId:
+          session.result?.id ??
+          null,
       });
     }
 
@@ -403,7 +482,7 @@ export async function POST(
     //
     // КРИТИЧНО:
     //
-    // Тут НІКОЛИ не повинно бути:
+    // Тут НЕ повинно бути:
     //
     // timeLeft
     // extraTime
@@ -412,11 +491,11 @@ export async function POST(
     // blockedAt
     //
     // Інакше браузер учасника може перезаписати
-    // зміни адміністратора.
+    // адміністративні зміни.
     // =================================================
 
-    const updateData:
-      Prisma.TestSessionUpdateInput = {
+    const updateData: Prisma.TestSessionUpdateInput =
+      {
         lastActivityAt:
           new Date(),
       };
@@ -457,14 +536,8 @@ export async function POST(
     // Зазвичай завершення виконується
     // через finishTest().
     //
-    // Але якщо учасник передав
-    // finished=true, дозволяємо завершити
-    // сесію звичайним способом.
-    //
-    // Адміністративне анулювання при цьому
-    // проходить через /api/session/manage/[id]
-    // і створює TestResult з finishReason
-    // "security".
+    // Якщо finished=true передано напряму,
+    // дозволяємо завершення.
     // =================================================
 
     if (
@@ -482,7 +555,7 @@ export async function POST(
     }
 
     // =================================================
-    // ОНОВЛЕННЯ СЕСІЇ
+    // ОНОВЛЕННЯ
     // =================================================
 
     const updatedSession =
@@ -492,6 +565,10 @@ export async function POST(
         },
 
         data: updateData,
+
+        include: {
+          result: true,
+        },
       });
 
     // =================================================
@@ -524,6 +601,10 @@ export async function POST(
 
       finishedAt:
         updatedSession.finishedAt,
+
+      resultId:
+        updatedSession.result?.id ??
+        null,
     });
   } catch (error) {
     console.error(
