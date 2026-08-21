@@ -185,7 +185,33 @@ export default async function ResultDetailsPage({
         },
       },
     });
+console.log(
+  "RESULT ID:",
+  result?.id
+);
 
+console.log(
+  "TEST:",
+  result?.test?.title
+);
+
+console.log(
+  "QUESTIONS COUNT:",
+  result?.test?.questions?.length
+);
+
+console.log(
+  "QUESTIONS:",
+  result?.test?.questions?.map(
+    (question) => ({
+      id: question.id,
+      order: question.order,
+      text: question.text,
+      optionsCount:
+        question.options?.length ?? 0,
+    })
+  )
+);
   if (!result) {
     notFound();
   }

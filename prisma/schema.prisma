@@ -15,7 +15,7 @@ model Test {
   schoolYear   String
   duration     Int
   maxPoints    Int
-  displayOrder Int @unique
+  displayOrder Int           @unique
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   accessCode   String?

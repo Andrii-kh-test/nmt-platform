@@ -30,310 +30,439 @@ type ShapeType =
   | "diamond";
 
 /*
- * Створення SVG для фігури
+ * ============================================================
+ * SVG ФІГУРИ
+ * ============================================================
  */
-function createShapeSvg(shape: ShapeType): SVGSVGElement {
-  const svgNS = "http://www.w3.org/2000/svg";
 
-  const svg = document.createElementNS(svgNS, "svg");
+function createShapeSvg(
+  shape: ShapeType
+): SVGSVGElement {
+  const svgNS =
+    "http://www.w3.org/2000/svg";
 
-  svg.setAttribute("width", "32");
-  svg.setAttribute("height", "24");
-  svg.setAttribute("viewBox", "0 0 32 24");
-  svg.setAttribute("xmlns", svgNS);
+  const svg =
+    document.createElementNS(
+      svgNS,
+      "svg"
+    );
 
-  svg.style.display = "inline-block";
-  svg.style.width = "32px";
-  svg.style.height = "24px";
-  svg.style.verticalAlign = "middle";
-  svg.style.overflow = "visible";
+  svg.setAttribute(
+    "width",
+    "32"
+  );
+
+  svg.setAttribute(
+    "height",
+    "24"
+  );
+
+  svg.setAttribute(
+    "viewBox",
+    "0 0 32 24"
+  );
+
+  svg.setAttribute(
+    "xmlns",
+    svgNS
+  );
+
+  svg.style.display =
+    "inline-block";
+
+  svg.style.width =
+    "32px";
+
+  svg.style.height =
+    "24px";
+
+  svg.style.verticalAlign =
+    "middle";
+
+  svg.style.overflow =
+    "visible";
 
   /*
    * ТРИКУТНИК
    */
+
   if (shape === "triangle") {
-    const polygon = document.createElementNS(
-      svgNS,
-      "polygon"
-    );
+    const polygon =
+      document.createElementNS(
+        svgNS,
+        "polygon"
+      );
 
     polygon.setAttribute(
       "points",
       "16,3 29,21 3,21"
     );
 
-    svg.appendChild(polygon);
+    svg.appendChild(
+      polygon
+    );
   }
 
   /*
    * ТРАПЕЦІЯ
    *
-   * ВАЖЛИВО:
-   * довга основа зверху,
-   * коротка основа знизу.
+   * Довга основа зверху.
+   * Коротка основа знизу.
    */
-  if (shape === "trapezoid") {
-    const polygon = document.createElementNS(
-      svgNS,
-      "polygon"
-    );
+
+  if (
+    shape === "trapezoid"
+  ) {
+    const polygon =
+      document.createElementNS(
+        svgNS,
+        "polygon"
+      );
 
     polygon.setAttribute(
       "points",
       "3,3 29,3 24,21 8,21"
     );
 
-    svg.appendChild(polygon);
+    svg.appendChild(
+      polygon
+    );
   }
 
   /*
    * КОЛО
    */
+
   if (shape === "circle") {
-    const circle = document.createElementNS(
-      svgNS,
-      "circle"
+    const circle =
+      document.createElementNS(
+        svgNS,
+        "circle"
+      );
+
+    circle.setAttribute(
+      "cx",
+      "16"
     );
 
-    circle.setAttribute("cx", "16");
-    circle.setAttribute("cy", "12");
-    circle.setAttribute("r", "9");
+    circle.setAttribute(
+      "cy",
+      "12"
+    );
 
-    svg.appendChild(circle);
+    circle.setAttribute(
+      "r",
+      "9"
+    );
+
+    svg.appendChild(
+      circle
+    );
   }
 
   /*
    * КВАДРАТ
    */
+
   if (shape === "square") {
-    const rect = document.createElementNS(
-      svgNS,
-      "rect"
+    const rect =
+      document.createElementNS(
+        svgNS,
+        "rect"
+      );
+
+    rect.setAttribute(
+      "x",
+      "7"
     );
 
-    rect.setAttribute("x", "7");
-    rect.setAttribute("y", "3");
-    rect.setAttribute("width", "18");
-    rect.setAttribute("height", "18");
+    rect.setAttribute(
+      "y",
+      "3"
+    );
 
-    svg.appendChild(rect);
+    rect.setAttribute(
+      "width",
+      "18"
+    );
+
+    rect.setAttribute(
+      "height",
+      "18"
+    );
+
+    svg.appendChild(
+      rect
+    );
   }
 
   /*
    * РОМБ
    */
+
   if (shape === "diamond") {
-    const polygon = document.createElementNS(
-      svgNS,
-      "polygon"
-    );
+    const polygon =
+      document.createElementNS(
+        svgNS,
+        "polygon"
+      );
 
     polygon.setAttribute(
       "points",
       "16,2 29,12 16,22 3,12"
     );
 
-    svg.appendChild(polygon);
+    svg.appendChild(
+      polygon
+    );
   }
 
   /*
-   * Загальний стиль ліній.
+   * Загальний стиль фігур.
    */
-  svg.querySelectorAll(
-    "polygon, circle, rect"
-  ).forEach((element) => {
-    element.setAttribute("fill", "none");
-    element.setAttribute(
-      "stroke",
-      "#111827"
+
+  svg
+    .querySelectorAll(
+      "polygon, circle, rect"
+    )
+    .forEach(
+      (element) => {
+        element.setAttribute(
+          "fill",
+          "none"
+        );
+
+        element.setAttribute(
+          "stroke",
+          "#111827"
+        );
+
+        element.setAttribute(
+          "stroke-width",
+          "2.5"
+        );
+
+        element.setAttribute(
+          "stroke-linejoin",
+          "round"
+        );
+
+        element.setAttribute(
+          "stroke-linecap",
+          "round"
+        );
+      }
     );
-    element.setAttribute(
-      "stroke-width",
-      "2.5"
-    );
-    element.setAttribute(
-      "stroke-linejoin",
-      "round"
-    );
-    element.setAttribute(
-      "stroke-linecap",
-      "round"
-    );
-  });
 
   return svg;
 }
 
 /*
  * ============================================================
- * TIPTAP NODE ДЛЯ ФІГУРИ
+ * TIPTAP NODE — ФІГУРА
  * ============================================================
  */
 
-const ShapeNode = Node.create({
-  name: "shape",
+const ShapeNode =
+  Node.create({
+    name: "shape",
 
-  group: "inline",
+    group: "inline",
 
-  inline: true,
+    inline: true,
 
-  atom: true,
+    atom: true,
 
-  selectable: true,
+    selectable: true,
 
-  draggable: false,
+    draggable: false,
 
-  addAttributes() {
-    return {
-      shape: {
-        default: "triangle",
-      },
-    };
-  },
-
-  parseHTML() {
-  return [
-    {
-      tag: "span[data-shape]",
-      getAttrs: (element) => {
-        if (!(element instanceof HTMLElement)) {
-          return false;
-        }
-
-        const shape = element.getAttribute("data-shape");
-
-        if (
-          shape === "triangle" ||
-          shape === "trapezoid" ||
-          shape === "circle" ||
-          shape === "square" ||
-          shape === "diamond"
-        ) {
-          return {
-            shape,
-          };
-        }
-
-        return false;
-      },
-    },
-  ];
-},
-
-  renderHTML({ node }) {
-    return [
-      "span",
-      {
-        "data-shape": node.attrs.shape,
-      },
-    ];
-  },
-
-  /*
-   * ==========================================================
-   * NODE VIEW
-   *
-   * Саме тут фігура реально малюється в редакторі.
-   * ==========================================================
-   */
-
-  addNodeView() {
-    return ({ node }) => {
-      const wrapper = document.createElement(
-        "span"
-      );
-
-      wrapper.setAttribute(
-        "data-shape",
-        node.attrs.shape
-      );
-
-      wrapper.className =
-        "editor-shape-node";
-
-      wrapper.style.display =
-        "inline-flex";
-
-      wrapper.style.alignItems =
-        "center";
-
-      wrapper.style.justifyContent =
-        "center";
-
-      wrapper.style.width = "36px";
-
-      wrapper.style.height = "28px";
-
-      wrapper.style.margin =
-        "0 3px";
-
-      wrapper.style.verticalAlign =
-        "middle";
-
-      wrapper.style.cursor =
-        "pointer";
-
-      wrapper.style.lineHeight =
-        "1";
-
-      const svg = createShapeSvg(
-        node.attrs.shape as ShapeType
-      );
-
-      wrapper.appendChild(svg);
-
+    addAttributes() {
       return {
-        dom: wrapper,
-
-        /*
-         * При зміні атрибутів вузла
-         * перемальовуємо SVG.
-         */
-        update(updatedNode) {
-          if (
-            updatedNode.type !== node.type
-          ) {
-            return false;
-          }
-
-          const newShape =
-            updatedNode.attrs
-              .shape as ShapeType;
-
-          wrapper.setAttribute(
-            "data-shape",
-            newShape
-          );
-
-          wrapper.innerHTML = "";
-
-          wrapper.appendChild(
-            createShapeSvg(newShape)
-          );
-
-          return true;
-        },
-
-        /*
-         * Коли фігура виділена Tiptap-ом,
-         * додаємо клас для візуального
-         * позначення.
-         */
-        selectNode() {
-          wrapper.classList.add(
-            "ProseMirror-selectednode"
-          );
-        },
-
-        deselectNode() {
-          wrapper.classList.remove(
-            "ProseMirror-selectednode"
-          );
+        shape: {
+          default:
+            "triangle",
         },
       };
-    };
-  },
-});
+    },
+
+    parseHTML() {
+      return [
+        {
+          tag: "span[data-shape]",
+
+          getAttrs:
+            (element) => {
+              if (
+                !(
+                  element instanceof
+                  HTMLElement
+                )
+              ) {
+                return false;
+              }
+
+              const shape =
+                element.getAttribute(
+                  "data-shape"
+                );
+
+              if (
+                shape ===
+                  "triangle" ||
+                shape ===
+                  "trapezoid" ||
+                shape ===
+                  "circle" ||
+                shape ===
+                  "square" ||
+                shape ===
+                  "diamond"
+              ) {
+                return {
+                  shape,
+                };
+              }
+
+              return false;
+            },
+        },
+      ];
+    },
+
+    renderHTML({
+      node,
+    }) {
+      return [
+        "span",
+        {
+          "data-shape":
+            node.attrs.shape,
+        },
+      ];
+    },
+
+    /*
+     * ========================================================
+     * NODE VIEW
+     * ========================================================
+     */
+
+    addNodeView() {
+      return ({
+        node,
+      }) => {
+        const wrapper =
+          document.createElement(
+            "span"
+          );
+
+        wrapper.setAttribute(
+          "data-shape",
+          node.attrs.shape
+        );
+
+        wrapper.className =
+          "editor-shape-node";
+
+        wrapper.style.display =
+          "inline-flex";
+
+        wrapper.style.alignItems =
+          "center";
+
+        wrapper.style.justifyContent =
+          "center";
+
+        wrapper.style.width =
+          "36px";
+
+        wrapper.style.height =
+          "28px";
+
+        wrapper.style.margin =
+          "0 3px";
+
+        wrapper.style.verticalAlign =
+          "middle";
+
+        wrapper.style.cursor =
+          "pointer";
+
+        wrapper.style.lineHeight =
+          "1";
+
+        const svg =
+          createShapeSvg(
+            node.attrs
+              .shape as ShapeType
+          );
+
+        wrapper.appendChild(
+          svg
+        );
+
+        return {
+          dom: wrapper,
+
+          /*
+           * Оновлення фігури.
+           */
+
+          update(
+            updatedNode
+          ) {
+            if (
+              updatedNode.type !==
+              node.type
+            ) {
+              return false;
+            }
+
+            const newShape =
+              updatedNode.attrs
+                .shape as ShapeType;
+
+            wrapper.setAttribute(
+              "data-shape",
+              newShape
+            );
+
+            wrapper.innerHTML =
+              "";
+
+            wrapper.appendChild(
+              createShapeSvg(
+                newShape
+              )
+            );
+
+            return true;
+          },
+
+          /*
+           * Виділення фігури.
+           */
+
+          selectNode() {
+            wrapper.classList.add(
+              "ProseMirror-selectednode"
+            );
+          },
+
+          /*
+           * Зняття виділення.
+           */
+
+          deselectNode() {
+            wrapper.classList.remove(
+              "ProseMirror-selectednode"
+            );
+          },
+        };
+      };
+    },
+  });
 
 /*
  * ============================================================
@@ -346,42 +475,92 @@ export default function RichTextEditor({
   onChange,
 }: Props) {
   const fileInputRef =
-    useRef<HTMLInputElement>(null);
+    useRef<HTMLInputElement>(
+      null
+    );
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
+  /*
+   * ==========================================================
+   * TIPTAP
+   * ==========================================================
+   */
 
-      Underline,
+  const editor =
+    useEditor({
+      /*
+       * ВАЖЛИВО:
+       *
+       * Не додаємо тут додаткові екземпляри
+       * тих самих extension, які вже
+       * реєструються StarterKit.
+       *
+       * Link та Underline залишаємо
+       * окремо для підтримки відповідних
+       * функцій.
+       */
 
-      Link.configure({
-        openOnClick: false,
-      }),
+      extensions: [
+        StarterKit.configure({
+          /*
+           * Вимикаємо потенційні дублікати.
+           */
 
-      Image,
+          link: false,
 
-      TextAlign.configure({
-        types: [
-          "heading",
-          "paragraph",
-        ],
-      }),
+          underline: false,
+        }),
 
-      ShapeNode,
-    ],
+        Underline,
 
-    content: value,
+        Link.configure({
+          openOnClick:
+            false,
 
-    immediatelyRender: false,
+          autolink:
+            false,
 
-    onUpdate({ editor }) {
-  const html = editor.getHTML();
+          defaultProtocol:
+            "https",
+        }),
 
-  console.log("EDITOR HTML:", html);
+        Image.configure({
+          inline: false,
 
-  onChange(html);
-},
-  });
+          allowBase64: false,
+        }),
+
+        TextAlign.configure({
+          types: [
+            "heading",
+            "paragraph",
+          ],
+        }),
+
+        ShapeNode,
+      ],
+
+      content: value,
+
+      /*
+       * Потрібно для Next.js / SSR.
+       */
+
+      immediatelyRender:
+        false,
+
+      /*
+       * Передача HTML назовні.
+       */
+
+      onUpdate({
+        editor,
+      }) {
+        const html =
+          editor.getHTML();
+
+        onChange(html);
+      },
+    });
 
   /*
    * ==========================================================
@@ -389,7 +568,9 @@ export default function RichTextEditor({
    * ==========================================================
    */
 
-  async function uploadImage(file: File) {
+  async function uploadImage(
+    file: File
+  ) {
     try {
       const formData =
         new FormData();
@@ -408,10 +589,21 @@ export default function RichTextEditor({
           }
         );
 
+      if (
+        !response.ok
+      ) {
+        throw new Error(
+          `Upload failed: ${response.status}`
+        );
+      }
+
       const result =
         await response.json();
 
-      if (!result.success) {
+      if (
+        !result.success ||
+        !result.url
+      ) {
         alert(
           "Не вдалося завантажити зображення."
         );
@@ -419,15 +611,22 @@ export default function RichTextEditor({
         return;
       }
 
+      if (!editor) {
+        return;
+      }
+
       editor
-        ?.chain()
+        .chain()
         .focus()
         .setImage({
           src: result.url,
         })
         .run();
     } catch (error) {
-      console.error(error);
+      console.error(
+        "IMAGE UPLOAD ERROR:",
+        error
+      );
 
       alert(
         "Помилка завантаження зображення."
@@ -461,9 +660,21 @@ export default function RichTextEditor({
       .run();
   }
 
+  /*
+   * ==========================================================
+   * Якщо редактор ще не створений
+   * ==========================================================
+   */
+
   if (!editor) {
     return null;
   }
+
+  /*
+   * ==========================================================
+   * UI
+   * ==========================================================
+   */
 
   return (
     <div className="border rounded-xl overflow-hidden bg-white">
@@ -474,7 +685,9 @@ export default function RichTextEditor({
 
       <div className="flex flex-wrap gap-2 p-3 border-b bg-slate-50">
 
-        {/* ЖИРНИЙ */}
+        {/* ====================================================
+            ЖИРНИЙ
+            ==================================================== */}
 
         <button
           type="button"
@@ -486,7 +699,9 @@ export default function RichTextEditor({
               .run()
           }
           className={`px-3 py-1 border rounded ${
-            editor.isActive("bold")
+            editor.isActive(
+              "bold"
+            )
               ? "bg-[#7A1F2B] text-white"
               : ""
           }`}
@@ -495,7 +710,9 @@ export default function RichTextEditor({
           <b>B</b>
         </button>
 
-        {/* КУРСИВ */}
+        {/* ====================================================
+            КУРСИВ
+            ==================================================== */}
 
         <button
           type="button"
@@ -507,7 +724,9 @@ export default function RichTextEditor({
               .run()
           }
           className={`px-3 py-1 border rounded ${
-            editor.isActive("italic")
+            editor.isActive(
+              "italic"
+            )
               ? "bg-[#7A1F2B] text-white"
               : ""
           }`}
@@ -516,7 +735,9 @@ export default function RichTextEditor({
           <i>I</i>
         </button>
 
-        {/* ПІДКРЕСЛЕННЯ */}
+        {/* ====================================================
+            ПІДКРЕСЛЕННЯ
+            ==================================================== */}
 
         <button
           type="button"
@@ -539,7 +760,9 @@ export default function RichTextEditor({
           <u>U</u>
         </button>
 
-        {/* МАРКОВАНИЙ СПИСОК */}
+        {/* ====================================================
+            МАРКОВАНИЙ СПИСОК
+            ==================================================== */}
 
         <button
           type="button"
@@ -550,13 +773,21 @@ export default function RichTextEditor({
               .toggleBulletList()
               .run()
           }
-          className="px-3 py-1 border rounded"
+          className={`px-3 py-1 border rounded ${
+            editor.isActive(
+              "bulletList"
+            )
+              ? "bg-[#7A1F2B] text-white"
+              : ""
+          }`}
           title="Маркований список"
         >
           • List
         </button>
 
-        {/* НУМЕРОВАНИЙ СПИСОК */}
+        {/* ====================================================
+            НУМЕРОВАНИЙ СПИСОК
+            ==================================================== */}
 
         <button
           type="button"
@@ -567,15 +798,21 @@ export default function RichTextEditor({
               .toggleOrderedList()
               .run()
           }
-          className="px-3 py-1 border rounded"
+          className={`px-3 py-1 border rounded ${
+            editor.isActive(
+              "orderedList"
+            )
+              ? "bg-[#7A1F2B] text-white"
+              : ""
+          }`}
           title="Нумерований список"
         >
           1. List
         </button>
 
-        {/* ==================================================
+        {/* ====================================================
             ВИРІВНЮВАННЯ
-            ================================================== */}
+            ==================================================== */}
 
         <button
           type="button"
@@ -583,12 +820,15 @@ export default function RichTextEditor({
             editor
               .chain()
               .focus()
-              .setTextAlign("left")
+              .setTextAlign(
+                "left"
+              )
               .run()
           }
           className={`px-3 py-1 border rounded ${
             editor.isActive({
-              textAlign: "left",
+              textAlign:
+                "left",
             })
               ? "bg-[#7A1F2B] text-white"
               : ""
@@ -604,12 +844,15 @@ export default function RichTextEditor({
             editor
               .chain()
               .focus()
-              .setTextAlign("center")
+              .setTextAlign(
+                "center"
+              )
               .run()
           }
           className={`px-3 py-1 border rounded ${
             editor.isActive({
-              textAlign: "center",
+              textAlign:
+                "center",
             })
               ? "bg-[#7A1F2B] text-white"
               : ""
@@ -625,12 +868,15 @@ export default function RichTextEditor({
             editor
               .chain()
               .focus()
-              .setTextAlign("right")
+              .setTextAlign(
+                "right"
+              )
               .run()
           }
           className={`px-3 py-1 border rounded ${
             editor.isActive({
-              textAlign: "right",
+              textAlign:
+                "right",
             })
               ? "bg-[#7A1F2B] text-white"
               : ""
@@ -640,20 +886,21 @@ export default function RichTextEditor({
           ➡
         </button>
 
-        {/* ПО ШИРИНІ */}
-
         <button
           type="button"
           onClick={() =>
             editor
               .chain()
               .focus()
-              .setTextAlign("justify")
+              .setTextAlign(
+                "justify"
+              )
               .run()
           }
           className={`px-3 py-1 border rounded ${
             editor.isActive({
-              textAlign: "justify",
+              textAlign:
+                "justify",
             })
               ? "bg-[#7A1F2B] text-white"
               : ""
@@ -663,9 +910,9 @@ export default function RichTextEditor({
           ≡
         </button>
 
-        {/* ==================================================
+        {/* ====================================================
             ФІГУРИ
-            ================================================== */}
+            ==================================================== */}
 
         <div className="flex items-center gap-1 border-l pl-2 ml-1">
 
@@ -720,10 +967,6 @@ export default function RichTextEditor({
               xmlns="http://www.w3.org/2000/svg"
             >
               <polygon
-                /*
-                 * Довга основа зверху,
-                 * коротка — знизу.
-                 */
                 points="3,3 29,3 24,21 8,21"
                 fill="none"
                 stroke="#111827"
@@ -738,7 +981,9 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() =>
-              insertShape("circle")
+              insertShape(
+                "circle"
+              )
             }
             className="px-2 py-1 border rounded bg-white hover:bg-gray-100"
             title="Вставити коло"
@@ -765,7 +1010,9 @@ export default function RichTextEditor({
           <button
             type="button"
             onClick={() =>
-              insertShape("square")
+              insertShape(
+                "square"
+              )
             }
             className="px-2 py-1 border rounded bg-white hover:bg-gray-100"
             title="Вставити квадрат"
@@ -818,9 +1065,9 @@ export default function RichTextEditor({
 
         </div>
 
-        {/* ==================================================
+        {/* ====================================================
             ЗОБРАЖЕННЯ
-            ================================================== */}
+            ==================================================== */}
 
         <button
           type="button"
@@ -838,18 +1085,18 @@ export default function RichTextEditor({
           type="file"
           accept="image/*"
           hidden
-          onChange={(e) => {
+          onChange={(event) => {
             const file =
-              e.target.files?.[0];
+              event.target.files?.[0];
 
             if (file) {
               uploadImage(file);
             }
 
-            e.target.value = "";
+            event.target.value =
+              "";
           }}
         />
-
       </div>
 
       {/* ======================================================
@@ -862,12 +1109,43 @@ export default function RichTextEditor({
       />
 
       {/* ======================================================
-          СТИЛІ ФІГУР
+          СТИЛІ
           ====================================================== */}
 
       <style jsx global>{`
         .rich-text-editor .ProseMirror {
           min-height: 220px;
+          outline: none;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          p {
+          margin-top: 0.5rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          img {
+          max-width: 100%;
+          height: auto;
+          display: block;
+          margin: 0.75rem 0;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          ul {
+          list-style-type: disc;
+          padding-left: 1.5rem;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          ol {
+          list-style-type: decimal;
+          padding-left: 1.5rem;
         }
 
         .rich-text-editor
@@ -900,6 +1178,7 @@ export default function RichTextEditor({
           overflow: visible !important;
 
           visibility: visible !important;
+
           opacity: 1 !important;
         }
 
@@ -907,10 +1186,12 @@ export default function RichTextEditor({
           .ProseMirror
           .editor-shape-node
           polygon,
+
         .rich-text-editor
           .ProseMirror
           .editor-shape-node
           circle,
+
         .rich-text-editor
           .ProseMirror
           .editor-shape-node
@@ -926,13 +1207,6 @@ export default function RichTextEditor({
           stroke-linecap: round !important;
         }
 
-        /*
-         * Виділена фігура.
-         *
-         * Tiptap додає цей клас автоматично,
-         * коли атомарний вузол виділений.
-         */
-
         .rich-text-editor
           .ProseMirror
           .editor-shape-node.ProseMirror-selectednode {
@@ -942,8 +1216,41 @@ export default function RichTextEditor({
 
           border-radius: 4px !important;
         }
-      `}</style>
 
+        .rich-text-editor
+          .ProseMirror
+          a {
+          color: #7A1F2B;
+          text-decoration: underline;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          h1 {
+          font-size: 1.875rem;
+          font-weight: 700;
+          margin-top: 1rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          margin-top: 1rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .rich-text-editor
+          .ProseMirror
+          h3 {
+          font-size: 1.25rem;
+          font-weight: 700;
+          margin-top: 1rem;
+          margin-bottom: 0.75rem;
+        }
+      `}</style>
     </div>
   );
 }
