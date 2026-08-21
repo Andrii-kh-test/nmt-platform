@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { prisma } from "@/app/lib/prisma";
+import HtmlContent from "@/app/components/common/HtmlContent";
 
 type Props = {
   params: Promise<{
@@ -36,9 +37,10 @@ function formatDuration(seconds: number) {
   if (hours > 0) {
     return `${String(hours).padStart(2, "0")}:${String(
       minutes
-    ).padStart(2, "0")}:${String(
-      remainingSeconds
-    ).padStart(2, "0")}`;
+    ).padStart(2, "0")}:${String(remainingSeconds).padStart(
+      2,
+      "0"
+    )}`;
   }
 
   return `${String(minutes).padStart(2, "0")}:${String(
@@ -48,19 +50,11 @@ function formatDuration(seconds: number) {
 
 /* ============================================================
    ОЧИЩЕННЯ HTML
-
-   Наприклад:
-
-   <p>гара<strong><em>н</em></strong>тія</p>
-
-   перетворюється на:
-
-   гарантія
+   Використовується тільки там, де HTML НЕ потрібно показувати
+   форматованим — наприклад, для коротких підсумкових рядків.
 ============================================================ */
 
-function stripHtml(
-  html: string | null | undefined
-) {
+function stripHtml(html: string | null | undefined) {
   if (!html) {
     return "";
   }
@@ -90,9 +84,7 @@ function getParticipantName(result: {
     result.middleName,
   ].filter(Boolean);
 
-  return parts.length > 0
-    ? parts.join(" ")
-    : "Не вказано";
+  return parts.length > 0 ? parts.join(" ") : "Не вказано";
 }
 
 function getFinishReason(reason: string) {
@@ -139,19 +131,15 @@ function getSavedAnswer(
     return [];
   }
 
-  const data =
-    answers as Record<string, unknown>;
-
-  const answer =
-    data[String(questionId)];
+  const data = answers as Record<string, unknown>;
+  const answer = data[String(questionId)];
 
   if (!Array.isArray(answer)) {
     return [];
   }
 
   return answer.filter(
-    (value): value is number =>
-      typeof value === "number"
+    (value): value is number => typeof value === "number"
   );
 }
 
@@ -178,31 +166,19 @@ function getQuestionStatus(
     };
   }
 
-  const correctIds =
-    question.options
-      .filter(
-        (option) =>
-          option.isCorrect
-      )
-      .map(
-        (option) =>
-          option.id
-      )
-      .sort(
-        (a, b) => a - b
-      );
+  const correctIds = question.options
+    .filter((option) => option.isCorrect)
+    .map((option) => option.id)
+    .sort((a, b) => a - b);
 
-  const selectedIds =
-    [...selectedAnswers].sort(
-      (a, b) => a - b
-    );
+  const selectedIds = [...selectedAnswers].sort(
+    (a, b) => a - b
+  );
 
   const isCorrect =
-    correctIds.length ===
-      selectedIds.length &&
+    correctIds.length === selectedIds.length &&
     correctIds.every(
-      (id, index) =>
-        id === selectedIds[index]
+      (id, index) => id === selectedIds[index]
     );
 
   if (isCorrect) {
@@ -210,8 +186,7 @@ function getQuestionStatus(
       label: "Правильно",
       className:
         "bg-green-100 text-green-700 border-green-200",
-      pointsClass:
-        "text-green-600",
+      pointsClass: "text-green-600",
       icon: "✓",
     };
   }
@@ -220,8 +195,7 @@ function getQuestionStatus(
     label: "Неправильно",
     className:
       "bg-red-100 text-red-700 border-red-200",
-    pointsClass:
-      "text-red-600",
+    pointsClass: "text-red-600",
     icon: "×",
   };
 }
@@ -238,42 +212,29 @@ function getMatchingData(question: {
   }[];
 }) {
   const leftItems = question.options
-    .filter((option) =>
-      option.text?.startsWith("L|")
-    )
+    .filter((option) => option.text?.startsWith("L|"))
     .map((option) => {
-      const parts =
-        option.text.split("|");
+      const parts = option.text.split("|");
 
       return {
         id: Number(parts[1]),
         text: parts[2] ?? "",
-        correctRightId:
-          Number(parts[3]),
+        correctRightId: Number(parts[3]),
       };
     })
-    .sort(
-      (a, b) => a.id - b.id
-    );
+    .sort((a, b) => a.id - b.id);
 
   const rightItems = question.options
-    .filter((option) =>
-      option.text?.startsWith("R|")
-    )
+    .filter((option) => option.text?.startsWith("R|"))
     .map((option) => {
-      const parts =
-        option.text.split("|");
+      const parts = option.text.split("|");
 
       return {
         id: Number(parts[1]),
-        text: parts
-          .slice(2)
-          .join("|"),
+        text: parts.slice(2).join("|"),
       };
     })
-    .sort(
-      (a, b) => a.id - b.id
-    );
+    .sort((a, b) => a.id - b.id);
 
   return {
     leftItems,
@@ -294,9 +255,7 @@ function getMatchingStatus(
   },
   selectedAnswers: number[]
 ) {
-  const {
-    leftItems,
-  } = getMatchingData(question);
+  const { leftItems } = getMatchingData(question);
 
   if (
     leftItems.length === 0 ||
@@ -324,27 +283,21 @@ function getMatchingStatus(
 
   let correctPairs = 0;
 
-  leftItems.forEach(
-    (leftItem, index) => {
-      if (
-        selectedAnswers[index] ===
-        leftItem.correctRightId
-      ) {
-        correctPairs++;
-      }
+  leftItems.forEach((leftItem, index) => {
+    if (
+      selectedAnswers[index] ===
+      leftItem.correctRightId
+    ) {
+      correctPairs++;
     }
-  );
+  });
 
-  if (
-    correctPairs ===
-    leftItems.length
-  ) {
+  if (correctPairs === leftItems.length) {
     return {
       label: "Правильно",
       className:
         "bg-green-100 text-green-700 border-green-200",
-      pointsClass:
-        "text-green-600",
+      pointsClass: "text-green-600",
       icon: "✓",
     };
   }
@@ -353,8 +306,7 @@ function getMatchingStatus(
     label: "Неправильно",
     className:
       "bg-red-100 text-red-700 border-red-200",
-    pointsClass:
-      "text-red-600",
+    pointsClass: "text-red-600",
     icon: "×",
   };
 }
@@ -372,27 +324,22 @@ function getMatchingCorrectPairs(
   },
   selectedAnswers: number[]
 ) {
-  const {
-    leftItems,
-  } = getMatchingData(question);
+  const { leftItems } = getMatchingData(question);
 
   let correctPairs = 0;
 
-  leftItems.forEach(
-    (leftItem, index) => {
-      if (
-        selectedAnswers[index] ===
-        leftItem.correctRightId
-      ) {
-        correctPairs++;
-      }
+  leftItems.forEach((leftItem, index) => {
+    if (
+      selectedAnswers[index] ===
+      leftItem.correctRightId
+    ) {
+      correctPairs++;
     }
-  );
+  });
 
   return {
     correctPairs,
-    totalPairs:
-      leftItems.length,
+    totalPairs: leftItems.length,
   };
 }
 
@@ -405,77 +352,51 @@ export default async function ResultDetailsPage({
 }: Props) {
   const { id } = await params;
 
-  const result =
-    await prisma.testResult.findUnique({
-      where: {
-        id: Number(id),
-      },
-      include: {
-        test: {
-          include: {
-            questions: {
-              orderBy: {
-                order: "asc",
-              },
-              include: {
-                options: {
-                  orderBy: {
-                    order: "asc",
-                  },
+  const result = await prisma.testResult.findUnique({
+    where: {
+      id: Number(id),
+    },
+    include: {
+      test: {
+        include: {
+          questions: {
+            orderBy: {
+              order: "asc",
+            },
+            include: {
+              options: {
+                orderBy: {
+                  order: "asc",
                 },
               },
             },
           },
         },
       },
-    });
+    },
+  });
 
   if (!result) {
     notFound();
   }
 
-  const participantName =
-    getParticipantName(result);
+  const participantName = getParticipantName(result);
 
-  const finishReason =
-    getFinishReason(
-      result.finishReason
-    );
+  const finishReason = getFinishReason(
+    result.finishReason
+  );
 
   return (
     <main className="min-h-screen bg-[#f5f5f6]">
-
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
         {/* ==================================================
             ВЕРХНЯ ПАНЕЛЬ
         ================================================== */}
 
-        <header
-          className="
-            mb-6
-            overflow-hidden
-            rounded-2xl
-            bg-[#7A1F2B]
-            shadow-lg
-          "
-        >
-          <div
-            className="
-              flex
-              flex-col
-              gap-5
-              px-6
-              py-7
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-              sm:px-8
-            "
-          >
-
+        <header className="mb-6 overflow-hidden rounded-2xl bg-[#7A1F2B] shadow-lg">
+          <div className="flex flex-col gap-5 px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-8">
             <div>
-
               <div className="mb-2 text-sm font-medium text-white/70">
                 Результат тестування
               </div>
@@ -487,7 +408,6 @@ export default async function ResultDetailsPage({
               <p className="mt-2 text-sm text-white/75 sm:text-base">
                 Повна інформація про проходження тестування
               </p>
-
             </div>
 
             <Link
@@ -513,7 +433,6 @@ export default async function ResultDetailsPage({
             >
               ← До журналу
             </Link>
-
           </div>
         </header>
 
@@ -526,21 +445,8 @@ export default async function ResultDetailsPage({
           {/* УЧАСНИК */}
 
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
             <div className="mb-5 flex items-center gap-4">
-
-              <div
-                className="
-                  flex
-                  h-12
-                  w-12
-                  items-center
-                  justify-center
-                  rounded-xl
-                  bg-[#7A1F2B]/10
-                  text-xl
-                "
-              >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
                 👤
               </div>
 
@@ -553,11 +459,9 @@ export default async function ResultDetailsPage({
                   Дані учасника тестування
                 </p>
               </div>
-
             </div>
 
             <div className="space-y-4">
-
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                   ПІБ
@@ -575,19 +479,7 @@ export default async function ResultDetailsPage({
 
                 <div className="mt-2">
                   {result.accessCode ? (
-                    <span
-                      className="
-                        inline-flex
-                        rounded-lg
-                        bg-gray-100
-                        px-3
-                        py-1.5
-                        font-mono
-                        text-base
-                        font-semibold
-                        text-gray-700
-                      "
-                    >
+                    <span className="inline-flex rounded-lg bg-gray-100 px-3 py-1.5 font-mono text-base font-semibold text-gray-700">
                       {result.accessCode}
                     </span>
                   ) : (
@@ -597,29 +489,14 @@ export default async function ResultDetailsPage({
                   )}
                 </div>
               </div>
-
             </div>
-
           </section>
 
           {/* ТЕСТ */}
 
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
             <div className="mb-5 flex items-center gap-4">
-
-              <div
-                className="
-                  flex
-                  h-12
-                  w-12
-                  items-center
-                  justify-center
-                  rounded-xl
-                  bg-[#7A1F2B]/10
-                  text-xl
-                "
-              >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
                 📝
               </div>
 
@@ -632,11 +509,9 @@ export default async function ResultDetailsPage({
                   Основна інформація про тест
                 </p>
               </div>
-
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                   Назва тесту
@@ -656,11 +531,8 @@ export default async function ResultDetailsPage({
                   {result.test.subject}
                 </div>
               </div>
-
             </div>
-
           </section>
-
         </div>
 
         {/* ==================================================
@@ -668,21 +540,8 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
           <div className="mb-5 flex items-center gap-4">
-
-            <div
-              className="
-                flex
-                h-12
-                w-12
-                items-center
-                justify-center
-                rounded-xl
-                bg-gray-100
-                text-xl
-              "
-            >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-xl">
               ⏱
             </div>
 
@@ -695,11 +554,9 @@ export default async function ResultDetailsPage({
                 Час початку, завершення та тривалість
               </p>
             </div>
-
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-
             <div className="rounded-xl bg-gray-50 p-5">
               <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                 Початок
@@ -726,14 +583,10 @@ export default async function ResultDetailsPage({
               </div>
 
               <div className="mt-2 font-mono text-xl font-bold text-[#7A1F2B]">
-                {formatDuration(
-                  result.timeSpent
-                )}
+                {formatDuration(result.timeSpent)}
               </div>
             </div>
-
           </div>
-
         </section>
 
         {/* ==================================================
@@ -741,21 +594,8 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
           <div className="mb-5 flex items-center gap-4">
-
-            <div
-              className="
-                flex
-                h-12
-                w-12
-                items-center
-                justify-center
-                rounded-xl
-                bg-[#7A1F2B]/10
-                text-xl
-              "
-            >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
               🏆
             </div>
 
@@ -768,12 +608,9 @@ export default async function ResultDetailsPage({
                 Підсумкові показники тестування
               </p>
             </div>
-
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-
-            {/* БАЛИ */}
 
             <div className="rounded-xl bg-gray-50 p-5 text-center">
               <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -781,12 +618,9 @@ export default async function ResultDetailsPage({
               </div>
 
               <div className="mt-2 text-2xl font-bold text-[#7A1F2B]">
-                {result.earnedPoints} /{" "}
-                {result.maxPoints}
+                {result.earnedPoints} / {result.maxPoints}
               </div>
             </div>
-
-            {/* ВІДСОТОК */}
 
             <div className="rounded-xl bg-gray-50 p-5 text-center">
               <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -806,8 +640,6 @@ export default async function ResultDetailsPage({
               </div>
             </div>
 
-            {/* ПРАВИЛЬНІ */}
-
             <div className="rounded-xl bg-green-50 p-5 text-center">
               <div className="text-xs font-medium uppercase tracking-wide text-green-700/60">
                 Правильні
@@ -818,8 +650,6 @@ export default async function ResultDetailsPage({
               </div>
             </div>
 
-            {/* НЕПРАВИЛЬНІ */}
-
             <div className="rounded-xl bg-red-50 p-5 text-center">
               <div className="text-xs font-medium uppercase tracking-wide text-red-700/60">
                 Неправильні
@@ -829,8 +659,6 @@ export default async function ResultDetailsPage({
                 {result.incorrect}
               </div>
             </div>
-
-            {/* ПРОПУЩЕНІ */}
 
             <div className="rounded-xl bg-gray-50 p-5 text-center">
               <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -843,7 +671,6 @@ export default async function ResultDetailsPage({
             </div>
 
           </div>
-
         </section>
 
         {/* ==================================================
@@ -851,9 +678,7 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
             <div>
               <h2 className="text-xl font-bold text-gray-900">
                 Завершення тестування
@@ -885,9 +710,7 @@ export default async function ResultDetailsPage({
 
               {finishReason.label}
             </span>
-
           </div>
-
         </section>
 
         {/* ==================================================
@@ -895,23 +718,9 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-
           <div className="mb-7">
-
             <div className="flex items-center gap-4">
-
-              <div
-                className="
-                  flex
-                  h-12
-                  w-12
-                  items-center
-                  justify-center
-                  rounded-xl
-                  bg-[#7A1F2B]/10
-                  text-xl
-                "
-              >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#7A1F2B]/10 text-xl">
                 📋
               </div>
 
@@ -924,16 +733,12 @@ export default async function ResultDetailsPage({
                   Детальний перегляд усіх завдань та відповідей учасника
                 </p>
               </div>
-
             </div>
-
           </div>
 
           <div className="space-y-6">
-
             {result.test.questions.map(
               (question, index) => {
-
                 const selectedAnswers =
                   getSavedAnswer(
                     result.answers,
@@ -941,31 +746,25 @@ export default async function ResultDetailsPage({
                   );
 
                 const isMatching =
-                  question.type ===
-                  "matching";
+                  question.type === "matching";
 
                 /* ==================================================
                    MATCHING
                 ================================================== */
 
                 if (isMatching) {
-
                   const {
                     leftItems,
                     rightItems,
-                  } =
-                    getMatchingData(
-                      question
-                    );
+                  } = getMatchingData(question);
 
                   const {
                     correctPairs,
                     totalPairs,
-                  } =
-                    getMatchingCorrectPairs(
-                      question,
-                      selectedAnswers
-                    );
+                  } = getMatchingCorrectPairs(
+                    question,
+                    selectedAnswers
+                  );
 
                   const status =
                     getMatchingStatus(
@@ -984,15 +783,11 @@ export default async function ResultDetailsPage({
                         bg-white
                       "
                     >
-
                       {/* HEADER */}
 
                       <div className="bg-gray-50 p-5">
-
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
                           <div className="flex items-center gap-4">
-
                             <div
                               className="
                                 flex
@@ -1011,7 +806,6 @@ export default async function ResultDetailsPage({
                             </div>
 
                             <div>
-
                               <div className="text-sm font-medium text-gray-500">
                                 Завдання {index + 1}
                               </div>
@@ -1022,9 +816,7 @@ export default async function ResultDetailsPage({
                                   ? "бал"
                                   : "бали"}
                               </div>
-
                             </div>
-
                           </div>
 
                           <span
@@ -1048,9 +840,7 @@ export default async function ResultDetailsPage({
 
                             {status.label}
                           </span>
-
                         </div>
-
                       </div>
 
                       {/* CONTENT */}
@@ -1060,23 +850,19 @@ export default async function ResultDetailsPage({
                         {/* УМОВА */}
 
                         <div className="mb-7">
-
                           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
                             Умова
                           </div>
 
-                          <div className="whitespace-pre-wrap text-lg leading-8 text-gray-900">
-                            {stripHtml(
-                              question.text
-                            )}
-                          </div>
-
+                          <HtmlContent
+                            html={question.text}
+                            className="text-lg leading-8 text-gray-900"
+                          />
                         </div>
 
                         {/* MATCHING */}
 
                         <div>
-
                           <div className="mb-3 text-sm font-semibold text-gray-600">
                             Відповідності учасника
                           </div>
@@ -1087,13 +873,11 @@ export default async function ResultDetailsPage({
                             </div>
                           ) : (
                             <div className="overflow-hidden rounded-xl border border-gray-200">
-
                               {leftItems.map(
                                 (
                                   leftItem,
                                   leftIndex
                                 ) => {
-
                                   const selectedRightId =
                                     selectedAnswers[
                                       leftIndex
@@ -1105,18 +889,14 @@ export default async function ResultDetailsPage({
 
                                   const selectedRight =
                                     rightItems.find(
-                                      (
-                                        right
-                                      ) =>
+                                      (right) =>
                                         right.id ===
                                         selectedRightId
                                     );
 
                                   const correctRight =
                                     rightItems.find(
-                                      (
-                                        right
-                                      ) =>
+                                      (right) =>
                                         right.id ===
                                         leftItem.correctRightId
                                     );
@@ -1140,21 +920,17 @@ export default async function ResultDetailsPage({
                                         }
                                       `}
                                     >
-
                                       {/* LEFT */}
 
                                       <div className="rounded-lg border border-gray-200 bg-white p-3">
-
                                         <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
                                           Ліва частина
                                         </div>
 
-                                        <div className="font-medium text-gray-900">
-                                          {stripHtml(
-                                            leftItem.text
-                                          )}
-                                        </div>
-
+                                        <HtmlContent
+                                          html={leftItem.text}
+                                          className="font-medium text-gray-900"
+                                        />
                                       </div>
 
                                       {/* ARROW */}
@@ -1189,12 +965,16 @@ export default async function ResultDetailsPage({
                                           }
                                         `}
                                       >
-
                                         <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
                                           Відповідь учасника
                                         </div>
 
-                                        <div
+                                        <HtmlContent
+                                          html={
+                                            selectedRight
+                                              ? selectedRight.text
+                                              : "Без відповіді"
+                                          }
                                           className={`
                                             font-medium
                                             ${
@@ -1203,50 +983,37 @@ export default async function ResultDetailsPage({
                                                 : "text-red-800"
                                             }
                                           `}
-                                        >
-                                          {selectedRight
-                                            ? stripHtml(
-                                                selectedRight.text
-                                              )
-                                            : "Без відповіді"}
-                                        </div>
+                                        />
 
                                         {!correct &&
                                           correctRight && (
                                             <div className="mt-3 border-t border-red-200 pt-2">
-
                                               <div className="text-xs font-medium text-gray-500">
                                                 Правильна відповідність
                                               </div>
 
-                                              <div className="mt-1 text-sm font-semibold text-green-700">
-                                                {stripHtml(
+                                              <HtmlContent
+                                                html={
                                                   correctRight.text
-                                                )}
-                                              </div>
-
+                                                }
+                                                className="mt-1 text-sm font-semibold text-green-700"
+                                              />
                                             </div>
                                           )}
-
                                       </div>
-
                                     </div>
                                   );
                                 }
                               )}
-
                             </div>
                           )}
-
                         </div>
 
                         {/* ПІДСУМОК MATCHING */}
 
                         {totalPairs > 0 && (
                           <div className="mt-6 rounded-xl bg-gray-50 p-5">
-
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
                               <div>
                                 <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
                                   Результат відповідності
@@ -1280,14 +1047,10 @@ export default async function ResultDetailsPage({
                                 )}
                                 %
                               </div>
-
                             </div>
-
                           </div>
                         )}
-
                       </div>
-
                     </article>
                   );
                 }
@@ -1304,8 +1067,7 @@ export default async function ResultDetailsPage({
 
                 const correctOptions =
                   question.options.filter(
-                    (option) =>
-                      option.isCorrect
+                    (option) => option.isCorrect
                   );
 
                 const selectedOptions =
@@ -1327,15 +1089,11 @@ export default async function ResultDetailsPage({
                       bg-white
                     "
                   >
-
                     {/* HEADER */}
 
                     <div className="bg-gray-50 p-5">
-
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
                         <div className="flex items-center gap-4">
-
                           <div
                             className="
                               flex
@@ -1354,7 +1112,6 @@ export default async function ResultDetailsPage({
                           </div>
 
                           <div>
-
                             <div className="text-sm font-medium text-gray-500">
                               Завдання {index + 1}
                             </div>
@@ -1365,9 +1122,7 @@ export default async function ResultDetailsPage({
                                 ? "бал"
                                 : "бали"}
                             </div>
-
                           </div>
-
                         </div>
 
                         <span
@@ -1391,9 +1146,7 @@ export default async function ResultDetailsPage({
 
                           {status.label}
                         </span>
-
                       </div>
-
                     </div>
 
                     {/* CONTENT */}
@@ -1403,34 +1156,27 @@ export default async function ResultDetailsPage({
                       {/* УМОВА */}
 
                       <div className="mb-7">
-
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
                           Умова
                         </div>
 
-                        <div className="whitespace-pre-wrap text-lg leading-8 text-gray-900">
-                          {stripHtml(
-                            question.text
-                          )}
-                        </div>
-
+                        <HtmlContent
+                          html={question.text}
+                          className="text-lg leading-8 text-gray-900"
+                        />
                       </div>
 
                       {/* ВАРІАНТИ */}
 
                       {question.options.length > 0 && (
-
                         <div>
-
                           <div className="mb-3 text-sm font-semibold text-gray-600">
                             Варіанти відповідей
                           </div>
 
                           <div className="space-y-3">
-
                             {question.options.map(
                               (option) => {
-
                                 const selected =
                                   selectedAnswers.includes(
                                     option.id
@@ -1439,24 +1185,24 @@ export default async function ResultDetailsPage({
                                 const correct =
                                   option.isCorrect;
 
-                                let className =
+                                let optionClass =
                                   "border-gray-200 bg-white";
 
                                 if (
                                   correct &&
                                   selected
                                 ) {
-                                  className =
+                                  optionClass =
                                     "border-green-300 bg-green-50";
                                 } else if (
                                   correct
                                 ) {
-                                  className =
+                                  optionClass =
                                     "border-green-200 bg-green-50/70";
                                 } else if (
                                   selected
                                 ) {
-                                  className =
+                                  optionClass =
                                     "border-red-300 bg-red-50";
                                 }
 
@@ -1468,11 +1214,12 @@ export default async function ResultDetailsPage({
                                       border
                                       p-4
                                       transition
-                                      ${className}
+                                      ${optionClass}
                                     `}
                                   >
-
                                     <div className="flex items-start gap-3">
+
+                                      {/* ЛІТЕРА */}
 
                                       <div
                                         className="
@@ -1497,16 +1244,15 @@ export default async function ResultDetailsPage({
                                         )}
                                       </div>
 
-                                      <div className="min-w-0 flex-1">
+                                      {/* ТЕКСТ */}
 
-                                        <div className="text-base leading-7 text-gray-900">
-                                          {stripHtml(
-                                            option.text
-                                          )}
-                                        </div>
+                                      <div className="min-w-0 flex-1">
+                                        <HtmlContent
+                                          html={option.text}
+                                          className="text-base leading-7 text-gray-900"
+                                        />
 
                                         <div className="mt-3 flex flex-wrap gap-2">
-
                                           {selected && (
                                             <span
                                               className="
@@ -1538,38 +1284,32 @@ export default async function ResultDetailsPage({
                                               Правильна відповідь
                                             </span>
                                           )}
-
                                         </div>
-
                                       </div>
-
                                     </div>
-
                                   </div>
                                 );
                               }
                             )}
-
                           </div>
-
                         </div>
                       )}
 
                       {/* ПІДСУМОК */}
 
                       <div className="mt-6 border-t border-gray-200 pt-5">
-
                         <div className="grid gap-5 md:grid-cols-2">
 
-                          <div className="rounded-xl bg-gray-50 p-4">
+                          {/* ОБРАНО */}
 
+                          <div className="rounded-xl bg-gray-50 p-4">
                             <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                               Обрано
                             </div>
 
                             <div className="mt-2 font-semibold leading-6 text-gray-900">
-
-                              {selectedOptions.length > 0
+                              {selectedOptions.length >
+                              0
                                 ? selectedOptions
                                     .map(
                                       (option) =>
@@ -1579,13 +1319,12 @@ export default async function ResultDetailsPage({
                                     )
                                     .join(", ")
                                 : "Без відповіді"}
-
                             </div>
-
                           </div>
 
-                          <div className="rounded-xl bg-gray-50 p-4">
+                          {/* ПРАВИЛЬНА ВІДПОВІДЬ */}
 
+                          <div className="rounded-xl bg-gray-50 p-4">
                             <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                               Правильна відповідь
                             </div>
@@ -1598,8 +1337,8 @@ export default async function ResultDetailsPage({
                                 ${status.pointsClass}
                               `}
                             >
-
-                              {correctOptions.length > 0
+                              {correctOptions.length >
+                              0
                                 ? correctOptions
                                     .map(
                                       (option) =>
@@ -1609,24 +1348,17 @@ export default async function ResultDetailsPage({
                                     )
                                     .join(", ")
                                 : "Не визначено"}
-
                             </div>
-
                           </div>
 
                         </div>
-
                       </div>
-
                     </div>
-
                   </article>
                 );
               }
             )}
-
           </div>
-
         </section>
 
         {/* ==================================================
@@ -1634,7 +1366,6 @@ export default async function ResultDetailsPage({
         ================================================== */}
 
         <div className="mt-7 flex justify-center">
-
           <Link
             href="/admin/results"
             className="
@@ -1656,13 +1387,11 @@ export default async function ResultDetailsPage({
           >
             ← Повернутися до журналу
           </Link>
-
         </div>
 
         <div className="py-8 text-center text-xs text-gray-400">
           Адміністративна панель платформи тестування
         </div>
-
       </div>
     </main>
   );
