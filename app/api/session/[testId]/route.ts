@@ -12,13 +12,20 @@ import { prisma } from "@/app/lib/prisma";
 //
 // GET /api/session/[testId]?sessionId=123
 //
-// Повертає актуальний стан сесії учасника.
+// Повертає актуальний стан сесії.
 //
-// Використовується:
-// - SessionMonitor
-// - MonitoringSessionState
-// - RestoreSession
-// - адміністративний моніторинг
+// ВАЖЛИВО:
+//
+// GET НЕ ОНОВЛЮЄ БАЗУ ДАНИХ.
+//
+// Це принципова зміна.
+//
+// Раніше кожен GET кожні 2 секунди робив UPDATE
+// testSession, через що виникало:
+// P2024 - Timed out fetching a new connection
+//
+// Тепер GET тільки читає БД та розраховує
+// актуальний timeLeft.
 // =====================================================
 
 export async function GET(
@@ -57,8 +64,7 @@ export async function GET(
     if (!sessionIdParam) {
       return NextResponse.json(
         {
-          error:
-            "Не передано id сесії.",
+          error: "Не передано id сесії.",
         },
         {
           status: 400,
@@ -75,8 +81,7 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          error:
-            "Некоректний id сесії.",
+          error: "Некоректний id сесії.",
         },
         {
           status: 400,
@@ -85,7 +90,9 @@ export async function GET(
     }
 
     // ===================================================
-    // Завантажуємо сесію
+    // ОДНЕ ЧИТАННЯ БД
+    //
+    // ЖОДНОГО UPDATE.
     // ===================================================
 
     const session =
@@ -125,6 +132,10 @@ export async function GET(
         },
       });
 
+    // ===================================================
+    // СЕСІЮ НЕ ЗНАЙДЕНО
+    // ===================================================
+
     if (!session) {
       return NextResponse.json(
         {
@@ -138,7 +149,7 @@ export async function GET(
     }
 
     // ===================================================
-    // Перевіряємо, що сесія належить цьому тесту
+    // ПЕРЕВІРКА TEST ID
     // ===================================================
 
     if (
@@ -157,9 +168,9 @@ export async function GET(
     }
 
     // ===================================================
-    // Якщо сесія завершена
+    // ЗАВЕРШЕНА СЕСІЯ
     //
-    // Нічого більше не перераховуємо.
+    // Для завершеної сесії нічого не перераховуємо.
     // ===================================================
 
     if (session.finished) {
@@ -178,17 +189,15 @@ export async function GET(
           savedAnswers:
             session.savedAnswers,
 
-          timeLeft:
-            Math.max(
-              0,
-              session.timeLeft
-            ),
+          timeLeft: Math.max(
+            0,
+            session.timeLeft
+          ),
 
-          extraTime:
-            Math.max(
-              0,
-              session.extraTime
-            ),
+          extraTime: Math.max(
+            0,
+            session.extraTime
+          ),
 
           finished: true,
 
@@ -230,18 +239,19 @@ export async function GET(
     }
 
     // ===================================================
-    // РОЗРАХУНОК АКТУАЛЬНОГО ЧАСУ
-    //
-    // Час зменшується сервером на основі:
-    //
-    // timeLeft
-    // -
-    // кількість секунд від lastActivityAt
+    // АКТУАЛЬНИЙ ЧАС
     //
     // ВАЖЛИВО:
     //
-    // lastActivityAt оновлюється heartbeat-ом.
+    // Ми НЕ записуємо його назад у БД.
     //
+    // timeLeft у БД залишається базовим серверним
+    // значенням.
+    //
+    // Адміністративне +5 хвилин змінює timeLeft
+    // у БД.
+    //
+    // Наступний GET побачить уже нове значення.
     // ===================================================
 
     const now = new Date();
@@ -264,237 +274,90 @@ export async function GET(
     let actualTimeLeft =
       Math.max(
         0,
-        session.timeLeft -
-          elapsedSeconds
+        Math.floor(
+          session.timeLeft -
+            elapsedSeconds
+        )
       );
 
     // ===================================================
-    // Якщо час вичерпано
+    // ЗАБЛОКОВАНА СЕСІЯ
+    //
+    // Якщо адміністратор заблокував сесію,
+    // не дозволяємо локальному відліку впливати
+    // на її стан.
+    //
+    // Повертаємо поточний серверний timeLeft.
     // ===================================================
 
-    if (
-      actualTimeLeft <= 0 &&
-      !session.blocked
-    ) {
-      actualTimeLeft = 0;
-
-      // -------------------------------------------------
-      // Не створюємо результат безпосередньо тут.
-      //
-      // Просто фіксуємо timeLeft = 0.
-      //
-      // Завершення результату має виконувати
-      // існуючий механізм завершення тесту.
-      // -------------------------------------------------
-
-      const updated =
-        await prisma.testSession.update({
-          where: {
-            id: session.id,
-          },
-
-          data: {
-            timeLeft: 0,
-            lastActivityAt: now,
-          },
-
-          select: {
-            id: true,
-            testId: true,
-            participantId: true,
-            currentQuestion: true,
-            savedAnswers: true,
-            timeLeft: true,
-            extraTime: true,
-            finished: true,
-            finishedAt: true,
-            blocked: true,
-            blockReason: true,
-            blockedAt: true,
-            startedAt: true,
-            createdAt: true,
-            updatedAt: true,
-            lastActivityAt: true,
-
-            result: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        });
-
-      return NextResponse.json(
-        {
-          id: updated.id,
-
-          testId: updated.testId,
-
-          participantId:
-            updated.participantId,
-
-          currentQuestion:
-            updated.currentQuestion,
-
-          savedAnswers:
-            updated.savedAnswers,
-
-          timeLeft: 0,
-
-          extraTime:
-            Math.max(
-              0,
-              updated.extraTime
-            ),
-
-          finished:
-            updated.finished,
-
-          finishedAt:
-            updated.finishedAt,
-
-          blocked:
-            updated.blocked,
-
-          blockReason:
-            updated.blockReason,
-
-          blockedAt:
-            updated.blockedAt,
-
-          startedAt:
-            updated.startedAt,
-
-          createdAt:
-            updated.createdAt,
-
-          updatedAt:
-            updated.updatedAt,
-
-          lastActivityAt:
-            updated.lastActivityAt,
-
-          resultId:
-            updated.result?.id ??
-            null,
-        },
-        {
-          headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate, proxy-revalidate",
-          },
-        }
+    if (session.blocked) {
+      actualTimeLeft = Math.max(
+        0,
+        Math.floor(session.timeLeft)
       );
     }
 
     // ===================================================
-    // Якщо час ще є
+    // ВІДПОВІДЬ
     //
-    // Оновлюємо серверне значення.
-    // ===================================================
-
-    const updated =
-      await prisma.testSession.update({
-        where: {
-          id: session.id,
-        },
-
-        data: {
-          timeLeft: actualTimeLeft,
-          lastActivityAt: now,
-        },
-
-        select: {
-          id: true,
-          testId: true,
-          participantId: true,
-
-          currentQuestion: true,
-          savedAnswers: true,
-
-          timeLeft: true,
-          extraTime: true,
-
-          finished: true,
-          finishedAt: true,
-
-          blocked: true,
-          blockReason: true,
-          blockedAt: true,
-
-          startedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          lastActivityAt: true,
-
-          result: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      });
-
-    // ===================================================
-    // Відповідь
+    // НІЯКОГО UPDATE.
     // ===================================================
 
     return NextResponse.json(
       {
-        id: updated.id,
+        id: session.id,
 
-        testId: updated.testId,
+        testId: session.testId,
 
         participantId:
-          updated.participantId,
+          session.participantId,
 
         currentQuestion:
-          updated.currentQuestion,
+          session.currentQuestion,
 
         savedAnswers:
-          updated.savedAnswers,
+          session.savedAnswers,
 
         timeLeft:
-          Math.max(
-            0,
-            updated.timeLeft
-          ),
+          actualTimeLeft,
 
         extraTime:
           Math.max(
             0,
-            updated.extraTime
+            Math.floor(
+              session.extraTime
+            )
           ),
 
         finished:
-          updated.finished,
+          session.finished,
 
         finishedAt:
-          updated.finishedAt,
+          session.finishedAt,
 
         blocked:
-          updated.blocked,
+          session.blocked,
 
         blockReason:
-          updated.blockReason,
+          session.blockReason,
 
         blockedAt:
-          updated.blockedAt,
+          session.blockedAt,
 
         startedAt:
-          updated.startedAt,
+          session.startedAt,
 
         createdAt:
-          updated.createdAt,
+          session.createdAt,
 
         updatedAt:
-          updated.updatedAt,
+          session.updatedAt,
 
         lastActivityAt:
-          updated.lastActivityAt,
+          session.lastActivityAt,
 
         resultId:
-          updated.result?.id ??
+          session.result?.id ??
           null,
       },
       {
@@ -532,13 +395,14 @@ export async function GET(
 // 3. збереження savedAnswers
 // 4. завершення сесії
 //
-// Учасник НЕ може змінювати:
+// УЧАСНИК НЕ МОЖЕ ЗМІНЮВАТИ:
 //
 // - timeLeft
 // - extraTime
 // - blocked
 // - blockReason
 // - blockedAt
+//
 // =====================================================
 
 export async function POST(
@@ -601,7 +465,7 @@ export async function POST(
     }
 
     // ===================================================
-    // Завантажуємо сесію
+    // ЗНАХОДИМО СЕСІЮ
     // ===================================================
 
     const session =
@@ -613,6 +477,7 @@ export async function POST(
         select: {
           id: true,
           testId: true,
+
           currentQuestion: true,
           savedAnswers: true,
 
@@ -650,7 +515,7 @@ export async function POST(
     }
 
     // ===================================================
-    // Перевірка testId
+    // ПЕРЕВІРКА TEST ID
     // ===================================================
 
     if (
@@ -673,16 +538,13 @@ export async function POST(
     // ===================================================
     // HEARTBEAT
     //
-    // heartbeat НЕ змінює:
+    // Heartbeat змінює ТІЛЬКИ lastActivityAt.
     //
-    // timeLeft
-    // currentQuestion
-    // savedAnswers
-    // finished
-    // blocked
+    // Особливо важливо:
     //
-    // Він тільки повідомляє сервер,
-    // що учасник активний.
+    // timeLeft НЕ змінюємо.
+    // blocked НЕ змінюємо.
+    // extraTime НЕ змінюємо.
     // ===================================================
 
     if (heartbeat === true) {
@@ -699,15 +561,20 @@ export async function POST(
           select: {
             id: true,
             testId: true,
+
             currentQuestion: true,
             savedAnswers: true,
+
             timeLeft: true,
             extraTime: true,
+
             finished: true,
             finishedAt: true,
+
             blocked: true,
             blockReason: true,
             blockedAt: true,
+
             startedAt: true,
             lastActivityAt: true,
 
@@ -734,13 +601,17 @@ export async function POST(
           timeLeft:
             Math.max(
               0,
-              updated.timeLeft
+              Math.floor(
+                updated.timeLeft
+              )
             ),
 
           extraTime:
             Math.max(
               0,
-              updated.extraTime
+              Math.floor(
+                updated.extraTime
+              )
             ),
 
           finished:
@@ -771,33 +642,24 @@ export async function POST(
         {
           headers: {
             "Cache-Control":
-              "no-store",
+              "no-store, no-cache, must-revalidate",
           },
         }
       );
     }
 
     // ===================================================
-    // ПІДГОТОВКА ДАНИХ ОНОВЛЕННЯ
+    // ПІДГОТОВКА ОНОВЛЕННЯ
     // ===================================================
 
-    const updateData: {
-      currentQuestion?: number;
-
-      savedAnswers?:
-        Prisma.InputJsonValue;
-
-      finished?: boolean;
-
-      finishedAt?: Date | null;
-
-      lastActivityAt: Date;
-    } = {
-      lastActivityAt: now,
-    };
+    const updateData:
+      Prisma.TestSessionUpdateInput =
+      {
+        lastActivityAt: now,
+      };
 
     // ===================================================
-    // Поточне питання
+    // CURRENT QUESTION
     // ===================================================
 
     if (
@@ -813,45 +675,35 @@ export async function POST(
     }
 
     // ===================================================
-    // Збережені відповіді
+    // SAVED ANSWERS
     // ===================================================
 
     if (
       savedAnswers !==
       undefined
     ) {
-      try {
+      if (savedAnswers === null) {
+        updateData.savedAnswers =
+          Prisma.JsonNull;
+      } else {
         updateData.savedAnswers =
           savedAnswers as Prisma.InputJsonValue;
-      } catch {
-        return NextResponse.json(
-          {
-            error:
-              "Некоректний формат збережених відповідей.",
-          },
-          {
-            status: 400,
-          }
-        );
       }
     }
 
     // ===================================================
-    // ЗАВЕРШЕННЯ СЕСІЇ
+    // FINISHED
     //
-    // ВАЖЛИВО:
+    // Клієнт може встановити finished = true.
     //
-    // finished = false від клієнта
-    // НІКОЛИ не повертає завершену сесію
-    // у незавершений стан.
-    //
-    // finished = true дозволяється тільки
-    // для сесії, яка ще не була завершена.
+    // finished = false НІКОЛИ не повертає
+    // завершену сесію назад.
     // ===================================================
 
     if (finished === true) {
       if (!session.finished) {
-        updateData.finished = true;
+        updateData.finished =
+          true;
 
         updateData.finishedAt =
           session.finishedAt ??
@@ -862,7 +714,7 @@ export async function POST(
     // ===================================================
     // КРИТИЧНО
     //
-    // Тут НІКОЛИ НЕ повинно бути:
+    // У updateData ВІДСУТНІ:
     //
     // timeLeft
     // extraTime
@@ -870,8 +722,8 @@ export async function POST(
     // blockReason
     // blockedAt
     //
-    // Інакше браузер учасника зможе
-    // перезаписати рішення адміністратора.
+    // Отже, учасник не може своїм POST
+    // скасувати рішення адміністратора.
     // ===================================================
 
     const updated =
@@ -885,6 +737,7 @@ export async function POST(
         select: {
           id: true,
           testId: true,
+
           currentQuestion: true,
           savedAnswers: true,
 
@@ -910,7 +763,7 @@ export async function POST(
       });
 
     // ===================================================
-    // Відповідь
+    // ВІДПОВІДЬ
     // ===================================================
 
     return NextResponse.json(
@@ -928,13 +781,17 @@ export async function POST(
         timeLeft:
           Math.max(
             0,
-            updated.timeLeft
+            Math.floor(
+              updated.timeLeft
+            )
           ),
 
         extraTime:
           Math.max(
             0,
-            updated.extraTime
+            Math.floor(
+              updated.extraTime
+            )
           ),
 
         finished:
@@ -965,7 +822,7 @@ export async function POST(
       {
         headers: {
           "Cache-Control":
-            "no-store",
+            "no-store, no-cache, must-revalidate",
         },
       }
     );
