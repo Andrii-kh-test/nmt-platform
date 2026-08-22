@@ -320,25 +320,18 @@ export default async function MonitoringDetailsPage({
         ================================================= */}
 
         <MonitoringSessionState
-          testId={session.testId}
-          sessionId={session.id}
-          totalQuestions={totalQuestions}
-          initialTimeLeft={
-            session.timeLeft
-          }
-          initialExtraTime={
-            session.extraTime
-          }
-          initialBlocked={
-            session.blocked
-          }
-          initialBlockReason={
-            session.blockReason
-          }
-          initialFinished={
-            session.finished
-          }
-        />
+  testId={session.testId}
+  sessionId={session.id}
+  totalQuestions={totalQuestions}
+  initialTimeLeft={session.timeLeft}
+  initialExtraTime={session.extraTime}
+  initialBlocked={session.blocked}
+  initialBlockReason={session.blockReason}
+  initialFinished={session.finished}
+  initialCurrentQuestion={
+    session.currentQuestion
+  }
+/>
 
         {/* =================================================
             ЧАС ТА АКТИВНІСТЬ

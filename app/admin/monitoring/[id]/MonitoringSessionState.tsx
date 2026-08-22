@@ -13,17 +13,22 @@ type Props = {
   initialBlocked: boolean;
   initialBlockReason: string | null;
   initialFinished: boolean;
+  initialCurrentQuestion: number;
 };
 
 type SessionState = {
   id: number;
   currentQuestion: number;
+
   blocked: boolean;
   blockReason: string | null;
+
   timeLeft: number;
   extraTime: number;
+
   finished: boolean;
   finishedAt: string | null;
+
   resultId?: number | null;
 };
 
@@ -72,9 +77,10 @@ export default function MonitoringSessionState({
   initialBlocked,
   initialBlockReason,
   initialFinished,
+  initialCurrentQuestion,
 }: Props) {
   // =====================================================
-  // АКТУАЛЬНЕ ПОТОЧНЕ ПИТАННЯ
+  // ПОТОЧНЕ ПИТАННЯ
   //
   // currentQuestion зберігається в БД з нуля:
   //
@@ -82,28 +88,23 @@ export default function MonitoringSessionState({
   // 1 = питання №2
   // 2 = питання №3
   //
-  // Моніторинг тільки читає це значення.
-  // Самостійно його не змінює.
   // =====================================================
 
-  const [
-    currentQuestion,
-    setCurrentQuestion,
-  ] = useState(0);
-
-  // =====================================================
-  // ЧАС
-  // =====================================================
+  const [currentQuestion, setCurrentQuestion] =
+    useState(
+      Math.max(
+        0,
+        Math.floor(
+          initialCurrentQuestion
+        )
+      )
+    );
 
   const [timeLeft, setTimeLeft] =
     useState(initialTimeLeft);
 
   const [extraTime, setExtraTime] =
     useState(initialExtraTime);
-
-  // =====================================================
-  // СТАН СЕСІЇ
-  // =====================================================
 
   const [blocked, setBlocked] =
     useState(initialBlocked);
@@ -114,20 +115,15 @@ export default function MonitoringSessionState({
   const [finished, setFinished] =
     useState(initialFinished);
 
-  // =====================================================
-  // СПИСОК ПИТАНЬ
-  // =====================================================
-
-  const [
-    questionsOpen,
-    setQuestionsOpen,
-  ] = useState(false);
+  const [questionsOpen, setQuestionsOpen] =
+    useState(false);
 
   // =====================================================
-  // LIVE-ОНОВЛЕННЯ СТАНУ СЕСІЇ
+  // АКТУАЛІЗАЦІЯ СТАНУ СЕСІЇ
   //
   // Кожні 2 секунди отримуємо актуальний стан
-  // безпосередньо з БД.
+  // безпосередньо з БД через API.
+  //
   // =====================================================
 
   useEffect(() => {
@@ -135,14 +131,13 @@ export default function MonitoringSessionState({
 
     async function loadSessionState() {
       try {
-        const response =
-          await fetch(
-            `/api/session/${testId}?sessionId=${sessionId}`,
-            {
-              method: "GET",
-              cache: "no-store",
-            }
-          );
+        const response = await fetch(
+          `/api/session/${testId}?sessionId=${sessionId}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
 
         if (!response.ok) {
           return;
@@ -163,9 +158,12 @@ export default function MonitoringSessionState({
         // =================================================
         // ПОТОЧНЕ ПИТАННЯ
         //
-        // КЛЮЧОВЕ ВИПРАВЛЕННЯ:
+        // КРИТИЧНО:
         //
-        // Беремо актуальне currentQuestion з API.
+        // Раніше currentQuestion приходив з API,
+        // але тут не записувався у state.
+        //
+        // Тепер він оновлюється кожні 2 секунди.
         // =================================================
 
         if (
@@ -193,6 +191,10 @@ export default function MonitoringSessionState({
             )
           )
         );
+
+        // =================================================
+        // ДОДАТКОВИЙ ЧАС
+        // =================================================
 
         setExtraTime(
           Math.max(
@@ -230,15 +232,15 @@ export default function MonitoringSessionState({
       }
     }
 
-    // ===================================================
-    // ПЕРШЕ ЗАВАНТАЖЕННЯ
-    // ===================================================
+    // =====================================================
+    // ПЕРШЕ ОТРИМАННЯ
+    // =====================================================
 
     loadSessionState();
 
-    // ===================================================
-    // LIVE POLLING
-    // ===================================================
+    // =====================================================
+    // ПЕРІОДИЧНЕ ОНОВЛЕННЯ
+    // =====================================================
 
     const interval =
       window.setInterval(
@@ -253,10 +255,7 @@ export default function MonitoringSessionState({
         interval
       );
     };
-  }, [
-    testId,
-    sessionId,
-  ]);
+  }, [testId, sessionId]);
 
   // =====================================================
   // КІЛЬКІСТЬ ПИТАНЬ
@@ -273,16 +272,18 @@ export default function MonitoringSessionState({
   // =====================================================
   // НОМЕР ПОТОЧНОГО ПИТАННЯ ДЛЯ ВІДОБРАЖЕННЯ
   //
-  // Захист від некоректного значення.
+  // currentQuestion:
+  // 0 → №1
+  // 1 → №2
+  // 2 → №3
+  //
+  // Також захищаємося від некоректного значення.
   // =====================================================
 
-  const displayedQuestion =
+  const displayedCurrentQuestion =
     questionsCount > 0
       ? Math.min(
-          Math.max(
-            currentQuestion + 1,
-            1
-          ),
+          currentQuestion + 1,
           questionsCount
         )
       : 0;
@@ -304,8 +305,8 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {displayedQuestion > 0
-              ? `№ ${displayedQuestion}`
+            {displayedCurrentQuestion > 0
+              ? `№${displayedCurrentQuestion}`
               : "—"}
           </div>
         </div>
@@ -356,9 +357,7 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(
-              timeLeft
-            )}
+            {formatTime(timeLeft)}
           </div>
         </div>
 
@@ -371,17 +370,15 @@ export default function MonitoringSessionState({
             Додатковий час
           </div>
 
-          <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(
-              extraTime
-            )}
+          <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
+            {formatTime(extraTime)}
           </div>
         </div>
       </div>
 
-      {/* ===================================================
+      {/* =================================================
           СПИСОК ПИТАНЬ
-      =================================================== */}
+      ================================================= */}
 
       {questionsOpen && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-5">
@@ -440,9 +437,9 @@ export default function MonitoringSessionState({
         </div>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           БЛОКУВАННЯ
-      =================================================== */}
+      ================================================= */}
 
       {blocked && (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4">
@@ -459,9 +456,9 @@ export default function MonitoringSessionState({
         </div>
       )}
 
-      {/* ===================================================
+      {/* =================================================
           ЗАВЕРШЕННЯ
-      =================================================== */}
+      ================================================= */}
 
       {finished && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
