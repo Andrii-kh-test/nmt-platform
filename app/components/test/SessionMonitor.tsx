@@ -1,543 +1,606 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
-import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 import { useTestSession } from "@/app/context/TestSessionContext";
 
-type SessionState = {
+type SessionResponse = {
   id: number;
+  currentQuestion: number;
 
-  blocked: boolean;
-
-  blockReason: string | null;
+  savedAnswers:
+    | Record<number, number[]>
+    | null;
 
   timeLeft: number;
-
   extraTime: number;
 
   finished: boolean;
-
-  currentQuestion: number;
+  blocked: boolean;
+  blockReason: string | null;
 
   resultId?: number | null;
 };
 
 export default function SessionMonitor() {
-  const router = useRouter();
-
   const {
-    test,
     sessionId,
-
-    timeLeft,
-    setTimeLeft,
-
     currentQuestion,
-    setCurrentQuestion,
+    savedAnswers,
 
-    stopTimer,
-    startTimer,
+    setTimeLeft,
+    restoreSession,
+
+    test,
   } = useTestSession();
 
   // =====================================================
-  // Стан блокування
-  // =====================================================
-
-  const [blocked, setBlocked] =
-    useState(false);
-
-  const [blockReason, setBlockReason] =
-    useState<string | null>(null);
-
-  // =====================================================
-  // Стан первинної перевірки
-  // =====================================================
-
-  const [checking, setChecking] =
-    useState(true);
-
-  // =====================================================
-  // Останній серверний час
+  // STABILЬНИЙ TEST ID
   //
-  // ВАЖЛИВО:
+  // Після перевірки test !== null зберігаємо ID окремо.
   //
-  // Ми НЕ записуємо локальний timeLeft назад
-  // на сервер.
-  //
-  // Цей ref потрібен лише для визначення,
-  // чи змінився час на сервері.
+  // Це:
+  // 1. усуває TypeScript-помилку;
+  // 2. не дає вкладеним async-функціям працювати
+  //    безпосередньо з nullable test.
   // =====================================================
 
-  const lastServerTimeRef =
-    useRef<number | null>(null);
+  const testId =
+    test?.id ?? null;
 
   // =====================================================
-  // Захист від одночасних запитів
+  // ПОПЕРЕДЖЕННЯ ПРО ПАРАЛЕЛЬНІ ЗАПИТИ
   // =====================================================
 
-  const requestInProgressRef =
+  const restoringRef =
+    useRef(false);
+
+  const synchronizingRef =
     useRef(false);
 
   // =====================================================
-  // Захист від повторного переходу
-  // на сторінку результату
-  // =====================================================
-
-  const resultRedirectedRef =
-    useRef(false);
-
-  // =====================================================
-  // Зберігаємо актуальний локальний час
+  // ОСТАННІ УСПІШНО СИНХРОНІЗОВАНІ ДАНІ
   //
-  // Це потрібно, щоб callback interval
-  // не працював із застарілим значенням.
+  // Зберігаємо не response сервера,
+  // а саме payload, який ми відправили.
   // =====================================================
 
-  const timeLeftRef =
-    useRef(timeLeft);
-
-  useEffect(() => {
-    timeLeftRef.current =
-      timeLeft;
-  }, [timeLeft]);
+  const lastSentRef =
+    useRef<string>("");
 
   // =====================================================
-  // Зберігаємо актуальне поточне питання
-  // =====================================================
-
-  const currentQuestionRef =
-    useRef(currentQuestion);
-
-  useEffect(() => {
-    currentQuestionRef.current =
-      currentQuestion;
-  }, [currentQuestion]);
-
-  // =====================================================
-  // Основний моніторинг
+  // ОСТАННІ ЛОКАЛЬНІ ДАНІ
   //
-  // ВАЖЛИВО:
-  //
-  // effect НЕ залежить від timeLeft.
-  //
-  // Інакше кожна секунда створювала б новий
-  // цикл моніторингу.
+  // Використовуються для захисту від ситуації,
+  // коли старий async-запит повертається після
+  // нового стану React.
+  // =====================================================
+
+  const latestStateRef =
+    useRef({
+      sessionId:
+        sessionId,
+
+      currentQuestion:
+        currentQuestion,
+
+      savedAnswers:
+        savedAnswers ?? {},
+    });
+
+  // =====================================================
+  // ПОСТІЙНО ОНОВЛЮЄМО REF АКТУАЛЬНИМ СТАНОМ
   // =====================================================
 
   useEffect(() => {
-    if (!test?.id || !sessionId) {
-      setChecking(false);
+    latestStateRef.current = {
+      sessionId,
 
+      currentQuestion,
+
+      savedAnswers:
+        savedAnswers ?? {},
+    };
+  }, [
+    sessionId,
+    currentQuestion,
+    savedAnswers,
+  ]);
+
+  // =====================================================
+  // СИНХРОНІЗАЦІЯ СТАНУ УЧАСНИКА
+  //
+  // Надсилаємо:
+  // - currentQuestion;
+  // - savedAnswers.
+  //
+  // НЕ надсилаємо:
+  // - timeLeft;
+  // - extraTime;
+  // - blocked;
+  // - blockReason;
+  // - blockedAt.
+  //
+  // Це відповідає серверному API.
+  // =====================================================
+
+  async function synchronizeSession() {
+    const currentSessionId =
+      latestStateRef.current.sessionId;
+
+    const currentTestId =
+      testId;
+
+    if (
+      !currentSessionId ||
+      !currentTestId
+    ) {
       return;
     }
 
-    const testId = test.id;
+    if (synchronizingRef.current) {
+      return;
+    }
+
+    // ---------------------------------------------------
+    // Беремо стан саме на момент початку синхронізації.
+    // ---------------------------------------------------
+
+    const state =
+      latestStateRef.current;
+
+    const payload = {
+      sessionId:
+        currentSessionId,
+
+      currentQuestion:
+        state.currentQuestion,
+
+      savedAnswers:
+        state.savedAnswers,
+    };
+
+    const serialized =
+      JSON.stringify(payload);
+
+    // ---------------------------------------------------
+    // Нічого нового не змінилося.
+    // ---------------------------------------------------
+
+    if (
+      serialized ===
+      lastSentRef.current
+    ) {
+      return;
+    }
+
+    synchronizingRef.current =
+      true;
+
+    try {
+      const response =
+        await fetch(
+          `/api/session/${currentTestId}`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            cache: "no-store",
+
+            body: JSON.stringify(
+              payload
+            ),
+          }
+        );
+
+      if (!response.ok) {
+        console.error(
+          "SESSION MONITOR POST ERROR:",
+          response.status
+        );
+
+        return;
+      }
+
+      const data =
+        (await response.json()) as
+          | SessionResponse
+          | null;
+
+      if (!data) {
+        return;
+      }
+
+      // ---------------------------------------------------
+      // КРИТИЧНО
+      //
+      // НЕ робимо:
+      //
+      // setCurrentQuestion(
+      //   data.currentQuestion
+      // );
+      //
+      // і НЕ робимо:
+      //
+      // restoreSession(...)
+      //
+      // після звичайного POST.
+      //
+      // Інакше старий response може відкотити
+      // новий стан React.
+      // ---------------------------------------------------
+
+      if (
+        typeof data.timeLeft ===
+        "number"
+      ) {
+        setTimeLeft(
+          Math.max(
+            0,
+            Math.floor(
+              data.timeLeft
+            )
+          )
+        );
+      }
+
+      // ---------------------------------------------------
+      // Запам'ятовуємо саме payload,
+      // який успішно прийняв сервер.
+      // ---------------------------------------------------
+
+      lastSentRef.current =
+        serialized;
+    } catch (error) {
+      console.error(
+        "SESSION MONITOR ERROR:",
+        error
+      );
+    } finally {
+      synchronizingRef.current =
+        false;
+    }
+  }
+
+  // =====================================================
+  // ПОЧАТКОВЕ ВІДНОВЛЕННЯ СЕСІЇ
+  //
+  // GET один раз отримує:
+  // - currentQuestion;
+  // - savedAnswers;
+  // - timeLeft.
+  //
+  // Після цього Context відновлюється із БД.
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
+
+    if (restoringRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+
+    restoringRef.current =
+      true;
 
     const currentSessionId =
       sessionId;
 
-    let cancelled = false;
+    const currentTestId =
+      testId;
 
-    // ===================================================
-    // Перевірка сесії
-    // ===================================================
-
-    async function checkSession() {
-      if (cancelled) {
-        return;
-      }
-
-      if (
-        requestInProgressRef.current
-      ) {
-        return;
-      }
-
-      requestInProgressRef.current =
-        true;
-
+    async function restore() {
       try {
-        // ===============================================
-        // GET актуального стану
-        // ===============================================
-
         const response =
           await fetch(
-            `/api/session/${testId}?sessionId=${currentSessionId}`,
+            `/api/session/${currentTestId}?sessionId=${currentSessionId}`,
             {
               method: "GET",
-
               cache: "no-store",
-
-              headers: {
-                "Cache-Control":
-                  "no-cache",
-              },
             }
           );
 
         if (!response.ok) {
           console.error(
-            "SessionMonitor GET error:",
+            "SESSION RESTORE HTTP ERROR:",
             response.status
           );
 
           return;
         }
 
-        const session:
-          | SessionState
-          | null =
-          await response.json();
+        const data =
+          (await response.json()) as
+            | SessionResponse
+            | null;
 
-        if (!session || cancelled) {
+        if (
+          cancelled ||
+          !data
+        ) {
           return;
         }
 
-        console.log(
-          "SESSION MONITOR:",
-          session
+        const answers =
+          data.savedAnswers ?? {};
+
+        // =================================================
+        // ВІДНОВЛЮЄМО СТАН ІЗ БД
+        // =================================================
+
+        restoreSession(
+          data.currentQuestion,
+          answers,
+          data.timeLeft
         );
 
-        // ===============================================
-        // 1. ЗАВЕРШЕННЯ СЕСІЇ
-        //
-        // Це перевіряємо ПЕРШИМ.
-        //
-        // Бо після анулювання:
-        //
-        // finished = true
-        // blocked = true
-        //
-        // але учасник повинен перейти
-        // на результат, а не побачити
-        // екран блокування.
-        // ===============================================
+        // =================================================
+        // Синхронізований стан уже є серверним.
+        // =================================================
 
-        if (session.finished) {
-          stopTimer();
+        lastSentRef.current =
+          JSON.stringify({
+            sessionId:
+              currentSessionId,
 
-          // ---------------------------------------------
-          // Якщо API вже повернув resultId
-          // ---------------------------------------------
+            currentQuestion:
+              data.currentQuestion,
 
-          if (
-            session.resultId &&
-            Number.isInteger(
-              session.resultId
-            ) &&
-            session.resultId > 0
-          ) {
-            if (
-              !resultRedirectedRef.current
-            ) {
-              resultRedirectedRef.current =
-                true;
-
-              router.replace(
-                `/result/${session.resultId}`
-              );
-            }
-
-            return;
-          }
-
-          // ---------------------------------------------
-          // Якщо resultId ще не прийшов
-          //
-          // Не показуємо блокування.
-          // Продовжуємо перевіряти сервер.
-          // ---------------------------------------------
-
-          setBlocked(false);
-          setBlockReason(null);
-
-          return;
+            savedAnswers:
+              answers,
+          });
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "SESSION RESTORE ERROR:",
+            error
+          );
         }
+      } finally {
+        restoringRef.current =
+          false;
+      }
+    }
 
-        // ===============================================
-        // 2. БЛОКУВАННЯ
-        // ===============================================
+    restore();
 
-        if (session.blocked) {
-          setBlocked(true);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionId,
+    testId,
+    restoreSession,
+  ]);
 
-          setBlockReason(
-            session.blockReason ||
-              "Тестування заблоковано адміністратором."
+  // =====================================================
+  // СИНХРОНІЗАЦІЯ ПРИ ЗМІНІ:
+  //
+  // - currentQuestion;
+  // - savedAnswers.
+  //
+  // Невелика затримка потрібна, щоб React встиг
+  // сформувати остаточний стан після натискання.
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
+
+    if (restoringRef.current) {
+      return;
+    }
+
+    const timeout =
+      window.setTimeout(() => {
+        synchronizeSession();
+      }, 150);
+
+    return () => {
+      window.clearTimeout(
+        timeout
+      );
+    };
+  }, [
+    sessionId,
+    testId,
+    currentQuestion,
+    savedAnswers,
+  ]);
+
+  // =====================================================
+  // HEARTBEAT
+  //
+  // Heartbeat ТІЛЬКИ оновлює lastActivityAt.
+  //
+  // Ми навмисно НЕ беремо з його response:
+  //
+  // - currentQuestion;
+  // - savedAnswers;
+  // - timeLeft.
+  //
+  // Таким чином heartbeat не може відкотити Context.
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const currentSessionId =
+      sessionId;
+
+    const currentTestId =
+      testId;
+
+    async function heartbeat() {
+      if (cancelled) {
+        return;
+      }
+
+      try {
+        const response =
+          await fetch(
+            `/api/session/${currentTestId}`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              cache: "no-store",
+
+              body: JSON.stringify({
+                sessionId:
+                  currentSessionId,
+
+                heartbeat: true,
+              }),
+            }
           );
 
-          stopTimer();
-        } else {
-          setBlocked(false);
-
-          setBlockReason(null);
-        }
-
-        // ===============================================
-        // 3. СИНХРОНІЗАЦІЯ ПОТОЧНОГО ПИТАННЯ
-        // ===============================================
-
         if (
-          typeof session.currentQuestion ===
-            "number" &&
-          Number.isInteger(
-            session.currentQuestion
-          ) &&
-          session.currentQuestion >= 0
+          !response.ok &&
+          !cancelled
         ) {
-          const serverQuestion =
-            session.currentQuestion;
-
-          if (
-            serverQuestion !==
-            currentQuestionRef.current
-          ) {
-            currentQuestionRef.current =
-              serverQuestion;
-
-            setCurrentQuestion(
-              serverQuestion
-            );
-          }
-        }
-
-        // ===============================================
-        // 4. СИНХРОНІЗАЦІЯ ЧАСУ
-        //
-        // Серверне значення використовується
-        // тільки тоді, коли воно реально змінилося.
-        //
-        // Наприклад:
-        //
-        // сервер: 1800
-        // локально: 1799
-        //
-        // це нормальний відлік.
-        //
-        // Але:
-        //
-        // сервер: 1800
-        // локально: 1790
-        //
-        // сервер змінився суттєво —
-        // синхронізуємо.
-        // ===============================================
-
-        if (
-          typeof session.timeLeft ===
-            "number" &&
-          Number.isFinite(
-            session.timeLeft
-          )
-        ) {
-          const serverTime =
-            Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            );
-
-          const previousServerTime =
-            lastServerTimeRef.current;
-
-          // ---------------------------------------------
-          // Перша синхронізація
-          // ---------------------------------------------
-
-          if (
-            previousServerTime ===
-            null
-          ) {
-            lastServerTimeRef.current =
-              serverTime;
-
-            timeLeftRef.current =
-              serverTime;
-
-            setTimeLeft(serverTime);
-
-            if (
-              serverTime > 0 &&
-              !session.blocked
-            ) {
-              startTimer();
-            }
-          } else {
-            const difference =
-              Math.abs(
-                serverTime -
-                  previousServerTime
-              );
-
-            // -------------------------------------------
-            // Якщо серверне значення змінилося
-            // більше ніж на 2 секунди.
-            //
-            // Це означає, що:
-            //
-            // + адміністратор додав час;
-            // або
-            // + сервер змінив час.
-            // -------------------------------------------
-
-            if (difference > 2) {
-              lastServerTimeRef.current =
-                serverTime;
-
-              timeLeftRef.current =
-                serverTime;
-
-              setTimeLeft(
-                serverTime
-              );
-
-              if (
-                serverTime > 0 &&
-                !session.blocked
-              ) {
-                startTimer();
-              }
-
-              console.log(
-                "SERVER TIME SYNCHRONIZED:",
-                {
-                  previous:
-                    previousServerTime,
-
-                  current:
-                    serverTime,
-                }
-              );
-            } else {
-              // -----------------------------------------
-              // Нормальний локальний відлік.
-              //
-              // НЕ викликаємо setTimeLeft().
-              // -----------------------------------------
-
-              lastServerTimeRef.current =
-                serverTime;
-            }
-          }
+          console.error(
+            "SESSION HEARTBEAT HTTP ERROR:",
+            response.status
+          );
         }
       } catch (error) {
-        console.error(
-          "Помилка моніторингу сесії:",
-          error
-        );
-      } finally {
-        requestInProgressRef.current =
-          false;
-
         if (!cancelled) {
-          setChecking(false);
+          console.error(
+            "SESSION HEARTBEAT ERROR:",
+            error
+          );
         }
       }
     }
 
-    // ===================================================
-    // Перша перевірка одразу
-    // ===================================================
-
-    checkSession();
-
-    // ===================================================
-    // Подальші перевірки кожні 2 секунди
-    // ===================================================
+    // Перше повідомлення.
+    heartbeat();
 
     const interval =
-  setInterval(
-    checkSession,
-    5000
-  );
-
-    // ===================================================
-    // Cleanup
-    // ===================================================
+      window.setInterval(
+        heartbeat,
+        5000
+      );
 
     return () => {
       cancelled = true;
 
-      clearInterval(interval);
-
-      requestInProgressRef.current =
-        false;
+      window.clearInterval(
+        interval
+      );
     };
   }, [
-    test?.id,
     sessionId,
-    setTimeLeft,
-    setCurrentQuestion,
-    stopTimer,
-    startTimer,
-    router,
+    testId,
   ]);
 
   // =====================================================
-  // Якщо часу залишилося 0
+  // ПЕРЕД ЗАКРИТТЯМ / ПЕРЕЗАВАНТАЖЕННЯМ
+  //
+  // sendBeacon передає останній стан.
   // =====================================================
 
   useEffect(() => {
-    if (timeLeft <= 0) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
-    timeLeftRef.current =
-      timeLeft;
-  }, [timeLeft]);
+    const currentTestId =
+      testId;
 
-  // =====================================================
-  // Поки не отримали перший стан
-  // =====================================================
+    function handleBeforeUnload() {
+      const state =
+        latestStateRef.current;
 
-  if (checking) {
-    return null;
-  }
+      if (
+        !state.sessionId
+      ) {
+        return;
+      }
 
-  // =====================================================
-  // ЗАБЛОКОВАНО
-  //
-  // ВАЖЛИВО:
-  //
-  // finished перевіряється вище.
-  //
-  // Тому анульована сесія сюди
-  // не повинна потрапляти.
-  // =====================================================
+      const payload = {
+        sessionId:
+          state.sessionId,
 
-  if (blocked) {
-    return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-6">
-        <div className="w-full max-w-lg rounded-2xl bg-white p-8 text-center shadow-2xl">
-          <div className="text-6xl">
-            🔒
-          </div>
+        currentQuestion:
+          state.currentQuestion,
 
-          <h1 className="mt-6 text-3xl font-bold text-red-700">
-            Тестування заблоковано
-          </h1>
+        savedAnswers:
+          state.savedAnswers,
+      };
 
-          <p className="mt-5 text-lg leading-relaxed text-gray-700">
-            {blockReason ||
-              "Тестування заблоковано адміністратором."}
-          </p>
+      try {
+        navigator.sendBeacon(
+          `/api/session/${currentTestId}`,
+          new Blob(
+            [
+              JSON.stringify(
+                payload
+              ),
+            ],
+            {
+              type:
+                "application/json",
+            }
+          )
+        );
+      } catch (error) {
+        console.error(
+          "SESSION BEFORE UNLOAD ERROR:",
+          error
+        );
+      }
+    }
 
-          <div className="mt-6 rounded-lg bg-gray-100 p-4 text-sm text-gray-600">
-            Подальше виконання
-            завдань недоступне.
-          </div>
-        </div>
-      </div>
+    window.addEventListener(
+      "beforeunload",
+      handleBeforeUnload
     );
-  }
+
+    return () => {
+      window.removeEventListener(
+        "beforeunload",
+        handleBeforeUnload
+      );
+    };
+  }, [
+    sessionId,
+    testId,
+  ]);
+
+  // =====================================================
+  // UI ВІДСУТНІЙ
+  // =====================================================
 
   return null;
 }

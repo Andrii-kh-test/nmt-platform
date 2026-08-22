@@ -2,128 +2,285 @@
 
 import { useEffect, useState } from "react";
 
+import MonitoringQuestions from "./MonitoringQuestions";
+
 type Props = {
   testId: number;
   sessionId: number;
 
   totalQuestions: number;
 
+  // =====================================================
+  // РЕАЛЬНІ ID ПИТАНЬ
+  //
+  // Наприклад:
+  //
+  // [17, 21, 25, 31, 44]
+  //
+  // Це НЕ номери питань.
+  // Це id записів Question у БД.
+  // =====================================================
+
+  questionIds: number[];
+
   initialTimeLeft: number;
   initialExtraTime: number;
+
   initialBlocked: boolean;
   initialBlockReason: string | null;
+
   initialFinished: boolean;
+
   initialCurrentQuestion: number;
+
+  initialSavedAnswers: Record<
+    number,
+    number[]
+  >;
 };
+
+// =====================================================
+// СТАН СЕСІЇ, ЯКИЙ ПОВЕРТАЄ API
+// =====================================================
 
 type SessionState = {
   id: number;
+
   currentQuestion: number;
 
+  savedAnswers:
+    | Record<number, number[]>
+    | null;
+
   blocked: boolean;
+
   blockReason: string | null;
 
   timeLeft: number;
+
   extraTime: number;
 
   finished: boolean;
+
   finishedAt: string | null;
 
   resultId?: number | null;
 };
 
-function formatTime(seconds: number) {
-  if (seconds <= 0) {
-    return "00:00";
-  }
+// =====================================================
+// ФОРМАТУВАННЯ ЧАСУ
+// =====================================================
 
-  const hours = Math.floor(
-    seconds / 3600
-  );
+function formatTime(
+  seconds: number
+) {
+  const normalized =
+    Math.max(
+      0,
+      Math.floor(seconds)
+    );
 
-  const minutes = Math.floor(
-    (seconds % 3600) / 60
-  );
+  const hours =
+    Math.floor(
+      normalized / 3600
+    );
+
+  const minutes =
+    Math.floor(
+      (normalized % 3600) / 60
+    );
 
   const remainingSeconds =
-    seconds % 60;
+    normalized % 60;
 
   if (hours > 0) {
-    return `${String(hours).padStart(
+    return `${String(
+      hours
+    ).padStart(
       2,
       "0"
-    )}:${String(minutes).padStart(
+    )}:${String(
+      minutes
+    ).padStart(
       2,
       "0"
     )}:${String(
       remainingSeconds
-    ).padStart(2, "0")}`;
+    ).padStart(
+      2,
+      "0"
+    )}`;
   }
 
-  return `${String(minutes).padStart(
+  return `${String(
+    minutes
+  ).padStart(
     2,
     "0"
   )}:${String(
     remainingSeconds
-  ).padStart(2, "0")}`;
+  ).padStart(
+    2,
+    "0"
+  )}`;
 }
+
+// =====================================================
+// КОМПОНЕНТ
+// =====================================================
 
 export default function MonitoringSessionState({
   testId,
   sessionId,
   totalQuestions,
+  questionIds,
+
   initialTimeLeft,
   initialExtraTime,
+
   initialBlocked,
   initialBlockReason,
+
   initialFinished,
   initialCurrentQuestion,
+
+  initialSavedAnswers,
 }: Props) {
   // =====================================================
   // ПОТОЧНЕ ПИТАННЯ
   //
-  // currentQuestion зберігається в БД з нуля:
+  // У БД:
   //
   // 0 = питання №1
   // 1 = питання №2
   // 2 = питання №3
-  //
   // =====================================================
 
-  const [currentQuestion, setCurrentQuestion] =
-    useState(
-      Math.max(
-        0,
-        Math.floor(
-          initialCurrentQuestion
-        )
+  const [
+    currentQuestion,
+    setCurrentQuestion,
+  ] = useState(
+    Math.max(
+      0,
+      Math.floor(
+        initialCurrentQuestion
+      )
+    )
+  );
+
+  // =====================================================
+  // ЗБЕРЕЖЕНІ ВІДПОВІДІ
+  //
+  // КЛЮЧІ — РЕАЛЬНІ question.id
+  //
+  // Наприклад:
+  //
+  // {
+  //   "17": [2],
+  //   "21": [1, 3],
+  //   "25": [4]
+  // }
+  // =====================================================
+
+  const [
+    savedAnswers,
+    setSavedAnswers,
+  ] = useState<
+    Record<number, number[]>
+  >(
+    initialSavedAnswers ?? {}
+  );
+
+  // =====================================================
+  // ЧАС
+  // =====================================================
+
+  const [
+    timeLeft,
+    setTimeLeft,
+  ] = useState(
+    Math.max(
+      0,
+      Math.floor(
+        initialTimeLeft
+      )
+    )
+  );
+
+  // =====================================================
+  // ДОДАТКОВИЙ ЧАС
+  // =====================================================
+
+  const [
+    extraTime,
+    setExtraTime,
+  ] = useState(
+    Math.max(
+      0,
+      Math.floor(
+        initialExtraTime
+      )
+    )
+  );
+
+  // =====================================================
+  // БЛОКУВАННЯ
+  // =====================================================
+
+  const [
+    blocked,
+    setBlocked,
+  ] = useState(
+    initialBlocked
+  );
+
+  const [
+    blockReason,
+    setBlockReason,
+  ] = useState<
+    string | null
+  >(
+    initialBlockReason
+  );
+
+  // =====================================================
+  // ЗАВЕРШЕННЯ
+  // =====================================================
+
+  const [
+    finished,
+    setFinished,
+  ] = useState(
+    initialFinished
+  );
+
+  // =====================================================
+  // ВІДКРИТТЯ СПИСКУ ПИТАНЬ
+  // =====================================================
+
+  const [
+    questionsOpen,
+    setQuestionsOpen,
+  ] = useState(false);
+
+  // =====================================================
+  // КІЛЬКІСТЬ ПИТАНЬ
+  // =====================================================
+
+  const questionsCount =
+    Math.max(
+      0,
+      Math.floor(
+        totalQuestions
       )
     );
 
-  const [timeLeft, setTimeLeft] =
-    useState(initialTimeLeft);
-
-  const [extraTime, setExtraTime] =
-    useState(initialExtraTime);
-
-  const [blocked, setBlocked] =
-    useState(initialBlocked);
-
-  const [blockReason, setBlockReason] =
-    useState(initialBlockReason);
-
-  const [finished, setFinished] =
-    useState(initialFinished);
-
-  const [questionsOpen, setQuestionsOpen] =
-    useState(false);
-
   // =====================================================
-  // АКТУАЛІЗАЦІЯ СТАНУ СЕСІЇ
+  // ОТРИМАННЯ АКТУАЛЬНОГО СТАНУ СЕСІЇ
   //
-  // Кожні 2 секунди отримуємо актуальний стан
-  // безпосередньо з БД через API.
+  // Кожні 2 секунди отримуємо стан із сервера.
   //
+  // GET нічого не змінює в БД.
   // =====================================================
 
   useEffect(() => {
@@ -131,15 +288,21 @@ export default function MonitoringSessionState({
 
     async function loadSessionState() {
       try {
-        const response = await fetch(
-          `/api/session/${testId}?sessionId=${sessionId}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
+        const response =
+          await fetch(
+            `/api/session/${testId}?sessionId=${sessionId}`,
+            {
+              method: "GET",
+              cache: "no-store",
+            }
+          );
 
         if (!response.ok) {
+          console.error(
+            "MONITORING SESSION GET ERROR:",
+            response.status
+          );
+
           return;
         }
 
@@ -157,13 +320,6 @@ export default function MonitoringSessionState({
 
         // =================================================
         // ПОТОЧНЕ ПИТАННЯ
-        //
-        // КРИТИЧНО:
-        //
-        // Раніше currentQuestion приходив з API,
-        // але тут не записувався у state.
-        //
-        // Тепер він оновлюється кожні 2 секунди.
         // =================================================
 
         if (
@@ -180,41 +336,79 @@ export default function MonitoringSessionState({
         }
 
         // =================================================
+        // ЗБЕРЕЖЕНІ ВІДПОВІДІ
+        //
+        // КРИТИЧНО:
+        //
+        // data.savedAnswers має ключі:
+        //
+        // question.id
+        //
+        // а НЕ порядкові номери питань.
+        // =================================================
+
+        if (
+          data.savedAnswers !==
+            null &&
+          typeof data.savedAnswers ===
+            "object"
+        ) {
+          setSavedAnswers(
+            data.savedAnswers
+          );
+        } else {
+          setSavedAnswers({});
+        }
+
+        // =================================================
         // ЧАС
         // =================================================
 
-        setTimeLeft(
-          Math.max(
-            0,
-            Math.floor(
-              data.timeLeft
+        if (
+          typeof data.timeLeft ===
+          "number"
+        ) {
+          setTimeLeft(
+            Math.max(
+              0,
+              Math.floor(
+                data.timeLeft
+              )
             )
-          )
-        );
+          );
+        }
 
         // =================================================
         // ДОДАТКОВИЙ ЧАС
         // =================================================
 
-        setExtraTime(
-          Math.max(
-            0,
-            Math.floor(
-              data.extraTime
+        if (
+          typeof data.extraTime ===
+          "number"
+        ) {
+          setExtraTime(
+            Math.max(
+              0,
+              Math.floor(
+                data.extraTime
+              )
             )
-          )
-        );
+          );
+        }
 
         // =================================================
         // БЛОКУВАННЯ
         // =================================================
 
         setBlocked(
-          data.blocked
+          Boolean(
+            data.blocked
+          )
         );
 
         setBlockReason(
-          data.blockReason
+          data.blockReason ??
+            null
         );
 
         // =================================================
@@ -222,24 +416,28 @@ export default function MonitoringSessionState({
         // =================================================
 
         setFinished(
-          data.finished
+          Boolean(
+            data.finished
+          )
         );
       } catch (error) {
-        console.error(
-          "MONITORING SESSION STATE ERROR:",
-          error
-        );
+        if (!cancelled) {
+          console.error(
+            "MONITORING SESSION STATE ERROR:",
+            error
+          );
+        }
       }
     }
 
     // =====================================================
-    // ПЕРШЕ ОТРИМАННЯ
+    // ПЕРШЕ ЗАВАНТАЖЕННЯ
     // =====================================================
 
     loadSessionState();
 
     // =====================================================
-    // ПЕРІОДИЧНЕ ОНОВЛЕННЯ
+    // ОНОВЛЕННЯ КОЖНІ 2 СЕКУНДИ
     // =====================================================
 
     const interval =
@@ -255,46 +453,69 @@ export default function MonitoringSessionState({
         interval
       );
     };
-  }, [testId, sessionId]);
-
-  // =====================================================
-  // КІЛЬКІСТЬ ПИТАНЬ
-  // =====================================================
-
-  const questionsCount =
-    Math.max(
-      0,
-      Math.floor(
-        totalQuestions
-      )
-    );
+  }, [
+    testId,
+    sessionId,
+  ]);
 
   // =====================================================
   // НОМЕР ПОТОЧНОГО ПИТАННЯ ДЛЯ ВІДОБРАЖЕННЯ
   //
-  // currentQuestion:
   // 0 → №1
   // 1 → №2
   // 2 → №3
-  //
-  // Також захищаємося від некоректного значення.
   // =====================================================
 
   const displayedCurrentQuestion =
     questionsCount > 0
       ? Math.min(
-          currentQuestion + 1,
+          Math.max(
+            currentQuestion + 1,
+            1
+          ),
           questionsCount
         )
       : 0;
 
+  // =====================================================
+  // КІЛЬКІСТЬ ЗБЕРЕЖЕНИХ ВІДПОВІДЕЙ
+  //
+  // ВАЖЛИВО:
+  //
+  // Рахуємо тільки ті ключі savedAnswers,
+  // які відповідають реальним question.id
+  // цього тесту.
+  // =====================================================
+
+  const savedQuestionsCount =
+    questionIds.filter(
+      (questionId) =>
+        savedAnswers[
+          questionId
+        ] !== undefined
+    ).length;
+
+  // =====================================================
+  // UI
+  // =====================================================
+
   return (
     <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
+
+      {/* =================================================
+          ЗАГОЛОВОК
+      ================================================= */}
+
       <h2 className="mb-5 text-2xl font-bold text-[#7A1F2B]">
         Поточний стан
       </h2>
 
+      {/* =================================================
+          ОСНОВНІ ПОКАЗНИКИ
+      ================================================= */}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
         {/* =================================================
             ПОТОЧНЕ ПИТАННЯ
         ================================================= */}
@@ -305,7 +526,8 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {displayedCurrentQuestion > 0
+            {displayedCurrentQuestion >
+            0
               ? `№${displayedCurrentQuestion}`
               : "—"}
           </div>
@@ -324,7 +546,9 @@ export default function MonitoringSessionState({
             type="button"
             onClick={() =>
               setQuestionsOpen(
-                (previous) =>
+                (
+                  previous
+                ) =>
                   !previous
               )
             }
@@ -357,7 +581,9 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(timeLeft)}
+            {formatTime(
+              timeLeft
+            )}
           </div>
         </div>
 
@@ -371,7 +597,9 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(extraTime)}
+            {formatTime(
+              extraTime
+            )}
           </div>
         </div>
       </div>
@@ -382,58 +610,45 @@ export default function MonitoringSessionState({
 
       {questionsOpen && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-5">
-          <h3 className="mb-4 text-lg font-bold text-gray-800">
-            Перелік питань
-          </h3>
 
-          {questionsCount > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {Array.from(
-                {
-                  length:
-                    questionsCount,
-                },
-                (_, index) => {
-                  const isCurrent =
-                    index ===
-                    currentQuestion;
+          {/* ===============================================
+              ЗАГОЛОВОК СПИСКУ
+          =============================================== */}
 
-                  return (
-                    <div
-                      key={index}
-                      className={`
-                        rounded-lg
-                        border
-                        px-4
-                        py-3
-                        text-center
-                        font-medium
-                        transition
-                        ${
-                          isCurrent
-                            ? "border-[#7A1F2B] bg-[#fff1f3] text-[#7A1F2B]"
-                            : "border-gray-200 bg-white text-gray-700"
-                        }
-                      `}
-                    >
-                      Питання №{" "}
-                      {index + 1}
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
-                      {isCurrent && (
-                        <div className="mt-1 text-xs font-semibold text-[#7A1F2B]">
-                          Поточне
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-              )}
+            <h3 className="text-lg font-bold text-gray-800">
+              Перелік питань
+            </h3>
+
+            <div className="text-sm text-gray-500">
+              Збережено:{" "}
+              {
+                savedQuestionsCount
+              }{" "}
+              із{" "}
+              {questionsCount}
             </div>
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-white p-4 text-center text-sm text-gray-500">
-              Питання відсутні.
-            </div>
-          )}
+          </div>
+
+          {/* ===============================================
+              ПИТАННЯ
+          =============================================== */}
+
+          <MonitoringQuestions
+            totalQuestions={
+              questionsCount
+            }
+            questionIds={
+              questionIds
+            }
+            currentQuestion={
+              currentQuestion
+            }
+            savedAnswers={
+              savedAnswers
+            }
+          />
         </div>
       )}
 
@@ -443,6 +658,7 @@ export default function MonitoringSessionState({
 
       {blocked && (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4">
+
           <div className="font-bold text-red-700">
             Тестування заблоковано
           </div>
@@ -462,6 +678,7 @@ export default function MonitoringSessionState({
 
       {finished && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+
           <div className="font-bold text-gray-700">
             Тестування завершено
           </div>

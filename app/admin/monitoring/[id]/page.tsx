@@ -322,14 +322,48 @@ export default async function MonitoringDetailsPage({
         <MonitoringSessionState
   testId={session.testId}
   sessionId={session.id}
-  totalQuestions={totalQuestions}
-  initialTimeLeft={session.timeLeft}
-  initialExtraTime={session.extraTime}
-  initialBlocked={session.blocked}
-  initialBlockReason={session.blockReason}
-  initialFinished={session.finished}
+
+  totalQuestions={
+    totalQuestions
+  }
+
+  questionIds={
+    session.test.questions.map(
+      (item) =>
+        item.question.id
+    )
+  }
+
+  initialTimeLeft={
+    session.timeLeft
+  }
+
+  initialExtraTime={
+    session.extraTime
+  }
+
+  initialBlocked={
+    session.blocked
+  }
+
+  initialBlockReason={
+    session.blockReason
+  }
+
+  initialFinished={
+    session.finished
+  }
+
   initialCurrentQuestion={
     session.currentQuestion
+  }
+
+  initialSavedAnswers={
+    (session.savedAnswers ??
+      {}) as Record<
+      number,
+      number[]
+    >
   }
 />
 
