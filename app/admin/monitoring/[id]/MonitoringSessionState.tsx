@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 type Props = {
   testId: number;
   sessionId: number;
-  initialCurrentQuestion: number;
+
+  totalQuestions: number;
+
   initialTimeLeft: number;
   initialExtraTime: number;
   initialBlocked: boolean;
@@ -13,15 +15,9 @@ type Props = {
   initialFinished: boolean;
 };
 
-type SessionQuestion = {
-  number: number;
-  answered: boolean;
-};
-
 type SessionState = {
   id: number;
   currentQuestion: number;
-  savedAnswers: unknown;
   blocked: boolean;
   blockReason: string | null;
   timeLeft: number;
@@ -29,7 +25,6 @@ type SessionState = {
   finished: boolean;
   finishedAt: string | null;
   resultId?: number | null;
-  questions?: SessionQuestion[];
 };
 
 function formatTime(seconds: number) {
@@ -37,7 +32,9 @@ function formatTime(seconds: number) {
     return "00:00";
   }
 
-  const hours = Math.floor(seconds / 3600);
+  const hours = Math.floor(
+    seconds / 3600
+  );
 
   const minutes = Math.floor(
     (seconds % 3600) / 60
@@ -66,172 +63,47 @@ function formatTime(seconds: number) {
   ).padStart(2, "0")}`;
 }
 
-/**
- * Перевіряє, чи є відповідь на конкретне питання.
- *
- * Підтримуються основні варіанти структури
- * savedAnswers, які використовуються в тестовій системі:
- *
- * - масив відповідей:
- *   ["A", "B", null, ...]
- *
- * - об'єкт:
- *   {
- *     "0": "A",
- *     "1": "B"
- *   }
- *
- * - об'єкт із масивом:
- *   {
- *     answers: [...]
- *   }
- */
-function hasAnswer(
-  savedAnswers: unknown,
-  questionIndex: number
-): boolean {
-  if (
-    savedAnswers === null ||
-    savedAnswers === undefined
-  ) {
-    return false;
-  }
-
-  // -----------------------------------------------
-  // Якщо savedAnswers — масив
-  // -----------------------------------------------
-
-  if (Array.isArray(savedAnswers)) {
-    const answer =
-      savedAnswers[questionIndex];
-
-    if (
-      answer === null ||
-      answer === undefined
-    ) {
-      return false;
-    }
-
-    if (
-      typeof answer === "string" &&
-      answer.trim() === ""
-    ) {
-      return false;
-    }
-
-    if (
-      Array.isArray(answer) &&
-      answer.length === 0
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  // -----------------------------------------------
-  // Якщо savedAnswers — об'єкт
-  // -----------------------------------------------
-
-  if (
-    typeof savedAnswers === "object"
-  ) {
-    const object =
-      savedAnswers as Record<
-        string,
-        unknown
-      >;
-
-    // Варіант:
-    // { answers: [...] }
-
-    if (
-      Array.isArray(
-        object.answers
-      )
-    ) {
-      const answer =
-        object.answers[
-          questionIndex
-        ];
-
-      if (
-        answer === null ||
-        answer === undefined
-      ) {
-        return false;
-      }
-
-      if (
-        typeof answer === "string" &&
-        answer.trim() === ""
-      ) {
-        return false;
-      }
-
-      if (
-        Array.isArray(answer) &&
-        answer.length === 0
-      ) {
-        return false;
-      }
-
-      return true;
-    }
-
-    // Варіант:
-    // { "0": "A", "1": "B" }
-
-    const answer =
-      object[
-        String(questionIndex)
-      ];
-
-    if (
-      answer === null ||
-      answer === undefined
-    ) {
-      return false;
-    }
-
-    if (
-      typeof answer === "string" &&
-      answer.trim() === ""
-    ) {
-      return false;
-    }
-
-    if (
-      Array.isArray(answer) &&
-      answer.length === 0
-    ) {
-      return false;
-    }
-
-    return true;
-  }
-
-  return false;
-}
-
 export default function MonitoringSessionState({
   testId,
   sessionId,
-  initialCurrentQuestion,
+  totalQuestions,
   initialTimeLeft,
   initialExtraTime,
   initialBlocked,
   initialBlockReason,
   initialFinished,
 }: Props) {
-  const [currentQuestion, setCurrentQuestion] =
-    useState(initialCurrentQuestion);
+  // =====================================================
+  // АКТУАЛЬНЕ ПОТОЧНЕ ПИТАННЯ
+  //
+  // currentQuestion зберігається в БД з нуля:
+  //
+  // 0 = питання №1
+  // 1 = питання №2
+  // 2 = питання №3
+  //
+  // Моніторинг тільки читає це значення.
+  // Самостійно його не змінює.
+  // =====================================================
+
+  const [
+    currentQuestion,
+    setCurrentQuestion,
+  ] = useState(0);
+
+  // =====================================================
+  // ЧАС
+  // =====================================================
 
   const [timeLeft, setTimeLeft] =
     useState(initialTimeLeft);
 
   const [extraTime, setExtraTime] =
     useState(initialExtraTime);
+
+  // =====================================================
+  // СТАН СЕСІЇ
+  // =====================================================
 
   const [blocked, setBlocked] =
     useState(initialBlocked);
@@ -242,27 +114,35 @@ export default function MonitoringSessionState({
   const [finished, setFinished] =
     useState(initialFinished);
 
-  const [savedAnswers, setSavedAnswers] =
-    useState<unknown>(null);
+  // =====================================================
+  // СПИСОК ПИТАНЬ
+  // =====================================================
 
-  const [questionCount, setQuestionCount] =
-    useState(0);
+  const [
+    questionsOpen,
+    setQuestionsOpen,
+  ] = useState(false);
 
-  const [questionsOpen, setQuestionsOpen] =
-    useState(false);
+  // =====================================================
+  // LIVE-ОНОВЛЕННЯ СТАНУ СЕСІЇ
+  //
+  // Кожні 2 секунди отримуємо актуальний стан
+  // безпосередньо з БД.
+  // =====================================================
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSessionState() {
       try {
-        const response = await fetch(
-          `/api/session/${testId}?sessionId=${sessionId}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
+        const response =
+          await fetch(
+            `/api/session/${testId}?sessionId=${sessionId}`,
+            {
+              method: "GET",
+              cache: "no-store",
+            }
+          );
 
         if (!response.ok) {
           return;
@@ -280,17 +160,52 @@ export default function MonitoringSessionState({
           return;
         }
 
-        setCurrentQuestion(
-          data.currentQuestion
-        );
+        // =================================================
+        // ПОТОЧНЕ ПИТАННЯ
+        //
+        // КЛЮЧОВЕ ВИПРАВЛЕННЯ:
+        //
+        // Беремо актуальне currentQuestion з API.
+        // =================================================
+
+        if (
+          typeof data.currentQuestion ===
+            "number" &&
+          Number.isInteger(
+            data.currentQuestion
+          ) &&
+          data.currentQuestion >= 0
+        ) {
+          setCurrentQuestion(
+            data.currentQuestion
+          );
+        }
+
+        // =================================================
+        // ЧАС
+        // =================================================
 
         setTimeLeft(
-          data.timeLeft
+          Math.max(
+            0,
+            Math.floor(
+              data.timeLeft
+            )
+          )
         );
 
         setExtraTime(
-          data.extraTime
+          Math.max(
+            0,
+            Math.floor(
+              data.extraTime
+            )
+          )
         );
+
+        // =================================================
+        // БЛОКУВАННЯ
+        // =================================================
 
         setBlocked(
           data.blocked
@@ -300,23 +215,13 @@ export default function MonitoringSessionState({
           data.blockReason
         );
 
+        // =================================================
+        // ЗАВЕРШЕННЯ
+        // =================================================
+
         setFinished(
           data.finished
         );
-
-        setSavedAnswers(
-          data.savedAnswers
-        );
-
-        if (
-          Array.isArray(
-            data.questions
-          )
-        ) {
-          setQuestionCount(
-            data.questions.length
-          );
-        }
       } catch (error) {
         console.error(
           "MONITORING SESSION STATE ERROR:",
@@ -325,7 +230,15 @@ export default function MonitoringSessionState({
       }
     }
 
+    // ===================================================
+    // ПЕРШЕ ЗАВАНТАЖЕННЯ
+    // ===================================================
+
     loadSessionState();
+
+    // ===================================================
+    // LIVE POLLING
+    // ===================================================
 
     const interval =
       window.setInterval(
@@ -340,30 +253,39 @@ export default function MonitoringSessionState({
         interval
       );
     };
-  }, [testId, sessionId]);
+  }, [
+    testId,
+    sessionId,
+  ]);
 
-  /**
-   * Формуємо список питань.
-   *
-   * Якщо API вже повернуло questions,
-   * questionCount буде встановлений.
-   *
-   * Якщо questions ще не повертаються,
-   * список тимчасово не показується.
-   */
-  const questions =
-    Array.from(
-      {
-        length: questionCount,
-      },
-      (_, index) => ({
-        number: index + 1,
-        answered: hasAnswer(
-          savedAnswers,
-          index
-        ),
-      })
+  // =====================================================
+  // КІЛЬКІСТЬ ПИТАНЬ
+  // =====================================================
+
+  const questionsCount =
+    Math.max(
+      0,
+      Math.floor(
+        totalQuestions
+      )
     );
+
+  // =====================================================
+  // НОМЕР ПОТОЧНОГО ПИТАННЯ ДЛЯ ВІДОБРАЖЕННЯ
+  //
+  // Захист від некоректного значення.
+  // =====================================================
+
+  const displayedQuestion =
+    questionsCount > 0
+      ? Math.min(
+          Math.max(
+            currentQuestion + 1,
+            1
+          ),
+          questionsCount
+        )
+      : 0;
 
   return (
     <section className="mb-6 rounded-xl bg-white p-6 shadow-lg">
@@ -371,12 +293,10 @@ export default function MonitoringSessionState({
         Поточний стан
       </h2>
 
-      {/* =================================================
-          ОСНОВНІ ПОКАЗНИКИ
-      ================================================= */}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* ПОТОЧНЕ ПИТАННЯ */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* =================================================
+            ПОТОЧНЕ ПИТАННЯ
+        ================================================= */}
 
         <div className="rounded-lg bg-gray-50 p-5 text-center">
           <div className="text-sm text-gray-500">
@@ -384,11 +304,51 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {currentQuestion + 1}
+            {displayedQuestion > 0
+              ? `№ ${displayedQuestion}`
+              : "—"}
           </div>
         </div>
 
-        {/* ЗАЛИШОК ЧАСУ */}
+        {/* =================================================
+            ПЕРЕГЛЯД ПИТАНЬ
+        ================================================= */}
+
+        <div className="rounded-lg bg-gray-50 p-5">
+          <div className="text-center text-sm text-gray-500">
+            Питання тесту
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setQuestionsOpen(
+                (previous) =>
+                  !previous
+              )
+            }
+            className="
+              mt-3
+              w-full
+              rounded-lg
+              bg-[#7A1F2B]
+              px-5
+              py-3
+              font-semibold
+              text-white
+              transition
+              hover:bg-[#651923]
+            "
+          >
+            {questionsOpen
+              ? "Сховати питання"
+              : "Переглянути питання"}
+          </button>
+        </div>
+
+        {/* =================================================
+            ЗАЛИШОК ЧАСУ
+        ================================================= */}
 
         <div className="rounded-lg bg-gray-50 p-5 text-center">
           <div className="text-sm text-gray-500">
@@ -396,11 +356,15 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 font-mono text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(timeLeft)}
+            {formatTime(
+              timeLeft
+            )}
           </div>
         </div>
 
-        {/* ДОДАТКОВИЙ ЧАС */}
+        {/* =================================================
+            ДОДАТКОВИЙ ЧАС
+        ================================================= */}
 
         <div className="rounded-lg bg-gray-50 p-5 text-center">
           <div className="text-sm text-gray-500">
@@ -408,190 +372,77 @@ export default function MonitoringSessionState({
           </div>
 
           <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {formatTime(extraTime)}
+            {formatTime(
+              extraTime
+            )}
           </div>
         </div>
       </div>
 
-      {/* =================================================
-          КНОПКА СПИСКУ ПИТАНЬ
-      ================================================= */}
-
-      <div className="mt-6">
-        <button
-          type="button"
-          onClick={() =>
-            setQuestionsOpen(
-              (value) => !value
-            )
-          }
-          className="
-            flex
-            w-full
-            items-center
-            justify-between
-            rounded-lg
-            border
-            border-gray-200
-            bg-gray-50
-            px-5
-            py-4
-            text-left
-            font-semibold
-            text-gray-800
-            transition
-            hover:bg-gray-100
-          "
-        >
-          <span>
-            Перелік питань
-          </span>
-
-          <span className="text-xl text-[#7A1F2B]">
-            {questionsOpen
-              ? "▲"
-              : "▼"}
-          </span>
-        </button>
-      </div>
-
-      {/* =================================================
+      {/* ===================================================
           СПИСОК ПИТАНЬ
-      ================================================= */}
+      =================================================== */}
 
       {questionsOpen && (
-        <div className="mt-3 overflow-hidden rounded-lg border border-gray-200">
-          {questions.length === 0 ? (
-            <div className="p-5 text-center text-gray-500">
-              Інформація про питання
-              поки недоступна.
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {questions.map(
-                (question) => {
+        <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-5">
+          <h3 className="mb-4 text-lg font-bold text-gray-800">
+            Перелік питань
+          </h3>
+
+          {questionsCount > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {Array.from(
+                {
+                  length:
+                    questionsCount,
+                },
+                (_, index) => {
                   const isCurrent =
-                    question.number -
-                      1 ===
+                    index ===
                     currentQuestion;
 
                   return (
                     <div
-                      key={
-                        question.number
-                      }
+                      key={index}
                       className={`
-                        flex
-                        items-center
-                        justify-between
-                        px-5
-                        py-4
+                        rounded-lg
+                        border
+                        px-4
+                        py-3
+                        text-center
+                        font-medium
                         transition
                         ${
                           isCurrent
-                            ? "bg-[#7A1F2B]/10"
-                            : "bg-white"
+                            ? "border-[#7A1F2B] bg-[#fff1f3] text-[#7A1F2B]"
+                            : "border-gray-200 bg-white text-gray-700"
                         }
                       `}
                     >
-                      <div className="flex items-center gap-3">
-                        {/* НОМЕР ПИТАННЯ */}
+                      Питання №{" "}
+                      {index + 1}
 
-                        <span
-                          className={`
-                            flex
-                            h-9
-                            w-9
-                            items-center
-                            justify-center
-                            rounded-full
-                            text-sm
-                            font-bold
-                            ${
-                              isCurrent
-                                ? "bg-[#7A1F2B] text-white"
-                                : "bg-gray-100 text-gray-700"
-                            }
-                          `}
-                        >
-                          {
-                            question.number
-                          }
-                        </span>
-
-                        {/* НАЗВА */}
-
-                        <span
-                          className={`
-                            font-semibold
-                            ${
-                              isCurrent
-                                ? "text-[#7A1F2B]"
-                                : "text-gray-700"
-                            }
-                          `}
-                        >
-                          Питання №{" "}
-                          {
-                            question.number
-                          }
-                        </span>
-
-                        {/* ПОТОЧНЕ */}
-
-                        {isCurrent && (
-                          <span className="
-                            rounded-full
-                            bg-[#7A1F2B]
-                            px-3
-                            py-1
-                            text-xs
-                            font-semibold
-                            text-white
-                          ">
-                            Поточне
-                          </span>
-                        )}
-                      </div>
-
-                      {/* СТАН ВІДПОВІДІ */}
-
-                      {question.answered ? (
-                        <span
-                          className="
-                            flex
-                            items-center
-                            gap-2
-                            font-semibold
-                            text-green-600
-                          "
-                        >
-                          <span className="text-xl">
-                            ✓
-                          </span>
-
-                          <span className="hidden sm:inline">
-                            Відповідь
-                            надано
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">
-                          Не відповідав
-                        </span>
+                      {isCurrent && (
+                        <div className="mt-1 text-xs font-semibold text-[#7A1F2B]">
+                          Поточне
+                        </div>
                       )}
                     </div>
                   );
                 }
               )}
             </div>
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 text-center text-sm text-gray-500">
+              Питання відсутні.
+            </div>
           )}
         </div>
       )}
 
-      {/* =================================================
-          ДОДАТКОВИЙ СТАН
-      ================================================= */}
+      {/* ===================================================
+          БЛОКУВАННЯ
+      =================================================== */}
 
       {blocked && (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4">
@@ -607,6 +458,10 @@ export default function MonitoringSessionState({
           )}
         </div>
       )}
+
+      {/* ===================================================
+          ЗАВЕРШЕННЯ
+      =================================================== */}
 
       {finished && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
