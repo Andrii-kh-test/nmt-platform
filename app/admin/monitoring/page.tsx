@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { prisma } from "@/app/lib/prisma";
+
 import MonitoringRefresh from "./MonitoringRefresh";
 
 export const dynamic = "force-dynamic";
@@ -9,135 +10,7 @@ export const revalidate = 0;
 const INACTIVITY_TIMEOUT = 90;
 
 // =====================================================
-// ФОРМАТУВАННЯ ДАТИ
-// =====================================================
-
-function formatDate(date: Date | null) {
-  if (!date) {
-    return "—";
-  }
-
-  return new Date(date).toLocaleString("uk-UA", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  });
-}
-
-// =====================================================
-// ФОРМАТУВАННЯ ЧАСУ
-// =====================================================
-
-function formatTime(seconds: number) {
-  if (seconds <= 0) {
-    return "00:00";
-  }
-
-  const hours = Math.floor(seconds / 3600);
-
-  const minutes = Math.floor(
-    (seconds % 3600) / 60
-  );
-
-  const remainingSeconds = seconds % 60;
-
-  if (hours > 0) {
-    return `${String(hours).padStart(
-      2,
-      "0"
-    )}:${String(minutes).padStart(
-      2,
-      "0"
-    )}:${String(remainingSeconds).padStart(
-      2,
-      "0"
-    )}`;
-  }
-
-  return `${String(minutes).padStart(
-    2,
-    "0"
-  )}:${String(remainingSeconds).padStart(
-    2,
-    "0"
-  )}`;
-}
-
-// =====================================================
-// РОЗРАХУНОК АКТУАЛЬНОГО ЗАЛИШКУ ЧАСУ
-//
-// Не покладаємося тільки на session.timeLeft,
-// оскільки це значення не обов'язково записується
-// в БД щосекунди.
-//
-// Рахуємо:
-//
-// duration * 60
-// + extraTime
-// - час від початку
-// =====================================================
-
-function getCurrentTimeLeft(session: {
-  startedAt: Date;
-  timeLeft: number;
-  extraTime: number;
-  test: {
-    duration: number;
-  };
-}) {
-  const baseTime =
-    Math.max(
-      0,
-      Math.floor(
-        session.test.duration * 60
-      )
-    );
-
-  const extraTime =
-    Math.max(
-      0,
-      Math.floor(session.extraTime)
-    );
-
-  const startedAt =
-    new Date(
-      session.startedAt
-    ).getTime();
-
-  const elapsedSeconds =
-    Math.max(
-      0,
-      Math.floor(
-        (Date.now() - startedAt) /
-          1000
-      )
-    );
-
-  const calculatedTimeLeft =
-    Math.max(
-      0,
-      baseTime +
-        extraTime -
-        elapsedSeconds
-    );
-
-  // Якщо серверне timeLeft менше за розраховане,
-  // використовуємо менше значення.
-  //
-  // Це захищає від ситуації, коли timeLeft уже
-  // було зменшено іншою серверною логікою.
-  if (
-    session.timeLeft >= 0 &&
-    session.timeLeft <
-      calculatedTimeLeft
-  ) {
-    return session.timeLeft;
-  }
-
-  return calculatedTimeLeft;
-}
-
-// =====================================================
-// ПІБ УЧАСНИКА
+// ПІБ
 // =====================================================
 
 function getParticipantName(
@@ -161,27 +34,14 @@ function getParticipantName(
 }
 
 // =====================================================
-// СТАТУС СЕСІЇ
+// СТАТУС
 // =====================================================
 
 function getStatus(session: {
   blocked: boolean;
-  blockReason: string | null;
   finished: boolean;
   lastActivityAt: Date;
 }) {
-  // ---------------------------------------------------
-  // Заблоковано
-  // ---------------------------------------------------
-
-  if (session.blocked) {
-    return {
-      label: "Заблоковано",
-      className:
-        "bg-red-100 text-red-800",
-    };
-  }
-
   // ---------------------------------------------------
   // Завершено
   // ---------------------------------------------------
@@ -195,7 +55,19 @@ function getStatus(session: {
   }
 
   // ---------------------------------------------------
-  // Час останньої активності
+  // Заблоковано
+  // ---------------------------------------------------
+
+  if (session.blocked) {
+    return {
+      label: "Заблоковано",
+      className:
+        "bg-red-100 text-red-800",
+    };
+  }
+
+  // ---------------------------------------------------
+  // Активність
   // ---------------------------------------------------
 
   const lastActivity =
@@ -203,11 +75,9 @@ function getStatus(session: {
       session.lastActivityAt
     ).getTime();
 
-  const now = Date.now();
-
   const secondsSinceActivity =
     Math.floor(
-      (now - lastActivity) / 1000
+      (Date.now() - lastActivity) / 1000
     );
 
   // ---------------------------------------------------
@@ -244,27 +114,32 @@ export default async function MonitoringPage() {
   const sessions =
     await prisma.testSession.findMany({
       where: {
+        // ------------------------------------------------
+        // Завершені сесії НЕ показуємо на головній
+        // сторінці моніторингу.
+        //
+        // Вони залишаються в БД і доступні через
+        // окремі сторінки/результати.
+        // ------------------------------------------------
+
         finished: false,
 
         OR: [
           // ------------------------------------------------
-          // Активні / нещодавно активні сесії
+          // Активні / нещодавно активні
           // ------------------------------------------------
 
           {
             lastActivityAt: {
               gte: new Date(
                 Date.now() -
-                  INACTIVITY_TIMEOUT *
-                    1000
+                  INACTIVITY_TIMEOUT * 1000
               ),
             },
           },
 
           // ------------------------------------------------
-          // Заблоковані сесії також залишаємо
-          // в моніторингу, навіть якщо heartbeat
-          // більше не надходить.
+          // Заблоковані показуємо завжди
           // ------------------------------------------------
 
           {
@@ -285,14 +160,13 @@ export default async function MonitoringPage() {
             id: true,
             title: true,
             subject: true,
-            duration: true,
           },
         },
       },
     });
 
   // =====================================================
-  // КІЛЬКІСТЬ АКТИВНИХ
+  // КІЛЬКІСТЬ
   // =====================================================
 
   const activeCount =
@@ -300,10 +174,6 @@ export default async function MonitoringPage() {
       (session) =>
         !session.blocked
     ).length;
-
-  // =====================================================
-  // КІЛЬКІСТЬ ЗАБЛОКОВАНИХ
-  // =====================================================
 
   const blockedCount =
     sessions.filter(
@@ -331,7 +201,7 @@ export default async function MonitoringPage() {
             </h1>
 
             <p className="mt-2 text-gray-600">
-              Перегляд активних проходжень
+              Перегляд поточних проходжень
               тестування.
             </p>
           </div>
@@ -368,7 +238,7 @@ export default async function MonitoringPage() {
 
           <div className="rounded-xl bg-white p-6 shadow-lg">
             <div className="text-sm text-gray-500">
-              Активних проходжень
+              Проходжень
             </div>
 
             <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
@@ -402,220 +272,128 @@ export default async function MonitoringPage() {
         </div>
 
         {/* =================================================
-            ТАБЛИЦЯ
+            КАРТКИ УЧАСНИКІВ
         ================================================= */}
 
-        <div className="overflow-hidden rounded-xl bg-white shadow-lg">
-          {sessions.length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="text-xl font-semibold text-gray-700">
-                Наразі немає активних
-                проходжень.
-              </div>
-
-              <p className="mt-2 text-gray-500">
-                Коли учасник розпочне
-                тестування, він з'явиться
-                тут.
-              </p>
+        {sessions.length === 0 ? (
+          <div className="rounded-xl bg-white p-10 text-center shadow-lg">
+            <div className="text-xl font-semibold text-gray-700">
+              Наразі немає активних
+              проходжень.
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                {/* =================================================
-                    ЗАГОЛОВОК ТАБЛИЦІ
-                ================================================= */}
 
-                <thead className="bg-[#7A1F2B] text-white">
-                  <tr>
-                    <th className="whitespace-nowrap p-4 text-left">
-                      №
-                    </th>
+            <p className="mt-2 text-gray-500">
+              Коли учасник розпочне
+              тестування, він з'явиться
+              тут.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {sessions.map(
+              (session) => {
+                const status =
+                  getStatus(session);
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Учасник
-                    </th>
+                const participantName =
+                  getParticipantName(
+                    session.participant
+                  );
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Тест
-                    </th>
+                return (
+                  <Link
+                    key={session.id}
+                    href={`/admin/monitoring/${session.id}`}
+                    className="
+                      group
+                      rounded-2xl
+                      border
+                      border-gray-200
+                      bg-white
+                      p-6
+                      shadow-lg
+                      transition
+                      hover:-translate-y-1
+                      hover:border-[#7A1F2B]
+                      hover:shadow-xl
+                    "
+                  >
+                    {/* Верхня частина */}
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Питання
-                    </th>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm text-gray-500">
+                          Учасник
+                        </div>
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Залишилось
-                    </th>
+                        <div className="mt-1 text-xl font-bold text-gray-900">
+                          {participantName}
+                        </div>
+                      </div>
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Статус
-                    </th>
+                      <span
+                        className={`
+                          shrink-0
+                          rounded-full
+                          px-3
+                          py-1
+                          text-sm
+                          font-semibold
+                          ${status.className}
+                        `}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
 
-                    <th className="whitespace-nowrap p-4 text-left">
-                      Остання активність
-                    </th>
+                    {/* Тест */}
 
-                    <th className="whitespace-nowrap p-4 text-center">
-                      Дія
-                    </th>
-                  </tr>
-                </thead>
+                    <div className="mt-6 border-t border-gray-100 pt-4">
+                      <div className="text-sm text-gray-500">
+                        Тест
+                      </div>
 
-                {/* =================================================
-                    ТІЛО ТАБЛИЦІ
-                ================================================= */}
+                      <div className="mt-1 font-semibold text-gray-800">
+                        {
+                          session.test
+                            .title
+                        }
+                      </div>
 
-                <tbody>
-                  {sessions.map(
-                    (session, index) => {
-                      const status =
-                        getStatus(
-                          session
-                        );
+                      <div className="mt-1 text-sm text-gray-500">
+                        {
+                          session.test
+                            .subject
+                        }
+                      </div>
+                    </div>
 
-                      const currentTimeLeft =
-                        session.finished
-                          ? 0
-                          : getCurrentTimeLeft(
-                              session
-                            );
+                    {/* Session ID */}
 
-                      return (
-                        <tr
-                          key={session.id}
-                          className="
-                            border-b
-                            transition
-                            hover:bg-gray-50
-                          "
-                        >
-                          {/* № */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="text-xs text-gray-400">
+                        Session ID:{" "}
+                        {session.id}
+                      </div>
 
-                          <td className="p-4">
-                            {index + 1}
-                          </td>
-
-                          {/* Учасник */}
-
-                          <td className="p-4">
-                            <div className="font-semibold">
-                              {getParticipantName(
-                                session.participant
-                              )}
-                            </div>
-
-                            <div className="mt-1 text-xs text-gray-500">
-                              Session ID:{" "}
-                              {session.id}
-                            </div>
-                          </td>
-
-                          {/* Тест */}
-
-                          <td className="p-4">
-                            <div className="font-semibold">
-                              {
-                                session
-                                  .test
-                                  .title
-                              }
-                            </div>
-
-                            <div className="mt-1 text-sm text-gray-500">
-                              {
-                                session
-                                  .test
-                                  .subject
-                              }
-                            </div>
-                          </td>
-
-                          {/* Поточне питання */}
-
-                          <td className="p-4">
-                            <span className="font-semibold">
-                              {session.currentQuestion +
-                                1}
-                            </span>
-                          </td>
-
-                          {/* Залишок часу */}
-
-                          <td className="p-4">
-                            <span className="font-mono font-semibold">
-                              {formatTime(
-                                currentTimeLeft
-                              )}
-                            </span>
-                          </td>
-
-                          {/* Статус */}
-
-                          <td className="p-4">
-                            <span
-                              className={`
-                                inline-flex
-                                rounded-full
-                                px-3
-                                py-1
-                                text-sm
-                                font-semibold
-                                ${status.className}
-                              `}
-                            >
-                              {
-                                status.label
-                              }
-                            </span>
-
-                            {session.blocked &&
-                              session.blockReason && (
-                                <div className="mt-2 max-w-xs text-xs text-red-600">
-                                  {
-                                    session.blockReason
-                                  }
-                                </div>
-                              )}
-                          </td>
-
-                          {/* Остання активність */}
-
-                          <td className="p-4 text-sm">
-                            {formatDate(
-                              session.lastActivityAt
-                            )}
-                          </td>
-
-                          {/* Дія */}
-
-                          <td className="p-4 text-center">
-                            <Link
-                              href={`/admin/monitoring/${session.id}`}
-                              className="
-                                inline-flex
-                                rounded-lg
-                                bg-[#7A1F2B]
-                                px-4
-                                py-2
-                                font-semibold
-                                text-white
-                                transition
-                                hover:bg-[#651923]
-                              "
-                            >
-                              Переглянути
-                            </Link>
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                      <div
+                        className="
+                          text-sm
+                          font-semibold
+                          text-[#7A1F2B]
+                          transition
+                          group-hover:translate-x-1
+                        "
+                      >
+                        Переглянути →
+                      </div>
+                    </div>
+                  </Link>
+                );
+              }
+            )}
+          </div>
+        )}
       </div>
     </main>
   );
