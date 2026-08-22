@@ -18,6 +18,7 @@ export default function InstructionPage({
   const router = useRouter();
 
   const [accepted, setAccepted] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] flex justify-center py-10">
@@ -154,7 +155,9 @@ export default function InstructionPage({
             id="agree"
             type="checkbox"
             checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
+            onChange={(e) =>
+              setAccepted(e.target.checked)
+            }
             className="w-5 h-5"
           />
 
@@ -170,16 +173,136 @@ export default function InstructionPage({
         <div className="mt-10 flex justify-end">
 
           <button
-            disabled={!accepted}
+            disabled={!accepted || starting}
             onClick={async () => {
-              try {
-                await document.documentElement.requestFullscreen();
+              if (starting) {
+                return;
+              }
 
-                router.push(`/test/${id}`);
-              } catch {
-                alert(
-                  "Для проходження тесту необхідно дозволити повноекранний режим."
+              setStarting(true);
+
+              try {
+                // =================================================
+                // SESSION ID
+                // =================================================
+
+                const storedSessionId =
+                  localStorage.getItem(
+                    "testSessionId"
+                  );
+
+                if (!storedSessionId) {
+                  alert(
+                    "Сесію тестування не знайдено. Будь ласка, розпочніть тестування спочатку."
+                  );
+
+                  setStarting(false);
+
+                  return;
+                }
+
+                const sessionId =
+                  Number(
+                    storedSessionId
+                  );
+
+                if (
+                  !Number.isInteger(
+                    sessionId
+                  ) ||
+                  sessionId <= 0
+                ) {
+                  alert(
+                    "Некоректний id сесії."
+                  );
+
+                  setStarting(false);
+
+                  return;
+                }
+
+                // =================================================
+                // ПОЧАТОК ТЕСТУВАННЯ
+                //
+                // Саме цей запит один раз встановлює startedAt.
+                // =================================================
+
+                const response =
+                  await fetch(
+                    "/api/test/begin",
+                    {
+                      method: "POST",
+
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+                      },
+
+                      body: JSON.stringify({
+                        sessionId,
+                        testId: Number(id),
+                      }),
+                    }
+                  );
+
+                const data =
+                  await response.json();
+
+                // =================================================
+                // ПОМИЛКА
+                // =================================================
+
+                if (
+                  !response.ok ||
+                  !data.success
+                ) {
+                  alert(
+                    data.message ||
+                      "Не вдалося розпочати тестування."
+                  );
+
+                  setStarting(false);
+
+                  return;
+                }
+
+                // =================================================
+                // FULLSCREEN
+                //
+                // ВАЖЛИВО:
+                // startedAt уже встановлено сервером.
+                // =================================================
+
+                try {
+                  await document.documentElement.requestFullscreen();
+                } catch {
+                  alert(
+                    "Для проходження тесту необхідно дозволити повноекранний режим."
+                  );
+
+                  setStarting(false);
+
+                  return;
+                }
+
+                // =================================================
+                // ПЕРЕХІД ДО ТЕСТУ
+                // =================================================
+
+                router.push(
+                  `/test/${id}`
                 );
+              } catch (error) {
+                console.error(
+                  "BEGIN TEST ERROR:",
+                  error
+                );
+
+                alert(
+                  "Не вдалося розпочати тестування. Перевірте з'єднання з сервером і спробуйте ще раз."
+                );
+
+                setStarting(false);
               }
             }}
             className="
@@ -194,7 +317,9 @@ export default function InstructionPage({
               hover:bg-[#641823]
             "
           >
-            Розпочати тестування
+            {starting
+              ? "Підготовка тестування..."
+              : "Розпочати тестування"}
           </button>
 
         </div>

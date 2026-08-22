@@ -18,11 +18,13 @@ import { prisma } from "@/app/lib/prisma";
 //
 // GET НЕ ЗМІНЮЄ БАЗУ ДАНИХ.
 //
-// GET тільки:
-// - читає сесію;
-// - перевіряє testId;
-// - розраховує актуальний timeLeft;
-// - повертає стан клієнту.
+// Якщо startedAt === null:
+// - тест ще офіційно не розпочато;
+// - час НЕ відраховується;
+// - повертається збережений timeLeft.
+//
+// Якщо startedAt !== null:
+// - час розраховується від startedAt.
 //
 // НІЯКОГО UPDATE.
 // =====================================================
@@ -102,7 +104,7 @@ export async function GET(
             "Некоректний id сесії.",
         },
         {
-          status: 400,
+          status: 400
         }
       );
     }
@@ -286,11 +288,47 @@ export async function GET(
     //
     // Під час блокування час НЕ зменшується.
     //
-    // Повертаємо timeLeft, який зафіксований
-    // у БД адміністративною операцією блокування.
+    // Повертаємо timeLeft, який збережений
+    // у БД.
     // ===================================================
 
     if (session.blocked) {
+      return NextResponse.json(
+        {
+          ...baseResponse,
+
+          timeLeft:
+            Math.max(
+              0,
+              Math.floor(
+                session.timeLeft
+              )
+            ),
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+          },
+        }
+      );
+    }
+
+    // ===================================================
+    // ТЕСТ ЩЕ НЕ РОЗПОЧАТО
+    //
+    // startedAt === null означає:
+    //
+    // учасник створив сесію,
+    // але ще НЕ натиснув
+    // «Розпочати тестування».
+    //
+    // У цей момент час НЕ МОЖНА відраховувати.
+    // ===================================================
+
+    if (
+      session.startedAt === null
+    ) {
       return NextResponse.json(
         {
           ...baseResponse,
@@ -319,23 +357,25 @@ export async function GET(
     //
     // НЕ використовуємо lastActivityAt.
     //
-    // Heartbeat кожні декілька секунд оновлює
-    // lastActivityAt.
+    // Heartbeat оновлює lastActivityAt,
+    // тому він НЕ повинен використовуватися
+    // для розрахунку часу тестування.
     //
-    // Якщо рахувати час від lastActivityAt,
-    // таймер практично не буде зменшуватися.
-    //
-    // Тому для активної сесії використовуємо
+    // Для активної сесії використовуємо
     // startedAt.
     // ===================================================
 
     const now =
       new Date();
 
+    // Тут TypeScript уже знає,
+    // що startedAt НЕ null,
+    // оскільки вище була перевірка:
+    //
+    // if (session.startedAt === null) return ...
+
     const startedAt =
-      new Date(
-        session.startedAt
-      );
+      session.startedAt;
 
     const elapsedSeconds =
       Math.max(
@@ -351,7 +391,8 @@ export async function GET(
     // ===================================================
     // БАЗОВИЙ ЧАС ТЕСТУ
     //
-    // duration з Test зберігається у хвилинах.
+    // duration у Test зберігається
+    // у хвилинах.
     //
     // Перетворюємо у секунди.
     // ===================================================
@@ -368,7 +409,8 @@ export async function GET(
     // ===================================================
     // ДОДАТКОВИЙ ЧАС
     //
-    // extraTime зберігається у секундах.
+    // extraTime зберігається
+    // у секундах.
     // ===================================================
 
     const extraTime =
@@ -445,13 +487,15 @@ export async function GET(
 //
 // УЧАСНИК НЕ МОЖЕ ЗМІНЮВАТИ:
 //
+// - startedAt;
 // - timeLeft;
 // - extraTime;
 // - blocked;
 // - blockReason;
 // - blockedAt.
 //
-// Це захищає адміністративні дії.
+// Це захищає адміністративні дії
+// та офіційний час початку тестування.
 // =====================================================
 
 export async function POST(
@@ -513,7 +557,7 @@ export async function POST(
 
     if (
       typeof body !==
-      "object" ||
+        "object" ||
       body === null
     ) {
       return NextResponse.json(
@@ -644,9 +688,11 @@ export async function POST(
     // ===================================================
     // HEARTBEAT
     //
-    // Heartbeat змінює ТІЛЬКИ lastActivityAt.
+    // Heartbeat змінює ТІЛЬКИ
+    // lastActivityAt.
     //
     // НЕ змінює:
+    // - startedAt;
     // - timeLeft;
     // - extraTime;
     // - blocked;
@@ -799,7 +845,8 @@ export async function POST(
           Prisma.JsonNull;
       } else {
         updateData.savedAnswers =
-          savedAnswers as Prisma.InputJsonValue;
+          savedAnswers as
+            Prisma.InputJsonValue;
       }
     }
 
@@ -810,8 +857,8 @@ export async function POST(
     //
     // finished = true
     //
-    // finished = false НЕ може скасувати
-    // завершення сесії.
+    // finished = false НЕ МОЖЕ
+    // скасувати завершення сесії.
     // ===================================================
 
     if (finished === true) {
@@ -830,6 +877,7 @@ export async function POST(
     //
     // Тут НЕМАЄ:
     //
+    // startedAt
     // timeLeft
     // extraTime
     // blocked
@@ -837,7 +885,8 @@ export async function POST(
     // blockedAt
     //
     // Тому POST учасника не може
-    // перезаписати адміністративні зміни.
+    // перезаписати адміністративні
+    // зміни або офіційний час старту.
     // ===================================================
 
     const updated =
