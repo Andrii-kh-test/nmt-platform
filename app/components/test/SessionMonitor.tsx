@@ -454,10 +454,10 @@ export default function SessionMonitor() {
     // ===================================================
 
     const interval =
-      setInterval(
-        checkSession,
-        2000
-      );
+  setInterval(
+    checkSession,
+    5000
+  );
 
     // ===================================================
     // Cleanup
