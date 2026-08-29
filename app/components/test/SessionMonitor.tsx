@@ -947,7 +947,7 @@ export default function SessionMonitor({
     sendHeartbeat,
   ]);
 
-  // =====================================================
+    // =====================================================
   // UI
   // =====================================================
 
@@ -962,57 +962,136 @@ export default function SessionMonitor({
             flex
             items-center
             justify-center
-            bg-black/60
+            bg-slate-950/70
             p-4
+            backdrop-blur-sm
           "
         >
           <div
             className="
+              relative
               w-full
-              max-w-lg
-              rounded-2xl
+              max-w-md
+              overflow-hidden
+              rounded-3xl
               bg-white
-              p-8
+              px-8
+              py-9
               text-center
-              shadow-2xl
+              shadow-[0_25px_70px_rgba(0,0,0,0.25)]
             "
           >
+            {/* =========================================
+                DECORATIVE BACKGROUND
+            ========================================= */}
+
             <div
               className="
+                pointer-events-none
+                absolute
+                -right-20
+                -top-20
+                h-48
+                w-48
+                rounded-full
+                bg-[#7A1F2B]/5
+              "
+            />
+
+            <div
+              className="
+                pointer-events-none
+                absolute
+                -bottom-24
+                -left-20
+                h-52
+                w-52
+                rounded-full
+                bg-[#7A1F2B]/5
+              "
+            />
+
+            {/* =========================================
+                ICON
+            ========================================= */}
+
+            <div
+              className="
+                relative
                 mx-auto
-                mb-5
+                mb-6
                 flex
-                h-16
-                w-16
+                h-20
+                w-20
                 items-center
                 justify-center
                 rounded-full
-                bg-red-100
+                bg-[#7A1F2B]/10
               "
             >
-              <span
+              <div
                 className="
-                  text-3xl
-                  font-bold
-                  text-red-600
+                  flex
+                  h-14
+                  w-14
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-[#7A1F2B]
+                  shadow-lg
+                  shadow-[#7A1F2B]/20
                 "
               >
-                !
-              </span>
+                {/* Pause icon */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  className="h-7 w-7 text-white"
+                >
+                  <rect
+                    x="6"
+                    y="5"
+                    width="4"
+                    height="14"
+                    rx="1"
+                  />
+                  <rect
+                    x="14"
+                    y="5"
+                    width="4"
+                    height="14"
+                    rx="1"
+                  />
+                </svg>
+              </div>
             </div>
+
+            {/* =========================================
+                TITLE
+            ========================================= */}
 
             <h2
               className="
+                relative
                 text-2xl
                 font-bold
+                tracking-tight
                 text-[#7A1F2B]
               "
             >
-              Тест заблоковано
+              Тестування заблоковано
             </h2>
+
+            {/* =========================================
+                DESCRIPTION
+            ========================================= */}
 
             <p
               className="
+                relative
                 mt-4
                 text-base
                 leading-7
@@ -1020,19 +1099,60 @@ export default function SessionMonitor({
               "
             >
               {blockReasonUI ??
-                "Тестування заблоковано адміністратором."}
+                "Будь ласка, очікуйте подальших вказівок адміністратора."}
             </p>
 
-            <p
+            {/* =========================================
+                INFORMATION BLOCK
+            ========================================= */}
+
+            <div
               className="
-                mt-5
-                text-sm
-                text-gray-500
+                relative
+                mt-6
+                rounded-2xl
+                border
+                border-gray-100
+                bg-gray-50
+                px-5
+                py-4
               "
             >
-              Будь ласка, очікуйте рішення
-              адміністратора.
-            </p>
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-center
+                  gap-2
+                  text-sm
+                  font-medium
+                  text-gray-600
+                "
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4 text-[#7A1F2B]"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="9"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    d="M12 8v4l2.5 1.5"
+                  />
+                </svg>
+
+                <span>
+                  Очікуйте подальших вказівок адміністратора
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       )}
