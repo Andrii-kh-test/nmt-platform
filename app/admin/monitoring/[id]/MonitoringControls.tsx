@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type Props = {
   sessionId: number;
@@ -21,8 +20,6 @@ export default function MonitoringControls({
   testId,
   blocked: initialBlocked,
 }: Props) {
-  const router = useRouter();
-
   const [blocked, setBlocked] =
     useState(initialBlocked);
 
@@ -61,6 +58,10 @@ export default function MonitoringControls({
         }
       );
 
+      // =================================================
+      // Формуємо body
+      // =================================================
+
       const body: {
         action: Action;
         minutes?: number;
@@ -77,6 +78,10 @@ export default function MonitoringControls({
         body.reason =
           "Тестування заблоковано через порушення правил тестування";
       }
+
+      // =================================================
+      // API
+      // =================================================
 
       const response = await fetch(
         `/api/session/manage/${sessionId}`,
@@ -121,6 +126,8 @@ export default function MonitoringControls({
         setMessage(
           "Тестування заблоковано."
         );
+
+        return;
       }
 
       // =================================================
@@ -133,6 +140,8 @@ export default function MonitoringControls({
         setMessage(
           "Тестування розблоковано."
         );
+
+        return;
       }
 
       // =================================================
@@ -143,18 +152,23 @@ export default function MonitoringControls({
         setMessage(
           `Додано ${minutes} хвилин.`
         );
+
+        return;
       }
 
       // =================================================
-      // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
+      // АНУЛЮВАННЯ
       //
-      // API повертає:
+      // ВАЖЛИВО:
       //
-      // resultId: result.result.id
+      // Тут НЕ виконуємо router.push().
       //
-      // Після успішного анулювання
-      // переходимо безпосередньо
-      // на сторінку результату.
+      // Адміністратор залишається на сторінці
+      // моніторингу.
+      //
+      // Учасник отримає finished=true та resultId
+      // через SessionMonitor і сам перейде
+      // на /result/[resultId].
       // =================================================
 
       if (
@@ -165,43 +179,11 @@ export default function MonitoringControls({
 
         setBlocked(true);
 
-        const resultId =
-          data?.resultId;
-
-        console.log(
-          "ADMIN ANNUL RESULT ID:",
-          resultId
-        );
-
-        if (
-          typeof resultId ===
-            "number" &&
-          resultId > 0
-        ) {
-          router.push(
-            `/results/${resultId}`
-          );
-
-          return;
-        }
-
-        /*
-         * Захист від ситуації, коли API
-         * не повернув resultId.
-         *
-         * У такому випадку залишаємо
-         * адміністратора на поточній
-         * сторінці замість переходу
-         * на неіснуючий маршрут.
-         */
-
         setMessage(
-          "Результат анульовано. Результат створено, але ID результату не отримано."
+          "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
         );
 
-        setTimeout(() => {
-          router.refresh();
-        }, 1000);
+        return;
       }
     } catch (err) {
       console.error(
@@ -235,7 +217,7 @@ export default function MonitoringControls({
       return;
     }
 
-    manageSession("annul");
+    void manageSession("annul");
   }
 
   // =====================================================
@@ -248,15 +230,19 @@ export default function MonitoringControls({
     }
 
     const timer =
-      setTimeout(() => {
+      window.setTimeout(() => {
         setMessage("");
         setError("");
       }, 5000);
 
     return () => {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     };
   }, [message, error]);
+
+  // =====================================================
+  // UI
+  // =====================================================
 
   return (
     <div className="space-y-6">
@@ -323,7 +309,9 @@ export default function MonitoringControls({
           </div>
         ) : blocked ? (
           <div className="space-y-4">
-            {/* СТАН БЛОКУВАННЯ */}
+            {/* =================================================
+                СТАН БЛОКУВАННЯ
+            ================================================= */}
 
             <div className="rounded-lg border border-red-200 bg-red-50 p-4">
               <div className="font-bold text-red-700">
@@ -337,7 +325,9 @@ export default function MonitoringControls({
               </div>
             </div>
 
-            {/* АНУЛЮВАННЯ */}
+            {/* =================================================
+                АНУЛЮВАННЯ
+            ================================================= */}
 
             <button
               type="button"
@@ -366,13 +356,15 @@ export default function MonitoringControls({
                 : "Анулювати результат"}
             </button>
 
-            {/* РОЗБЛОКУВАННЯ */}
+            {/* =================================================
+                РОЗБЛОКУВАННЯ
+            ================================================= */}
 
             <button
               type="button"
               disabled={loading}
               onClick={() =>
-                manageSession(
+                void manageSession(
                   "unblock"
                 )
               }
@@ -396,13 +388,17 @@ export default function MonitoringControls({
             </button>
           </div>
         ) : (
-          /* БЛОКУВАННЯ */
+          /* =================================================
+             БЛОКУВАННЯ
+          ================================================= */
 
           <button
             type="button"
             disabled={loading}
             onClick={() =>
-              manageSession("block")
+              void manageSession(
+                "block"
+              )
             }
             className="
               w-full
@@ -442,7 +438,9 @@ export default function MonitoringControls({
           </p>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            {/* +5 */}
+            {/* =================================================
+                +5
+            ================================================= */}
 
             <button
               type="button"
@@ -450,7 +448,7 @@ export default function MonitoringControls({
                 loading || blocked
               }
               onClick={() =>
-                manageSession(
+                void manageSession(
                   "addTime",
                   5
                 )
@@ -473,7 +471,9 @@ export default function MonitoringControls({
                 : "+5 хв"}
             </button>
 
-            {/* +10 */}
+            {/* =================================================
+                +10
+            ================================================= */}
 
             <button
               type="button"
@@ -481,7 +481,7 @@ export default function MonitoringControls({
                 loading || blocked
               }
               onClick={() =>
-                manageSession(
+                void manageSession(
                   "addTime",
                   10
                 )
@@ -504,7 +504,9 @@ export default function MonitoringControls({
                 : "+10 хв"}
             </button>
 
-            {/* +30 */}
+            {/* =================================================
+                +30
+            ================================================= */}
 
             <button
               type="button"
@@ -512,7 +514,7 @@ export default function MonitoringControls({
                 loading || blocked
               }
               onClick={() =>
-                manageSession(
+                void manageSession(
                   "addTime",
                   30
                 )

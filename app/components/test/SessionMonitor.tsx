@@ -7,6 +7,8 @@ import {
   useState,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import {
   useTestSession,
 } from "@/app/context/TestSessionContext";
@@ -35,6 +37,15 @@ type ServerSession = {
   blockReason: string | null;
 
   startedAt: string | null;
+
+  // ===================================================
+  // RESULT
+  //
+  // ID результату, який створюється після завершення
+  // або анулювання тестування.
+  // ===================================================
+
+  resultId: number | null;
 };
 
 // =====================================================
@@ -120,6 +131,8 @@ export default function SessionMonitor({
   pollInterval = 5000,
   heartbeatInterval = 10000,
 }: SessionMonitorProps) {
+  const router = useRouter();
+
   const {
     sessionId,
 
@@ -168,6 +181,15 @@ export default function SessionMonitor({
 
   const lastServerTimeRef =
     useRef<number | null>(null);
+
+  // =====================================================
+  // RESULT REDIRECT REF
+  //
+  // Захищаємося від повторних redirect.
+  // =====================================================
+
+  const resultRedirectedRef =
+    useRef(false);
 
   // =====================================================
   // MOUNT
@@ -289,6 +311,9 @@ export default function SessionMonitor({
 
             blocked:
               session.blocked,
+
+            resultId:
+              session.resultId,
           }
         );
 
@@ -317,6 +342,15 @@ export default function SessionMonitor({
 
         // =================================================
         // FINISHED
+        //
+        // Якщо сесію завершено:
+        //
+        // 1. відновлюємо фінальний стан;
+        // 2. якщо існує resultId — переходимо
+        //    на сторінку результату учасника.
+        //
+        // ВАЖЛИВО:
+        // маршрут /result/[id], а не /results/[id].
         // =================================================
 
         if (
@@ -330,6 +364,28 @@ export default function SessionMonitor({
             true,
             session.blocked
           );
+
+          if (
+            !resultRedirectedRef.current &&
+            typeof session.resultId ===
+              "number" &&
+            session.resultId > 0
+          ) {
+            resultRedirectedRef.current =
+              true;
+
+            console.log(
+              "SESSION MONITOR: TEST FINISHED, REDIRECTING TO RESULT",
+              {
+                resultId:
+                  session.resultId,
+              }
+            );
+
+            router.replace(
+              `/result/${session.resultId}`
+            );
+          }
 
           return;
         }
@@ -399,18 +455,19 @@ export default function SessionMonitor({
           false
         );
       },
-      [restoreSession]
+      [
+        restoreSession,
+        router,
+      ]
     );
 
   // =====================================================
   // FETCH SESSION
   //
-  // ВАЖЛИВО:
-  //
-  // ЦЕЙ КОМПОНЕНТ БІЛЬШЕ НЕ ВИКЛИКАЄ
+  // ЦЕЙ КОМПОНЕНТ НЕ ВИКЛИКАЄ
   // POST /api/test/begin.
   //
-  // Він ТІЛЬКИ ЧИТАЄ АКТИВНУ СЕСІЮ
+  // Він тільки читає активну сесію
   // через GET /api/session/[testId].
   // =====================================================
 
@@ -520,6 +577,12 @@ export default function SessionMonitor({
 
                 startedAt:
                   serverSession.startedAt,
+
+                finished:
+                  serverSession.finished,
+
+                resultId:
+                  serverSession.resultId,
               }
             );
 
@@ -579,7 +642,8 @@ export default function SessionMonitor({
           // Адміністратор:
           //
           // +5 хв
-          // -5 хв
+          // +10 хв
+          // +30 хв
           //
           // або інша зміна часу.
           // =================================================
