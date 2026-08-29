@@ -109,16 +109,123 @@ export async function GET(
     }
 
     // =================================================
+    // АКТУАЛІЗАЦІЯ ЧАСУ ДЛЯ АДМІНПАНЕЛІ
+    //
+    // НЕ ЗМІНЮЄМО БД.
+    //
+    // Для активної сесії:
+    //
+    // duration + extraTime - elapsed
+    //
+    // elapsed рахується від startedAt,
+    // а не від lastActivityAt.
+    // =================================================
+
+    let actualTimeLeft =
+      Math.max(
+        0,
+        Math.floor(
+          session.timeLeft
+        )
+      );
+
+    // -------------------------------------------------
+    // Активна сесія
+    // -------------------------------------------------
+
+    if (
+      !session.finished &&
+      !session.blocked &&
+      session.startedAt
+    ) {
+      const now =
+        new Date();
+
+      const elapsedSeconds =
+        Math.max(
+          0,
+          Math.floor(
+            (
+              now.getTime() -
+              session.startedAt.getTime()
+            ) / 1000
+          )
+        );
+
+      const durationSeconds =
+        Math.max(
+          0,
+          Math.floor(
+            session.test.duration * 60
+          )
+        );
+
+      const extraTime =
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              session.extraTime
+            ) || 0
+          )
+        );
+
+      actualTimeLeft =
+        Math.max(
+          0,
+          durationSeconds +
+            extraTime -
+            elapsedSeconds
+        );
+    }
+
+    // =================================================
+    // СИНХРОНІЗОВАНА СЕСІЯ
+    //
+    // Усі інші дані залишаються такими,
+    // як вони збережені в БД:
+    //
+    // currentQuestion
+    // savedAnswers
+    // extraTime
+    // blocked
+    // finished
+    //
+    // Змінюємо тільки timeLeft
+    // для актуального відображення
+    // в адміністративній панелі.
+    // =================================================
+
+    const synchronizedSession = {
+      ...session,
+
+      timeLeft:
+        actualTimeLeft,
+
+      extraTime:
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              session.extraTime
+            ) || 0
+          )
+        ),
+    };
+
+    // =================================================
     // ВІДПОВІДЬ
     // =================================================
 
     return NextResponse.json({
       success: true,
 
-      session,
+      session:
+        synchronizedSession,
 
       resultId:
-        session.result?.id ?? null,
+        session.result?.id ??
+        null,
     });
   } catch (error) {
     console.error(
@@ -271,10 +378,6 @@ export async function POST(
     // =================================================
 
     if (action === "block") {
-      // -------------------------------------------------
-      // Завершену сесію не потрібно блокувати повторно
-      // -------------------------------------------------
-
       if (existingSession.finished) {
         return NextResponse.json(
           {
@@ -287,10 +390,6 @@ export async function POST(
           }
         );
       }
-
-      // -------------------------------------------------
-      // Якщо вже заблокована
-      // -------------------------------------------------
 
       if (existingSession.blocked) {
         return NextResponse.json({
@@ -311,22 +410,6 @@ export async function POST(
       }
 
       const now = new Date();
-
-      // -------------------------------------------------
-      // КРИТИЧНО:
-      //
-      // При блокуванні потрібно зафіксувати
-      // актуальний залишок часу.
-      //
-      // timeLeft у БД є останнім серверним
-      // значенням.
-      //
-      // lastActivityAt показує момент,
-      // від якого GET відраховує час.
-      //
-      // Тому перед блокуванням обчислюємо,
-      // скільки часу реально минуло.
-      // -------------------------------------------------
 
       const lastActivity =
         existingSession.lastActivityAt ??
@@ -353,10 +436,6 @@ export async function POST(
           )
         );
 
-      // -------------------------------------------------
-      // БЛОКУЄМО СЕСІЮ
-      // -------------------------------------------------
-
       const session =
         await prisma.testSession.update({
           where: {
@@ -372,12 +451,11 @@ export async function POST(
 
             blockedAt: now,
 
-            // Фіксуємо актуальний час
-            timeLeft: actualTimeLeft,
+            timeLeft:
+              actualTimeLeft,
 
-            // Після фіксації часу
-            // починаємо нову точку відліку
-            lastActivityAt: now,
+            lastActivityAt:
+              now,
           },
 
           include: {
@@ -418,10 +496,6 @@ export async function POST(
     // =================================================
 
     if (action === "unblock") {
-      // -------------------------------------------------
-      // Завершену сесію не можна розблокувати
-      // -------------------------------------------------
-
       if (existingSession.finished) {
         return NextResponse.json(
           {
@@ -434,10 +508,6 @@ export async function POST(
           }
         );
       }
-
-      // -------------------------------------------------
-      // Якщо вже розблокована
-      // -------------------------------------------------
 
       if (!existingSession.blocked) {
         return NextResponse.json({
@@ -458,17 +528,6 @@ export async function POST(
       }
 
       const now = new Date();
-
-      // -------------------------------------------------
-      // РОЗБЛОКОВУЄМО
-      //
-      // timeLeft НЕ змінюємо.
-      //
-      // lastActivityAt = now
-      //
-      // Отже після розблокування відлік
-      // починається саме з моменту розблокування.
-      // -------------------------------------------------
 
       const session =
         await prisma.testSession.update({
@@ -521,18 +580,9 @@ export async function POST(
 
     // =================================================
     // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
-    //
-    // Підтримує:
-    //
-    // annul
-    // invalidate
     // =================================================
 
     if (action === "annul") {
-      // -------------------------------------------------
-      // Якщо результат уже існує
-      // -------------------------------------------------
-
       if (existingSession.result) {
         return NextResponse.json({
           success: true,
@@ -591,23 +641,11 @@ export async function POST(
 
       const now = new Date();
 
-      // -------------------------------------------------
-      // КІЛЬКІСТЬ ПИТАНЬ
-      // -------------------------------------------------
-
       const questionsCount =
         existingSession.test.questions.length;
 
-      // -------------------------------------------------
-      // МАКСИМАЛЬНА КІЛЬКІСТЬ БАЛІВ
-      // -------------------------------------------------
-
       const maxPoints =
         existingSession.test.maxPoints;
-
-      // -------------------------------------------------
-      // ЗАГАЛЬНИЙ ЧАС ТЕСТУ
-      // -------------------------------------------------
 
       const totalTime =
         Math.max(
@@ -617,13 +655,6 @@ export async function POST(
               60
           )
         );
-
-      // -------------------------------------------------
-      // ВИТРАЧЕНИЙ ЧАС
-      //
-      // Якщо timeLeft ще не був актуалізований,
-      // беремо значення з БД.
-      // -------------------------------------------------
 
       const timeSpent =
         Math.max(
@@ -635,27 +666,15 @@ export async function POST(
             )
         );
 
-      // -------------------------------------------------
-      // ПРИЧИНА ЗАВЕРШЕННЯ
-      // -------------------------------------------------
-
       const finishReason =
         "security";
 
       const finishMessage =
         "Порушення правил тестування";
 
-      // =================================================
-      // ТРАНЗАКЦІЯ
-      // =================================================
-
       const result =
         await prisma.$transaction(
           async (tx) => {
-            // -------------------------------------------
-            // ЗАВЕРШУЄМО СЕСІЮ
-            // -------------------------------------------
-
             const finishedSession =
               await tx.testSession.update({
                 where: {
@@ -681,10 +700,6 @@ export async function POST(
                   lastActivityAt: now,
                 },
               });
-
-            // -------------------------------------------
-            // СТВОРЮЄМО РЕЗУЛЬТАТ
-            // -------------------------------------------
 
             const createdResult =
               await tx.testResult.create({
@@ -761,10 +776,6 @@ export async function POST(
           }
         );
 
-      // =================================================
-      // ВІДПОВІДЬ
-      // =================================================
-
       return NextResponse.json({
         success: true,
 
@@ -813,10 +824,6 @@ export async function POST(
         body.minutes
       );
 
-      // -------------------------------------------------
-      // ПЕРЕВІРКА ХВИЛИН
-      // -------------------------------------------------
-
       if (
         !Number.isFinite(minutes) ||
         minutes <= 0
@@ -833,10 +840,6 @@ export async function POST(
         );
       }
 
-      // -------------------------------------------------
-      // Завершену сесію не можна продовжувати
-      // -------------------------------------------------
-
       if (existingSession.finished) {
         return NextResponse.json(
           {
@@ -850,10 +853,6 @@ export async function POST(
         );
       }
 
-      // -------------------------------------------------
-      // Заблоковану сесію не продовжуємо
-      // -------------------------------------------------
-
       if (existingSession.blocked) {
         return NextResponse.json(
           {
@@ -866,10 +865,6 @@ export async function POST(
           }
         );
       }
-
-      // -------------------------------------------------
-      // ПЕРЕТВОРЕННЯ ХВИЛИН У СЕКУНДИ
-      // -------------------------------------------------
 
       const secondsToAdd =
         Math.floor(
@@ -888,19 +883,6 @@ export async function POST(
           }
         );
       }
-
-      // -------------------------------------------------
-      // АКТУАЛЬНИЙ TIME LEFT
-      //
-      // ВАЖЛИВО:
-      //
-      // Оскільки GET не записує timeLeft,
-      // значення в БД може бути старшим на кілька
-      // секунд.
-      //
-      // Тому тут самостійно обчислюємо актуальний
-      // залишок перед додаванням часу.
-      // -------------------------------------------------
 
       const now = new Date();
 
@@ -929,10 +911,6 @@ export async function POST(
           )
         );
 
-      // -------------------------------------------------
-      // ПОТОЧНИЙ EXTRA TIME
-      // -------------------------------------------------
-
       const currentExtraTime =
         Math.max(
           0,
@@ -944,25 +922,13 @@ export async function POST(
           )
         );
 
-      // -------------------------------------------------
-      // НОВИЙ TIME LEFT
-      // -------------------------------------------------
-
       const newTimeLeft =
         currentTimeLeft +
         secondsToAdd;
 
-      // -------------------------------------------------
-      // НОВИЙ EXTRA TIME
-      // -------------------------------------------------
-
       const newExtraTime =
         currentExtraTime +
         secondsToAdd;
-
-      // -------------------------------------------------
-      // ОНОВЛЕННЯ
-      // -------------------------------------------------
 
       const session =
         await prisma.testSession.update({
@@ -997,10 +963,6 @@ export async function POST(
             result: true,
           },
         });
-
-      // -------------------------------------------------
-      // ВІДПОВІДЬ
-      // -------------------------------------------------
 
       return NextResponse.json({
         success: true,
