@@ -6,24 +6,53 @@ import {
 import { prisma } from "@/app/lib/prisma";
 
 // =====================================================
+// TYPES
+// =====================================================
+
+type BeginBody = {
+  sessionId?: unknown;
+  testId?: unknown;
+};
+
+type SessionResponse = {
+  id: number;
+  testId: number;
+  startedAt: Date | null;
+  currentQuestion: number;
+  savedAnswers: unknown;
+  timeLeft: number;
+  extraTime: number;
+  finished: boolean;
+  blocked: boolean;
+  blockReason: string | null;
+};
+
+// =====================================================
+// HELPERS
+// =====================================================
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null
+  );
+}
+
+function normalizeSeconds(
+  value: unknown
+): number {
+  return Math.max(
+    0,
+    Math.floor(
+      Number(value) || 0
+    )
+  );
+}
+
+// =====================================================
 // POST /api/test/begin
-//
-// Викликається ОДИН РАЗ кнопкою
-// «Розпочати тестування».
-//
-// Саме тут офіційно починається тестування.
-//
-// До цього моменту startedAt === null.
-//
-// Endpoint:
-// - перевіряє sessionId;
-// - перевіряє існування сесії;
-// - перевіряє, що сесія належить тесту;
-// - якщо startedAt вже встановлений —
-//   повторно його НЕ змінює;
-// - якщо startedAt === null —
-//   встановлює поточний час;
-// - повертає актуальний стан сесії.
 // =====================================================
 
 export async function POST(
@@ -37,7 +66,8 @@ export async function POST(
     let body: unknown;
 
     try {
-      body = await request.json();
+      body =
+        await request.json();
     } catch {
       return NextResponse.json(
         {
@@ -51,10 +81,7 @@ export async function POST(
       );
     }
 
-    if (
-      typeof body !== "object" ||
-      body === null
-    ) {
+    if (!isRecord(body)) {
       return NextResponse.json(
         {
           success: false,
@@ -68,31 +95,38 @@ export async function POST(
     }
 
     const {
-      sessionId,
-      testId,
-    } = body as {
-      sessionId?: unknown;
-      testId?: unknown;
-    };
+      sessionId:
+        rawSessionId,
+      testId:
+        rawTestId,
+    } =
+      body as BeginBody;
 
     // ===================================================
-    // SESSION ID
+    // IDS
     // ===================================================
 
-    const numericSessionId =
-      Number(sessionId);
+    const sessionId =
+      Number(rawSessionId);
+
+    const testId =
+      Number(rawTestId);
 
     if (
       !Number.isInteger(
-        numericSessionId
+        sessionId
       ) ||
-      numericSessionId <= 0
+      sessionId <= 0 ||
+      !Number.isInteger(
+        testId
+      ) ||
+      testId <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Некоректний id сесії.",
+            "Некоректні ідентифікатори.",
         },
         {
           status: 400,
@@ -100,39 +134,22 @@ export async function POST(
       );
     }
 
-    // ===================================================
-    // TEST ID
-    // ===================================================
-
-    const numericTestId =
-      Number(testId);
-
-    if (
-      !Number.isInteger(
-        numericTestId
-      ) ||
-      numericTestId <= 0
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Некоректний id тесту.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
+    console.log(
+      "TEST BEGIN: REQUEST",
+      {
+        sessionId,
+        testId,
+      }
+    );
 
     // ===================================================
-    // ПОШУК СЕСІЇ
+    // LOAD SESSION
     // ===================================================
 
     const session =
       await prisma.testSession.findUnique({
         where: {
-          id: numericSessionId,
+          id: sessionId,
         },
 
         select: {
@@ -154,18 +171,16 @@ export async function POST(
           blockReason: true,
           blockedAt: true,
 
-          lastActivityAt: true,
-
-          result: {
+          test: {
             select: {
-              id: true,
+              duration: true,
             },
           },
         },
       });
 
     // ===================================================
-    // СЕСІЮ НЕ ЗНАЙДЕНО
+    // SESSION NOT FOUND
     // ===================================================
 
     if (!session) {
@@ -182,12 +197,12 @@ export async function POST(
     }
 
     // ===================================================
-    // ПЕРЕВІРКА TEST ID
+    // TEST ID CHECK
     // ===================================================
 
     if (
       session.testId !==
-      numericTestId
+      testId
     ) {
       return NextResponse.json(
         {
@@ -202,7 +217,7 @@ export async function POST(
     }
 
     // ===================================================
-    // ПЕРЕВІРКА СТАНУ
+    // FINISHED
     // ===================================================
 
     if (session.finished) {
@@ -210,22 +225,24 @@ export async function POST(
         {
           success: false,
           message:
-            "Тестування вже завершено.",
+            "Тест уже завершено.",
         },
         {
           status: 409,
         }
       );
     }
+
+    // ===================================================
+    // BLOCKED
+    // ===================================================
 
     if (session.blocked) {
       return NextResponse.json(
         {
           success: false,
           message:
-            "Тестування заблоковано.",
-          blockReason:
-            session.blockReason,
+            "Сесію тестування заблоковано.",
         },
         {
           status: 409,
@@ -234,91 +251,269 @@ export async function POST(
     }
 
     // ===================================================
-    // ЯКЩО ТЕСТ ВЖЕ РОЗПОЧАТО
-    //
-    // Повторне натискання кнопки НЕ повинно
-    // змінювати startedAt.
-    //
-    // Це дуже важливо.
+    // CONSTANTS
     // ===================================================
 
-    if (session.startedAt) {
+    const durationSeconds =
+      normalizeSeconds(
+        session.test.duration *
+          60
+      );
+
+    const extraTime =
+      normalizeSeconds(
+        session.extraTime
+      );
+
+    const totalDuration =
+      durationSeconds +
+      extraTime;
+
+    // ===================================================
+    // DEBUG
+    // ===================================================
+
+    console.log(
+      "TEST BEGIN: SESSION STATE",
+      {
+        sessionId:
+          session.id,
+
+        startedAt:
+          session.startedAt,
+
+        databaseTimeLeft:
+          session.timeLeft,
+
+        durationSeconds,
+
+        extraTime,
+
+        totalDuration,
+      }
+    );
+
+    // ===================================================
+    // FIRST OFFICIAL START
+    //
+    // Якщо startedAt === null,
+    // тест ще НЕ починався.
+    //
+    // Саме зараз починається
+    // офіційний відлік.
+    // ===================================================
+
+    if (
+      session.startedAt ===
+      null
+    ) {
+      const startedAt =
+        new Date();
+
+      // -------------------------------------------------
+      // КРИТИЧНО
+      //
+      // Перший офіційний старт:
+      //
+      // startedAt = NOW
+      // timeLeft = ПОВНИЙ ЧАС
+      //
+      // Для 60 хв:
+      //
+      // 3600 секунд
+      // -------------------------------------------------
+
+      const updated =
+        await prisma.testSession.update({
+          where: {
+            id: session.id,
+
+            // ДОДАТКОВИЙ ЗАХИСТ:
+            //
+            // Якщо паралельно інший запит
+            // уже встиг почати сесію,
+            // цей update нічого не змінить.
+            startedAt: null,
+          },
+
+          data: {
+            startedAt,
+
+            timeLeft:
+              totalDuration,
+
+            lastActivityAt:
+              startedAt,
+          },
+
+          select: {
+            id: true,
+            testId: true,
+
+            startedAt: true,
+
+            currentQuestion: true,
+            savedAnswers: true,
+
+            timeLeft: true,
+            extraTime: true,
+
+            finished: true,
+
+            blocked: true,
+            blockReason: true,
+          },
+        });
+
+      console.log(
+        "TEST BEGIN: OFFICIAL FIRST START",
+        {
+          sessionId:
+            updated.id,
+
+          testId:
+            updated.testId,
+
+          startedAt:
+            updated.startedAt,
+
+          timeLeft:
+            updated.timeLeft,
+
+          extraTime:
+            updated.extraTime,
+        }
+      );
+
+      const responseSession: SessionResponse =
+        {
+          id:
+            updated.id,
+
+          testId:
+            updated.testId,
+
+          startedAt:
+            updated.startedAt,
+
+          currentQuestion:
+            updated.currentQuestion,
+
+          savedAnswers:
+            updated.savedAnswers,
+
+          timeLeft:
+            normalizeSeconds(
+              updated.timeLeft
+            ),
+
+          extraTime:
+            normalizeSeconds(
+              updated.extraTime
+            ),
+
+          finished:
+            updated.finished,
+
+          blocked:
+            updated.blocked,
+
+          blockReason:
+            updated.blockReason,
+        };
+
       return NextResponse.json(
         {
           success: true,
-          alreadyStarted: true,
 
-          session: {
-            id: session.id,
+          alreadyStarted:
+            false,
 
-            testId:
-              session.testId,
-
-            startedAt:
-              session.startedAt,
-
-            currentQuestion:
-              session.currentQuestion,
-
-            savedAnswers:
-              session.savedAnswers,
-
-            timeLeft:
-              Math.max(
-                0,
-                Math.floor(
-                  session.timeLeft
-                )
-              ),
-
-            extraTime:
-              Math.max(
-                0,
-                Math.floor(
-                  session.extraTime
-                )
-              ),
-
-            finished:
-              session.finished,
-
-            finishedAt:
-              session.finishedAt,
-
-            blocked:
-              session.blocked,
-
-            blockReason:
-              session.blockReason,
-
-            blockedAt:
-              session.blockedAt,
-
-            lastActivityAt:
-              session.lastActivityAt,
-
-            resultId:
-              session.result?.id ??
-              null,
-          },
+          session:
+            responseSession,
         },
         {
           headers: {
             "Cache-Control":
-              "no-store, no-cache, must-revalidate",
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+
+            Pragma:
+              "no-cache",
+
+            Expires:
+              "0",
           },
         }
       );
     }
 
     // ===================================================
-    // ОФІЦІЙНИЙ ПОЧАТОК ТЕСТУВАННЯ
+    // ALREADY STARTED
+    // ===================================================
     //
-    // Саме тут запускається час.
+    // Сюди потрапляємо:
+    //
+    // - після F5;
+    // - повторного відкриття сторінки;
+    // - повторного POST /begin;
+    // - повернення на сторінку.
+    //
+    // НОВІ 60 ХВ НЕ ДАЄМО.
+    //
+    // Рахуємо залишок від справжнього
+    // startedAt.
     // ===================================================
 
     const now =
       new Date();
+
+    const elapsedSeconds =
+      Math.max(
+        0,
+        Math.floor(
+          (
+            now.getTime() -
+            session.startedAt.getTime()
+          ) / 1000
+        )
+      );
+
+    const actualTimeLeft =
+      Math.max(
+        0,
+        totalDuration -
+          elapsedSeconds
+      );
+
+    console.log(
+      "TEST BEGIN: ALREADY STARTED",
+      {
+        sessionId:
+          session.id,
+
+        startedAt:
+          session.startedAt,
+
+        now,
+
+        elapsedSeconds,
+
+        totalDuration,
+
+        actualTimeLeft,
+
+        databaseTimeLeft:
+          session.timeLeft,
+      }
+    );
+
+    // ===================================================
+    // UPDATE SERVER TIME
+    //
+    // Зберігаємо актуальний залишок,
+    // щоб інші серверні запити бачили
+    // той самий стан.
+    // ===================================================
 
     const updated =
       await prisma.testSession.update({
@@ -327,9 +522,11 @@ export async function POST(
         },
 
         data: {
-          startedAt: now,
+          timeLeft:
+            actualTimeLeft,
 
-          lastActivityAt: now,
+          lastActivityAt:
+            now,
         },
 
         select: {
@@ -345,33 +542,96 @@ export async function POST(
           extraTime: true,
 
           finished: true,
-          finishedAt: true,
 
           blocked: true,
           blockReason: true,
-          blockedAt: true,
-
-          lastActivityAt: true,
-
-          result: {
-            select: {
-              id: true,
-            },
-          },
         },
       });
 
     // ===================================================
-    // ВІДПОВІДЬ
+    // EXPIRED
+    // ===================================================
+
+    if (
+      actualTimeLeft <= 0
+    ) {
+      console.log(
+        "TEST BEGIN: SESSION EXPIRED",
+        {
+          sessionId:
+            updated.id,
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: true,
+
+          alreadyStarted:
+            true,
+
+          session: {
+            id:
+              updated.id,
+
+            testId:
+              updated.testId,
+
+            startedAt:
+              updated.startedAt,
+
+            currentQuestion:
+              updated.currentQuestion,
+
+            savedAnswers:
+              updated.savedAnswers,
+
+            timeLeft: 0,
+
+            extraTime:
+              normalizeSeconds(
+                updated.extraTime
+              ),
+
+            finished:
+              updated.finished,
+
+            blocked:
+              updated.blocked,
+
+            blockReason:
+              updated.blockReason,
+          },
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
+
+            Pragma:
+              "no-cache",
+
+            Expires:
+              "0",
+          },
+        }
+      );
+    }
+
+    // ===================================================
+    // RESPONSE
     // ===================================================
 
     return NextResponse.json(
       {
         success: true,
-        alreadyStarted: false,
+
+        alreadyStarted:
+          true,
 
         session: {
-          id: updated.id,
+          id:
+            updated.id,
 
           testId:
             updated.testId,
@@ -386,48 +646,33 @@ export async function POST(
             updated.savedAnswers,
 
           timeLeft:
-            Math.max(
-              0,
-              Math.floor(
-                updated.timeLeft
-              )
-            ),
+            actualTimeLeft,
 
           extraTime:
-            Math.max(
-              0,
-              Math.floor(
-                updated.extraTime
-              )
+            normalizeSeconds(
+              updated.extraTime
             ),
 
           finished:
             updated.finished,
-
-          finishedAt:
-            updated.finishedAt,
 
           blocked:
             updated.blocked,
 
           blockReason:
             updated.blockReason,
-
-          blockedAt:
-            updated.blockedAt,
-
-          lastActivityAt:
-            updated.lastActivityAt,
-
-          resultId:
-            updated.result?.id ??
-            null,
         },
       },
       {
         headers: {
           "Cache-Control":
-            "no-store, no-cache, must-revalidate",
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+
+          Pragma:
+            "no-cache",
+
+          Expires:
+            "0",
         },
       }
     );

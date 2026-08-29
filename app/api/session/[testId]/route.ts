@@ -12,21 +12,20 @@ import { prisma } from "@/app/lib/prisma";
 //
 // GET /api/session/[testId]?sessionId=123
 //
-// Повертає актуальний стан сесії.
+// Повертає поточний стан сесії.
 //
 // ВАЖЛИВО:
 //
 // GET НЕ ЗМІНЮЄ БАЗУ ДАНИХ.
 //
-// Якщо startedAt === null:
-// - тест ще офіційно не розпочато;
-// - час НЕ відраховується;
-// - повертається збережений timeLeft.
+// timeLeft повертається саме зі сесії.
 //
-// Якщо startedAt !== null:
-// - час розраховується від startedAt.
+// Фактичний countdown запускається на клієнті
+// через TestSessionContext.
 //
-// НІЯКОГО UPDATE.
+// Адміністративні зміни (+5 хв, -5 хв) записуються
+// у timeLeft через /api/session/manage/[id]
+// і тому будуть отримані наступним GET.
 // =====================================================
 
 export async function GET(
@@ -104,17 +103,13 @@ export async function GET(
             "Некоректний id сесії.",
         },
         {
-          status: 400
+          status: 400,
         }
       );
     }
 
     // ===================================================
     // ОТРИМУЄМО СЕСІЮ
-    //
-    // ТІЛЬКИ SELECT.
-    //
-    // GET НІКОЛИ НЕ РОБИТЬ UPDATE.
     // ===================================================
 
     const session =
@@ -196,247 +191,43 @@ export async function GET(
     }
 
     // ===================================================
-    // БАЗОВА ВІДПОВІДЬ
-    // ===================================================
+    // TIME LEFT
+    //
+    // КЛЮЧОВА ЗМІНА:
+    //
+    // НЕ перераховуємо:
+    //
+    // duration + extraTime - elapsed
+    //
+    // через startedAt.
+    //
+    // Повертаємо timeLeft із БД.
+    //
+    // Countdown працює локально в
+    // TestSessionContext.
+    //
+    // Адміністративні зміни часу записуються
+    // безпосередньо в timeLeft.
+    // =====================================================
 
-    const baseResponse = {
-      id: session.id,
+    const normalizedTimeLeft =
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            session.timeLeft
+          ) || 0
+        )
+      );
 
-      testId:
-        session.testId,
-
-      participantId:
-        session.participantId,
-
-      currentQuestion:
-        session.currentQuestion,
-
-      savedAnswers:
-        session.savedAnswers,
-
-      extraTime:
-        Math.max(
-          0,
-          Math.floor(
+    const normalizedExtraTime =
+      Math.max(
+        0,
+        Math.floor(
+          Number(
             session.extraTime
-          )
-        ),
-
-      finished:
-        session.finished,
-
-      finishedAt:
-        session.finishedAt,
-
-      blocked:
-        session.blocked,
-
-      blockReason:
-        session.blockReason,
-
-      blockedAt:
-        session.blockedAt,
-
-      startedAt:
-        session.startedAt,
-
-      createdAt:
-        session.createdAt,
-
-      updatedAt:
-        session.updatedAt,
-
-      lastActivityAt:
-        session.lastActivityAt,
-
-      resultId:
-        session.result?.id ??
-        null,
-    };
-
-    // ===================================================
-    // ЗАВЕРШЕНА СЕСІЯ
-    //
-    // Після завершення таймер більше
-    // не перераховується.
-    // ===================================================
-
-    if (session.finished) {
-      return NextResponse.json(
-        {
-          ...baseResponse,
-
-          timeLeft:
-            Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            ),
-        },
-        {
-          headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate, proxy-revalidate",
-          },
-        }
-      );
-    }
-
-    // ===================================================
-    // ЗАБЛОКОВАНА СЕСІЯ
-    //
-    // Під час блокування час НЕ зменшується.
-    //
-    // Повертаємо timeLeft, який збережений
-    // у БД.
-    // ===================================================
-
-    if (session.blocked) {
-      return NextResponse.json(
-        {
-          ...baseResponse,
-
-          timeLeft:
-            Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            ),
-        },
-        {
-          headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate, proxy-revalidate",
-          },
-        }
-      );
-    }
-
-    // ===================================================
-    // ТЕСТ ЩЕ НЕ РОЗПОЧАТО
-    //
-    // startedAt === null означає:
-    //
-    // учасник створив сесію,
-    // але ще НЕ натиснув
-    // «Розпочати тестування».
-    //
-    // У цей момент час НЕ МОЖНА відраховувати.
-    // ===================================================
-
-    if (
-      session.startedAt === null
-    ) {
-      return NextResponse.json(
-        {
-          ...baseResponse,
-
-          timeLeft:
-            Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            ),
-        },
-        {
-          headers: {
-            "Cache-Control":
-              "no-store, no-cache, must-revalidate, proxy-revalidate",
-          },
-        }
-      );
-    }
-
-    // ===================================================
-    // АКТИВНА СЕСІЯ
-    //
-    // ВАЖЛИВО:
-    //
-    // НЕ використовуємо lastActivityAt.
-    //
-    // Heartbeat оновлює lastActivityAt,
-    // тому він НЕ повинен використовуватися
-    // для розрахунку часу тестування.
-    //
-    // Для активної сесії використовуємо
-    // startedAt.
-    // ===================================================
-
-    const now =
-      new Date();
-
-    // Тут TypeScript уже знає,
-    // що startedAt НЕ null,
-    // оскільки вище була перевірка:
-    //
-    // if (session.startedAt === null) return ...
-
-    const startedAt =
-      session.startedAt;
-
-    const elapsedSeconds =
-      Math.max(
-        0,
-        Math.floor(
-          (
-            now.getTime() -
-            startedAt.getTime()
-          ) / 1000
+          ) || 0
         )
-      );
-
-    // ===================================================
-    // БАЗОВИЙ ЧАС ТЕСТУ
-    //
-    // duration у Test зберігається
-    // у хвилинах.
-    //
-    // Перетворюємо у секунди.
-    // ===================================================
-
-    const baseDurationSeconds =
-      Math.max(
-        0,
-        Math.floor(
-          session.test.duration *
-            60
-        )
-      );
-
-    // ===================================================
-    // ДОДАТКОВИЙ ЧАС
-    //
-    // extraTime зберігається
-    // у секундах.
-    // ===================================================
-
-    const extraTime =
-      Math.max(
-        0,
-        Math.floor(
-          session.extraTime
-        )
-      );
-
-    // ===================================================
-    // АКТУАЛЬНИЙ ЗАЛИШОК
-    //
-    // duration
-    // + extraTime
-    // - elapsed
-    //
-    // НІЧОГО НЕ ЗАПИСУЄМО В БД.
-    // ===================================================
-
-    const actualTimeLeft =
-      Math.max(
-        0,
-        baseDurationSeconds +
-          extraTime -
-          elapsedSeconds
       );
 
     // ===================================================
@@ -445,10 +236,56 @@ export async function GET(
 
     return NextResponse.json(
       {
-        ...baseResponse,
+        id: session.id,
+
+        testId:
+          session.testId,
+
+        participantId:
+          session.participantId,
+
+        currentQuestion:
+          session.currentQuestion,
+
+        savedAnswers:
+          session.savedAnswers,
 
         timeLeft:
-          actualTimeLeft,
+          normalizedTimeLeft,
+
+        extraTime:
+          normalizedExtraTime,
+
+        finished:
+          session.finished,
+
+        finishedAt:
+          session.finishedAt,
+
+        blocked:
+          session.blocked,
+
+        blockReason:
+          session.blockReason,
+
+        blockedAt:
+          session.blockedAt,
+
+        startedAt:
+          session.startedAt,
+
+        createdAt:
+          session.createdAt,
+
+        updatedAt:
+          session.updatedAt,
+
+        lastActivityAt:
+          session.lastActivityAt,
+
+        resultId:
+          session.result?.id ??
+          null,
       },
       {
         headers: {
@@ -493,9 +330,6 @@ export async function GET(
 // - blocked;
 // - blockReason;
 // - blockedAt.
-//
-// Це захищає адміністративні дії
-// та офіційний час початку тестування.
 // =====================================================
 
 export async function POST(
@@ -690,14 +524,6 @@ export async function POST(
     //
     // Heartbeat змінює ТІЛЬКИ
     // lastActivityAt.
-    //
-    // НЕ змінює:
-    // - startedAt;
-    // - timeLeft;
-    // - extraTime;
-    // - blocked;
-    // - blockReason;
-    // - blockedAt.
     // ===================================================
 
     if (heartbeat === true) {
@@ -757,7 +583,9 @@ export async function POST(
             Math.max(
               0,
               Math.floor(
-                updated.timeLeft
+                Number(
+                  updated.timeLeft
+                ) || 0
               )
             ),
 
@@ -765,7 +593,9 @@ export async function POST(
             Math.max(
               0,
               Math.floor(
-                updated.extraTime
+                Number(
+                  updated.extraTime
+                ) || 0
               )
             ),
 
@@ -858,7 +688,7 @@ export async function POST(
     // finished = true
     //
     // finished = false НЕ МОЖЕ
-    // скасувати завершення сесії.
+    // скасувати завершення.
     // ===================================================
 
     if (finished === true) {
@@ -884,9 +714,8 @@ export async function POST(
     // blockReason
     // blockedAt
     //
-    // Тому POST учасника не може
-    // перезаписати адміністративні
-    // зміни або офіційний час старту.
+    // Тому учасник не може
+    // перезаписати адміністративні зміни.
     // ===================================================
 
     const updated =
@@ -946,7 +775,9 @@ export async function POST(
           Math.max(
             0,
             Math.floor(
-              updated.timeLeft
+              Number(
+                updated.timeLeft
+              ) || 0
             )
           ),
 
@@ -954,7 +785,9 @@ export async function POST(
           Math.max(
             0,
             Math.floor(
-              updated.extraTime
+              Number(
+                updated.extraTime
+              ) || 0
             )
           ),
 

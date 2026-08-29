@@ -1,47 +1,43 @@
 "use client";
 
-import { useEffect } from "react";
-
 import { useTestSession } from "@/app/context/TestSessionContext";
 
 export default function Timer() {
   const {
     timeLeft,
-    startTimer,
-    stopTimer,
+    timerRunning,
   } = useTestSession();
 
-  useEffect(() => {
-    startTimer();
+  console.log("TIMER RENDER:", {
+    timeLeft,
+    timerRunning,
+  });
 
-    return () => {
-      stopTimer();
-    };
-
-    // Запускаємо лише при монтуванні Timer
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const safeTimeLeft = Math.max(
+    0,
+    Math.floor(Number(timeLeft) || 0)
+  );
 
   const hours = Math.floor(
-    timeLeft / 3600
+    safeTimeLeft / 3600
   );
 
   const minutes = Math.floor(
-    (timeLeft % 3600) / 60
+    (safeTimeLeft % 3600) / 60
   );
 
   const seconds =
-    timeLeft % 60;
+    safeTimeLeft % 60;
 
   return (
-    <div>
+    <div className="min-w-[150px] text-right">
       <div className="mb-1 text-sm text-gray-500">
         Залишилося часу
       </div>
 
       <div
         className={`text-3xl font-bold ${
-          timeLeft <= 300
+          safeTimeLeft <= 300
             ? "text-red-600"
             : "text-[#7A1F2B]"
         }`}
@@ -49,6 +45,12 @@ export default function Timer() {
         {String(hours).padStart(2, "0")}:
         {String(minutes).padStart(2, "0")}:
         {String(seconds).padStart(2, "0")}
+      </div>
+
+      <div className="text-xs text-gray-400">
+        {timerRunning
+          ? "Таймер працює"
+          : "Таймер зупинений"}
       </div>
     </div>
   );

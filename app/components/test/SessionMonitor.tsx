@@ -1,517 +1,653 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 
-import { useTestSession } from "@/app/context/TestSessionContext";
+import {
+  useTestSession,
+} from "@/app/context/TestSessionContext";
 
-type SessionResponse = {
+// =====================================================
+// SERVER SESSION
+// =====================================================
+
+type ServerSession = {
   id: number;
+
+  testId: number;
+
   currentQuestion: number;
 
-  savedAnswers:
-    | Record<number, number[]>
-    | null;
+  savedAnswers: unknown;
 
   timeLeft: number;
+
   extraTime: number;
 
   finished: boolean;
+
   blocked: boolean;
+
   blockReason: string | null;
 
-  resultId?: number | null;
+  startedAt: string | null;
 };
 
-export default function SessionMonitor() {
+// =====================================================
+// PROPS
+// =====================================================
+
+type SessionMonitorProps = {
+  testId: number;
+
+  pollInterval?: number;
+
+  heartbeatInterval?: number;
+};
+
+// =====================================================
+// NORMALIZE ANSWERS
+// =====================================================
+
+function normalizeSavedAnswers(
+  value: unknown
+): Record<number, number[]> {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return {};
+  }
+
+  const result: Record<
+    number,
+    number[]
+  > = {};
+
+  for (const [
+    key,
+    valueForQuestion,
+  ] of Object.entries(
+    value as Record<
+      string,
+      unknown
+    >
+  )) {
+    if (
+      !Array.isArray(
+        valueForQuestion
+      )
+    ) {
+      continue;
+    }
+
+    const questionId =
+      Number(key);
+
+    if (
+      !Number.isInteger(
+        questionId
+      )
+    ) {
+      continue;
+    }
+
+    result[questionId] =
+      valueForQuestion.filter(
+        (
+          item
+        ): item is number =>
+          typeof item ===
+            "number" &&
+          Number.isInteger(item)
+      );
+  }
+
+  return result;
+}
+
+// =====================================================
+// COMPONENT
+// =====================================================
+
+export default function SessionMonitor({
+  testId,
+  pollInterval = 5000,
+  heartbeatInterval = 10000,
+}: SessionMonitorProps) {
   const {
     sessionId,
-    currentQuestion,
-    savedAnswers,
 
-    setTimeLeft,
+    setSessionId,
+
     restoreSession,
 
-    test,
+    setCurrentQuestion,
   } = useTestSession();
 
   // =====================================================
-  // STABILЬНИЙ TEST ID
-  //
-  // Після перевірки test !== null зберігаємо ID окремо.
-  //
-  // Це:
-  // 1. усуває TypeScript-помилку;
-  // 2. не дає вкладеним async-функціям працювати
-  //    безпосередньо з nullable test.
+  // REFS
   // =====================================================
 
-  const testId =
-    test?.id ?? null;
-
-  // =====================================================
-  // ПОПЕРЕДЖЕННЯ ПРО ПАРАЛЕЛЬНІ ЗАПИТИ
-  // =====================================================
-
-  const restoringRef =
+  const mountedRef =
     useRef(false);
 
-  const synchronizingRef =
+  const initialSyncDoneRef =
     useRef(false);
 
-  // =====================================================
-  // ОСТАННІ УСПІШНО СИНХРОНІЗОВАНІ ДАНІ
-  //
-  // Зберігаємо не response сервера,
-  // а саме payload, який ми відправили.
-  // =====================================================
+  const pollingRef =
+    useRef(false);
 
-  const lastSentRef =
-    useRef<string>("");
+  const heartbeatRef =
+    useRef(false);
 
-  // =====================================================
-  // ОСТАННІ ЛОКАЛЬНІ ДАНІ
-  //
-  // Використовуються для захисту від ситуації,
-  // коли старий async-запит повертається після
-  // нового стану React.
-  // =====================================================
-
-  const latestStateRef =
-    useRef({
-      sessionId:
-        sessionId,
-
-      currentQuestion:
-        currentQuestion,
-
-      savedAnswers:
-        savedAnswers ?? {},
-    });
+  const lastServerTimeRef =
+    useRef<number | null>(null);
 
   // =====================================================
-  // ПОСТІЙНО ОНОВЛЮЄМО REF АКТУАЛЬНИМ СТАНОМ
+  // MOUNT
   // =====================================================
 
   useEffect(() => {
-    latestStateRef.current = {
-      sessionId,
+    mountedRef.current = true;
 
-      currentQuestion,
-
-      savedAnswers:
-        savedAnswers ?? {},
+    return () => {
+      mountedRef.current = false;
     };
+  }, []);
+
+  // =====================================================
+  // FIND SESSION ID
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !testId ||
+      sessionId
+    ) {
+      return;
+    }
+
+    const sessionStorageId =
+      sessionStorage.getItem(
+        "testSessionId"
+      );
+
+    const localStorageId =
+      localStorage.getItem(
+        "testSessionId"
+      );
+
+    const storedSessionId =
+      sessionStorageId ??
+      localStorageId;
+
+    if (!storedSessionId) {
+      console.error(
+        "SESSION MONITOR: sessionId не знайдено."
+      );
+
+      return;
+    }
+
+    const numericSessionId =
+      Number(
+        storedSessionId
+      );
+
+    if (
+      !Number.isInteger(
+        numericSessionId
+      ) ||
+      numericSessionId <= 0
+    ) {
+      console.error(
+        "SESSION MONITOR: некоректний sessionId."
+      );
+
+      return;
+    }
+
+    setSessionId(
+      numericSessionId
+    );
   }, [
+    testId,
     sessionId,
-    currentQuestion,
-    savedAnswers,
+    setSessionId,
   ]);
 
   // =====================================================
-  // СИНХРОНІЗАЦІЯ СТАНУ УЧАСНИКА
-  //
-  // Надсилаємо:
-  // - currentQuestion;
-  // - savedAnswers.
-  //
-  // НЕ надсилаємо:
-  // - timeLeft;
-  // - extraTime;
-  // - blocked;
-  // - blockReason;
-  // - blockedAt.
-  //
-  // Це відповідає серверному API.
+  // APPLY SERVER SESSION
   // =====================================================
 
-  async function synchronizeSession() {
-    const currentSessionId =
-      latestStateRef.current.sessionId;
+  const applySession =
+    useCallback(
+      (
+        session: ServerSession
+      ) => {
+        if (
+          !mountedRef.current
+        ) {
+          return;
+        }
 
-    const currentTestId =
-      testId;
-
-    if (
-      !currentSessionId ||
-      !currentTestId
-    ) {
-      return;
-    }
-
-    if (synchronizingRef.current) {
-      return;
-    }
-
-    // ---------------------------------------------------
-    // Беремо стан саме на момент початку синхронізації.
-    // ---------------------------------------------------
-
-    const state =
-      latestStateRef.current;
-
-    const payload = {
-      sessionId:
-        currentSessionId,
-
-      currentQuestion:
-        state.currentQuestion,
-
-      savedAnswers:
-        state.savedAnswers,
-    };
-
-    const serialized =
-      JSON.stringify(payload);
-
-    // ---------------------------------------------------
-    // Нічого нового не змінилося.
-    // ---------------------------------------------------
-
-    if (
-      serialized ===
-      lastSentRef.current
-    ) {
-      return;
-    }
-
-    synchronizingRef.current =
-      true;
-
-    try {
-      const response =
-        await fetch(
-          `/api/session/${currentTestId}`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            cache: "no-store",
-
-            body: JSON.stringify(
-              payload
-            ),
-          }
-        );
-
-      if (!response.ok) {
-        console.error(
-          "SESSION MONITOR POST ERROR:",
-          response.status
-        );
-
-        return;
-      }
-
-      const data =
-        (await response.json()) as
-          | SessionResponse
-          | null;
-
-      if (!data) {
-        return;
-      }
-
-      // ---------------------------------------------------
-      // КРИТИЧНО
-      //
-      // НЕ робимо:
-      //
-      // setCurrentQuestion(
-      //   data.currentQuestion
-      // );
-      //
-      // і НЕ робимо:
-      //
-      // restoreSession(...)
-      //
-      // після звичайного POST.
-      //
-      // Інакше старий response може відкотити
-      // новий стан React.
-      // ---------------------------------------------------
-
-      if (
-        typeof data.timeLeft ===
-        "number"
-      ) {
-        setTimeLeft(
+        const normalizedTime =
           Math.max(
             0,
             Math.floor(
-              data.timeLeft
+              Number(
+                session.timeLeft
+              ) || 0
             )
-          )
-        );
-      }
-
-      // ---------------------------------------------------
-      // Запам'ятовуємо саме payload,
-      // який успішно прийняв сервер.
-      // ---------------------------------------------------
-
-      lastSentRef.current =
-        serialized;
-    } catch (error) {
-      console.error(
-        "SESSION MONITOR ERROR:",
-        error
-      );
-    } finally {
-      synchronizingRef.current =
-        false;
-    }
-  }
-
-  // =====================================================
-  // ПОЧАТКОВЕ ВІДНОВЛЕННЯ СЕСІЇ
-  //
-  // GET один раз отримує:
-  // - currentQuestion;
-  // - savedAnswers;
-  // - timeLeft.
-  //
-  // Після цього Context відновлюється із БД.
-  // =====================================================
-
-  useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
-      return;
-    }
-
-    if (restoringRef.current) {
-      return;
-    }
-
-    let cancelled = false;
-
-    restoringRef.current =
-      true;
-
-    const currentSessionId =
-      sessionId;
-
-    const currentTestId =
-      testId;
-
-    async function restore() {
-      try {
-        const response =
-          await fetch(
-            `/api/session/${currentTestId}?sessionId=${currentSessionId}`,
-            {
-              method: "GET",
-              cache: "no-store",
-            }
           );
-
-        if (!response.ok) {
-          console.error(
-            "SESSION RESTORE HTTP ERROR:",
-            response.status
-          );
-
-          return;
-        }
-
-        const data =
-          (await response.json()) as
-            | SessionResponse
-            | null;
-
-        if (
-          cancelled ||
-          !data
-        ) {
-          return;
-        }
 
         const answers =
-          data.savedAnswers ?? {};
+          normalizeSavedAnswers(
+            session.savedAnswers
+          );
+
+        console.log(
+          "SESSION MONITOR: APPLY SESSION",
+          {
+            sessionId:
+              session.id,
+
+            timeLeft:
+              normalizedTime,
+
+            startedAt:
+              session.startedAt,
+
+            finished:
+              session.finished,
+
+            blocked:
+              session.blocked,
+          }
+        );
+
+        lastServerTimeRef.current =
+          normalizedTime;
 
         // =================================================
-        // ВІДНОВЛЮЄМО СТАН ІЗ БД
+        // FINISHED
+        // =================================================
+
+        if (
+          session.finished
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            normalizedTime,
+            session.startedAt,
+            true,
+            session.blocked
+          );
+
+          return;
+        }
+
+        // =================================================
+        // BLOCKED
+        // =================================================
+
+        if (
+          session.blocked
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            normalizedTime,
+            session.startedAt,
+            false,
+            true
+          );
+
+          return;
+        }
+
+        // =================================================
+        // NOT STARTED
+        // =================================================
+
+        if (
+          !session.startedAt
+        ) {
+          console.warn(
+            "SESSION MONITOR: TEST NOT STARTED"
+          );
+
+          return;
+        }
+
+        // =================================================
+        // EXPIRED
+        // =================================================
+
+        if (
+          normalizedTime <= 0
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            0,
+            session.startedAt,
+            false,
+            false
+          );
+
+          return;
+        }
+
+        // =================================================
+        // ACTIVE
         // =================================================
 
         restoreSession(
-          data.currentQuestion,
+          session.currentQuestion,
           answers,
-          data.timeLeft
+          normalizedTime,
+          session.startedAt,
+          false,
+          false
         );
+      },
+      [restoreSession]
+    );
 
-        // =================================================
-        // Синхронізований стан уже є серверним.
-        // =================================================
+  // =====================================================
+  // FETCH SESSION
+  //
+  // ВАЖЛИВО:
+  //
+  // ЦЕЙ КОМПОНЕНТ БІЛЬШЕ НЕ ВИКЛИКАЄ
+  // POST /api/test/begin.
+  //
+  // Він ТІЛЬКИ ЧИТАЄ АКТИВНУ СЕСІЮ
+  // через GET /api/session/[testId].
+  // =====================================================
 
-        lastSentRef.current =
-          JSON.stringify({
-            sessionId:
-              currentSessionId,
-
-            currentQuestion:
-              data.currentQuestion,
-
-            savedAnswers:
-              answers,
-          });
-      } catch (error) {
-        if (!cancelled) {
-          console.error(
-            "SESSION RESTORE ERROR:",
-            error
-          );
+  const fetchSession =
+    useCallback(
+      async (
+        forceSync = false
+      ) => {
+        if (
+          !sessionId ||
+          !testId
+        ) {
+          return;
         }
-      } finally {
-        restoringRef.current =
-          false;
-      }
-    }
-
-    restore();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    sessionId,
-    testId,
-    restoreSession,
-  ]);
-
-  // =====================================================
-  // СИНХРОНІЗАЦІЯ ПРИ ЗМІНІ:
-  //
-  // - currentQuestion;
-  // - savedAnswers.
-  //
-  // Невелика затримка потрібна, щоб React встиг
-  // сформувати остаточний стан після натискання.
-  // =====================================================
-
-  useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
-      return;
-    }
-
-    if (restoringRef.current) {
-      return;
-    }
-
-    const timeout =
-      window.setTimeout(() => {
-        synchronizeSession();
-      }, 150);
-
-    return () => {
-      window.clearTimeout(
-        timeout
-      );
-    };
-  }, [
-    sessionId,
-    testId,
-    currentQuestion,
-    savedAnswers,
-  ]);
-
-  // =====================================================
-  // HEARTBEAT
-  //
-  // Heartbeat ТІЛЬКИ оновлює lastActivityAt.
-  //
-  // Ми навмисно НЕ беремо з його response:
-  //
-  // - currentQuestion;
-  // - savedAnswers;
-  // - timeLeft.
-  //
-  // Таким чином heartbeat не може відкотити Context.
-  // =====================================================
-
-  useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const currentSessionId =
-      sessionId;
-
-    const currentTestId =
-      testId;
-
-    async function heartbeat() {
-      if (cancelled) {
-        return;
-      }
-
-      try {
-        const response =
-          await fetch(
-            `/api/session/${currentTestId}`,
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              cache: "no-store",
-
-              body: JSON.stringify({
-                sessionId:
-                  currentSessionId,
-
-                heartbeat: true,
-              }),
-            }
-          );
 
         if (
-          !response.ok &&
-          !cancelled
+          pollingRef.current
         ) {
-          console.error(
-            "SESSION HEARTBEAT HTTP ERROR:",
-            response.status
-          );
+          return;
         }
-      } catch (error) {
-        if (!cancelled) {
+
+        pollingRef.current =
+          true;
+
+        try {
+          const response =
+            await fetch(
+              `/api/session/${testId}?sessionId=${sessionId}`,
+              {
+                method: "GET",
+
+                cache: "no-store",
+
+                headers: {
+                  "Cache-Control":
+                    "no-cache",
+                },
+              }
+            );
+
+          if (
+            !response.ok
+          ) {
+            console.error(
+              "SESSION MONITOR GET ERROR:",
+              response.status
+            );
+
+            return;
+          }
+
+          const data =
+            (await response.json()) as
+              | ServerSession
+              | {
+                  error?: string;
+                };
+
+          if (
+            !mountedRef.current
+          ) {
+            return;
+          }
+
+          if (
+            !("id" in data) ||
+            typeof data.id !==
+              "number"
+          ) {
+            console.error(
+              "SESSION MONITOR: некоректна відповідь сервера",
+              data
+            );
+
+            return;
+          }
+
+          const serverSession =
+            data as ServerSession;
+
+          const serverTime =
+            Math.max(
+              0,
+              Math.floor(
+                Number(
+                  serverSession.timeLeft
+                ) || 0
+              )
+            );
+
+          // =================================================
+          // INITIAL SYNC
+          //
+          // Перший GET після відкриття
+          // синхронізує Context із сервером.
+          // =================================================
+
+          if (
+            !initialSyncDoneRef.current
+          ) {
+            console.log(
+              "SESSION MONITOR: INITIAL SYNC",
+              {
+                sessionId,
+
+                serverTime,
+
+                startedAt:
+                  serverSession.startedAt,
+              }
+            );
+
+            initialSyncDoneRef.current =
+              true;
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // FINISHED / BLOCKED / EXPIRED
+          // =================================================
+
+          if (
+            serverSession.finished ||
+            serverSession.blocked ||
+            serverTime <= 0
+          ) {
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // FORCE SYNC
+          //
+          // Повернення у вкладку,
+          // відновлення мережі тощо.
+          // =================================================
+
+          if (
+            forceSync
+          ) {
+            console.log(
+              "SESSION MONITOR: FORCE SYNC",
+              {
+                serverTime,
+              }
+            );
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // SERVER TIME CHANGE
+          //
+          // Адміністратор:
+          //
+          // +5 хв
+          // -5 хв
+          //
+          // або інша зміна часу.
+          // =================================================
+
+          const previousServerTime =
+            lastServerTimeRef.current;
+
+          if (
+            previousServerTime !==
+              null &&
+            Math.abs(
+              serverTime -
+                previousServerTime
+            ) >= 2
+          ) {
+            console.log(
+              "SESSION MONITOR: SERVER TIME CHANGED",
+              {
+                previous:
+                  previousServerTime,
+
+                current:
+                  serverTime,
+              }
+            );
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          lastServerTimeRef.current =
+            serverTime;
+
+          // =================================================
+          // QUESTION
+          // =================================================
+
+          setCurrentQuestion(
+            Number.isInteger(
+              serverSession.currentQuestion
+            )
+              ? serverSession.currentQuestion
+              : 0
+          );
+        } catch (error) {
           console.error(
-            "SESSION HEARTBEAT ERROR:",
+            "SESSION MONITOR GET ERROR:",
             error
           );
+        } finally {
+          pollingRef.current =
+            false;
         }
-      }
+      },
+      [
+        sessionId,
+        testId,
+        applySession,
+        setCurrentQuestion,
+      ]
+    );
+
+  // =====================================================
+  // INITIAL FETCH
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
     }
 
-    // Перше повідомлення.
-    heartbeat();
+    void fetchSession(
+      true
+    );
+  }, [
+    sessionId,
+    testId,
+    fetchSession,
+  ]);
+
+  // =====================================================
+  // POLLING
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
 
     const interval =
       window.setInterval(
-        heartbeat,
-        5000
+        () => {
+          void fetchSession(
+            false
+          );
+        },
+        pollInterval
       );
 
     return () => {
-      cancelled = true;
-
       window.clearInterval(
         interval
       );
@@ -519,12 +655,75 @@ export default function SessionMonitor() {
   }, [
     sessionId,
     testId,
+    pollInterval,
+    fetchSession,
   ]);
 
   // =====================================================
-  // ПЕРЕД ЗАКРИТТЯМ / ПЕРЕЗАВАНТАЖЕННЯМ
-  //
-  // sendBeacon передає останній стан.
+  // HEARTBEAT
+  // =====================================================
+
+  const sendHeartbeat =
+    useCallback(
+      async () => {
+        if (
+          !sessionId ||
+          !testId
+        ) {
+          return;
+        }
+
+        if (
+          heartbeatRef.current
+        ) {
+          return;
+        }
+
+        heartbeatRef.current =
+          true;
+
+        try {
+          await fetch(
+            `/api/session/${testId}`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+
+                "Cache-Control":
+                  "no-cache",
+              },
+
+              cache: "no-store",
+
+              body: JSON.stringify({
+                sessionId,
+
+                heartbeat:
+                  true,
+              }),
+            }
+          );
+        } catch (error) {
+          console.error(
+            "SESSION HEARTBEAT ERROR:",
+            error
+          );
+        } finally {
+          heartbeatRef.current =
+            false;
+        }
+      },
+      [
+        sessionId,
+        testId,
+      ]
+    );
+
+  // =====================================================
+  // HEARTBEAT INTERVAL
   // =====================================================
 
   useEffect(() => {
@@ -535,72 +734,113 @@ export default function SessionMonitor() {
       return;
     }
 
-    const currentTestId =
-      testId;
-
-    function handleBeforeUnload() {
-      const state =
-        latestStateRef.current;
-
-      if (
-        !state.sessionId
-      ) {
-        return;
-      }
-
-      const payload = {
-        sessionId:
-          state.sessionId,
-
-        currentQuestion:
-          state.currentQuestion,
-
-        savedAnswers:
-          state.savedAnswers,
-      };
-
-      try {
-        navigator.sendBeacon(
-          `/api/session/${currentTestId}`,
-          new Blob(
-            [
-              JSON.stringify(
-                payload
-              ),
-            ],
-            {
-              type:
-                "application/json",
-            }
-          )
-        );
-      } catch (error) {
-        console.error(
-          "SESSION BEFORE UNLOAD ERROR:",
-          error
-        );
-      }
-    }
-
-    window.addEventListener(
-      "beforeunload",
-      handleBeforeUnload
-    );
+    const interval =
+      window.setInterval(
+        () => {
+          void sendHeartbeat();
+        },
+        heartbeatInterval
+      );
 
     return () => {
-      window.removeEventListener(
-        "beforeunload",
-        handleBeforeUnload
+      window.clearInterval(
+        interval
       );
     };
   }, [
     sessionId,
     testId,
+    heartbeatInterval,
+    sendHeartbeat,
   ]);
 
   // =====================================================
-  // UI ВІДСУТНІЙ
+  // VISIBILITY
   // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
+
+    const handleVisibility =
+      () => {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          console.log(
+            "SESSION MONITOR: TAB VISIBLE"
+          );
+
+          void fetchSession(
+            true
+          );
+        }
+      };
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibility
+    );
+
+    return () => {
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibility
+      );
+    };
+  }, [
+    sessionId,
+    testId,
+    fetchSession,
+  ]);
+
+  // =====================================================
+  // ONLINE
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !testId
+    ) {
+      return;
+    }
+
+    const handleOnline =
+      () => {
+        console.log(
+          "SESSION MONITOR: ONLINE"
+        );
+
+        void fetchSession(
+          true
+        );
+
+        void sendHeartbeat();
+      };
+
+    window.addEventListener(
+      "online",
+      handleOnline
+    );
+
+    return () => {
+      window.removeEventListener(
+        "online",
+        handleOnline
+      );
+    };
+  }, [
+    sessionId,
+    testId,
+    fetchSession,
+    sendHeartbeat,
+  ]);
 
   return null;
 }

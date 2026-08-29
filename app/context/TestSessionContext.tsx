@@ -6,22 +6,33 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
 import { Test } from "@/app/types/test";
 
-export type UserAnswers = Record<number, number[]>;
+export type UserAnswers =
+  Record<number, number[]>;
 
 type TestSessionContextType = {
   sessionId: number | null;
-  setSessionId: (id: number | null) => void;
+
+  setSessionId: (
+    id: number | null
+  ) => void;
 
   test: Test | null;
-  loadTest: (test: Test) => void;
+
+  loadTest: (
+    test: Test
+  ) => void;
 
   currentQuestion: number;
-  setCurrentQuestion: (index: number) => void;
+
+  setCurrentQuestion: (
+    index: number
+  ) => void;
 
   selectedAnswers: UserAnswers;
 
@@ -32,7 +43,9 @@ type TestSessionContextType = {
 
   savedAnswers: UserAnswers;
 
-  saveAnswer: (questionId: number) => void;
+  saveAnswer: (
+    questionId: number
+  ) => void;
 
   isQuestionSaved: (
     questionId: number
@@ -41,12 +54,17 @@ type TestSessionContextType = {
   restoreSession: (
     currentQuestion: number,
     savedAnswers: UserAnswers,
-    timeLeft: number
+    timeLeft: number,
+    startedAt: string | null,
+    finished: boolean,
+    blocked: boolean
   ) => void;
 
   timeLeft: number;
 
-  setTimeLeft: (seconds: number) => void;
+  setTimeLeft: (
+    seconds: number
+  ) => void;
 
   timerRunning: boolean;
 
@@ -54,10 +72,14 @@ type TestSessionContextType = {
 
   stopTimer: () => void;
 
-  onTimeExpired: (() => void) | null;
+  onTimeExpired:
+    | (() => void)
+    | null;
 
   setOnTimeExpired: (
-    callback: (() => void) | null
+    callback:
+      | (() => void)
+      | null
   ) => void;
 
   resetTest: () => void;
@@ -74,40 +96,84 @@ export function TestSessionProvider({
   children: ReactNode;
 }) {
   // =====================================================
-  // SESSION ID
+  // SESSION
   // =====================================================
 
-  const [sessionId, setSessionId] =
-    useState<number | null>(null);
+  const [
+    sessionId,
+    setSessionIdState,
+  ] = useState<number | null>(null);
 
   useEffect(() => {
-    const storedSessionId =
-      localStorage.getItem("testSessionId");
+    const sessionStorageId =
+      sessionStorage.getItem(
+        "testSessionId"
+      );
 
-    if (!storedSessionId) {
+    const localStorageId =
+      localStorage.getItem(
+        "testSessionId"
+      );
+
+    const stored =
+      sessionStorageId ??
+      localStorageId;
+
+    if (!stored) {
       return;
     }
 
-    const numericSessionId =
-      Number(storedSessionId);
+    const id = Number(stored);
 
     if (
-      Number.isInteger(numericSessionId) &&
-      numericSessionId > 0
+      Number.isInteger(id) &&
+      id > 0
     ) {
-      setSessionId(numericSessionId);
+      setSessionIdState(id);
     }
   }, []);
+
+  const setSessionId =
+    useCallback(
+      (id: number | null) => {
+        setSessionIdState(id);
+
+        if (id === null) {
+          sessionStorage.removeItem(
+            "testSessionId"
+          );
+
+          localStorage.removeItem(
+            "testSessionId"
+          );
+
+          return;
+        }
+
+        sessionStorage.setItem(
+          "testSessionId",
+          String(id)
+        );
+
+        localStorage.setItem(
+          "testSessionId",
+          String(id)
+        );
+      },
+      []
+    );
 
   // =====================================================
   // TEST
   // =====================================================
 
-  const [test, setTest] =
-    useState<Test | null>(null);
+  const [
+    test,
+    setTest,
+  ] = useState<Test | null>(null);
 
   // =====================================================
-  // CURRENT QUESTION
+  // QUESTIONS
   // =====================================================
 
   const [
@@ -116,7 +182,7 @@ export function TestSessionProvider({
   ] = useState(0);
 
   // =====================================================
-  // SELECTED ANSWERS
+  // ANSWERS
   // =====================================================
 
   const [
@@ -124,277 +190,623 @@ export function TestSessionProvider({
     setSelectedAnswers,
   ] = useState<UserAnswers>({});
 
-  // =====================================================
-  // SAVED ANSWERS
-  // =====================================================
-
   const [
     savedAnswers,
     setSavedAnswers,
   ] = useState<UserAnswers>({});
 
   // =====================================================
-  // TIME
-  // =====================================================
-
-  const [timeLeft, setTimeLeftState] =
-    useState(0);
-
-  // =====================================================
   // TIMER
   // =====================================================
+
+  const [
+    timeLeft,
+    setTimeLeftState,
+  ] = useState(0);
 
   const [
     timerRunning,
     setTimerRunning,
   ] = useState(false);
 
+  const deadlineRef =
+    useRef<number | null>(null);
+
+  const timerIntervalRef =
+    useRef<number | null>(null);
+
   // =====================================================
-  // TIME EXPIRED CALLBACK
+  // EXPIRATION CALLBACK
   // =====================================================
 
   const [
     onTimeExpired,
-    setOnTimeExpired,
-  ] = useState<(() => void) | null>(
-    null
-  );
+    setOnTimeExpiredState,
+  ] = useState<
+    (() => void) | null
+  >(null);
 
-  // =====================================================
-  // ЗАВАНТАЖЕННЯ ТЕСТУ
-  //
-  // useCallback потрібен для того, щоб посилання
-  // на функцію не змінювалося після кожного render.
-  // =====================================================
-
-  const loadTest = useCallback(
-    (loadedTest: Test) => {
-      setTest((previousTest) => {
-        // Якщо це той самий тест —
-        // нічого не скидаємо.
-        if (
-          previousTest &&
-          previousTest.id === loadedTest.id
-        ) {
-          return previousTest;
-        }
-
-        // Новий тест.
-        setCurrentQuestion(0);
-
-        setSelectedAnswers({});
-
-        setSavedAnswers({});
-
-        // Початковий час встановлюємо
-        // тільки для нового тесту.
-        setTimeLeftState(
-          loadedTest.duration * 60
+  const setOnTimeExpired =
+    useCallback(
+      (
+        callback:
+          | (() => void)
+          | null
+      ) => {
+        setOnTimeExpiredState(
+          () => callback
         );
-
-        setTimerRunning(false);
-
-        return loadedTest;
-      });
-    },
-    []
-  );
+      },
+      []
+    );
 
   // =====================================================
-  // СИНХРОНІЗАЦІЯ ЧАСУ
-  // =====================================================
-
-  const setTimeLeft = useCallback(
-    (seconds: number) => {
-      const normalized = Math.max(
-        0,
-        Math.floor(seconds)
-      );
-
-      setTimeLeftState(normalized);
-    },
-    []
-  );
-
-  // =====================================================
-  // ВИБІР ВІДПОВІДІ
-  // =====================================================
-
-  const selectAnswer = useCallback(
-    (
-      questionId: number,
-      answers: number[]
-    ) => {
-      setSelectedAnswers((previous) => ({
-        ...previous,
-        [questionId]: answers,
-      }));
-    },
-    []
-  );
-
-  // =====================================================
-  // ЗБЕРЕЖЕННЯ ВІДПОВІДІ
-  // =====================================================
-
-  const saveAnswer = useCallback(
-    (questionId: number) => {
-      const selected =
-        selectedAnswers[questionId] ?? [];
-
-      setSavedAnswers((previous) => ({
-        ...previous,
-        [questionId]: selected,
-      }));
-    },
-    [selectedAnswers]
-  );
-
-  // =====================================================
-  // ЧИ ЗБЕРЕЖЕНО ПИТАННЯ
-  // =====================================================
-
-  const isQuestionSaved = useCallback(
-    (questionId: number) => {
-      return (
-        savedAnswers[questionId] !== undefined
-      );
-    },
-    [savedAnswers]
-  );
-
-  // =====================================================
-  // ЗАПУСК ТАЙМЕРА
-  // =====================================================
-
-  const startTimer = useCallback(() => {
-    setTimerRunning(true);
-  }, []);
-
-  // =====================================================
-  // ЗУПИНКА ТАЙМЕРА
-  // =====================================================
-
-  const stopTimer = useCallback(() => {
-    setTimerRunning(false);
-  }, []);
-
-  // =====================================================
-  // ЛОКАЛЬНИЙ ВІДЛІК
-  //
-  // interval НЕ залежить від timeLeft.
-  //
-  // Тому коли SessionMonitor отримує нове
-  // значення з сервера, наприклад 3900,
-  // він просто змінює timeLeft.
-  //
-  // Таймер продовжує відлік від нового значення.
-  // =====================================================
-
-  useEffect(() => {
-    if (!timerRunning) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setTimeLeftState((previous) => {
-        if (previous <= 1) {
-          setTimerRunning(false);
-
-          return 0;
-        }
-
-        return previous - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [timerRunning]);
-
-  // =====================================================
-  // РЕАКЦІЯ НА ЗАВЕРШЕННЯ ЧАСУ
-  // =====================================================
-
-  useEffect(() => {
-    if (
-      timeLeft <= 0 &&
-      timerRunning
-    ) {
-      setTimerRunning(false);
-
-      if (onTimeExpired) {
-        onTimeExpired();
-      }
-    }
-  }, [
-    timeLeft,
-    timerRunning,
-    onTimeExpired,
-  ]);
-
-  // =====================================================
-  // ВІДНОВЛЕННЯ СЕСІЇ
+  // LOAD TEST
   //
   // ВАЖЛИВО:
   //
-  // useCallback робить функцію стабільною.
+  // Завантаження тесту НЕ повинно
+  // перезаписувати активну сесію.
   //
-  // Це не дозволяє RestoreSession повторно
-  // запускати свій useEffect після кожного render.
+  // Якщо серверна сесія вже відновлена,
+  // її timeLeft має пріоритет.
   // =====================================================
 
-  const restoreSession = useCallback(
-    (
-      question: number,
-      answers: UserAnswers,
-      seconds: number
-    ) => {
-      setCurrentQuestion(question);
+  const loadTest =
+    useCallback(
+      (loadedTest: Test) => {
+        setTest(
+          (previousTest) => {
+            if (
+              previousTest &&
+              previousTest.id ===
+                loadedTest.id
+            ) {
+              return previousTest;
+            }
 
-      setSelectedAnswers(answers);
+            setCurrentQuestion(0);
 
-      setSavedAnswers(answers);
+            setSelectedAnswers({});
 
-      // Серверне значення є головним.
-      setTimeLeftState(
-        Math.max(
-          0,
-          Math.floor(seconds)
-        )
-      );
+            setSavedAnswers({});
 
-      setTimerRunning(true);
-    },
-    []
-  );
+            /*
+             * Початковий час використовується
+             * тільки як початкове значення UI.
+             *
+             * Реальний час активної сесії
+             * встановлює restoreSession().
+             */
 
-  // =====================================================
-  // СКИДАННЯ ТЕСТУ
-  // =====================================================
+            const initialTime =
+              Math.max(
+                0,
+                Math.floor(
+                  Number(
+                    loadedTest.duration
+                  ) * 60
+                )
+              );
 
-  const resetTest = useCallback(() => {
-    setSessionId(null);
+            /*
+             * Не запускаємо таймер.
+             */
 
-    localStorage.removeItem(
-      "testSessionId"
+            setTimeLeftState(
+              initialTime
+            );
+
+            setTimerRunning(false);
+
+            deadlineRef.current =
+              null;
+
+            if (
+              timerIntervalRef.current !==
+              null
+            ) {
+              window.clearInterval(
+                timerIntervalRef.current
+              );
+
+              timerIntervalRef.current =
+                null;
+            }
+
+            return loadedTest;
+          }
+        );
+      },
+      []
     );
 
-    setTest(null);
+  // =====================================================
+  // SET TIME LEFT
+  // =====================================================
 
-    setCurrentQuestion(0);
+  const setTimeLeft =
+    useCallback(
+      (seconds: number) => {
+        const normalized =
+          Math.max(
+            0,
+            Math.floor(
+              Number(seconds) || 0
+            )
+          );
 
-    setSelectedAnswers({});
+        setTimeLeftState(
+          normalized
+        );
+      },
+      []
+    );
 
-    setSavedAnswers({});
+  // =====================================================
+  // ANSWER
+  // =====================================================
 
-    setTimeLeftState(0);
+  const selectAnswer =
+    useCallback(
+      (
+        questionId: number,
+        answers: number[]
+      ) => {
+        setSelectedAnswers(
+          (previous) => ({
+            ...previous,
+            [questionId]:
+              answers,
+          })
+        );
+      },
+      []
+    );
 
-    setTimerRunning(false);
+  // =====================================================
+  // SAVE ANSWER
+  // =====================================================
 
-    setOnTimeExpired(null);
+  const saveAnswer =
+    useCallback(
+      (
+        questionId: number
+      ) => {
+        const selected =
+          selectedAnswers[
+            questionId
+          ] ?? [];
+
+        setSavedAnswers(
+          (previous) => ({
+            ...previous,
+            [questionId]:
+              selected,
+          })
+        );
+      },
+      [selectedAnswers]
+    );
+
+  // =====================================================
+  // IS SAVED
+  // =====================================================
+
+  const isQuestionSaved =
+    useCallback(
+      (
+        questionId: number
+      ) => {
+        return (
+          savedAnswers[
+            questionId
+          ] !== undefined
+        );
+      },
+      [savedAnswers]
+    );
+
+  // =====================================================
+  // STOP TIMER
+  // =====================================================
+
+  const stopTimer =
+    useCallback(() => {
+      if (
+        timerIntervalRef.current !==
+        null
+      ) {
+        window.clearInterval(
+          timerIntervalRef.current
+        );
+
+        timerIntervalRef.current =
+          null;
+      }
+
+      setTimerRunning(false);
+    }, []);
+
+  // =====================================================
+  // START TIMER
+  // =====================================================
+
+  const startTimer =
+    useCallback(() => {
+      if (
+        timerIntervalRef.current !==
+        null
+      ) {
+        return;
+      }
+
+      const currentTime =
+        Math.max(
+          0,
+          Math.floor(
+            Number(timeLeft) || 0
+          )
+        );
+
+      if (currentTime <= 0) {
+        return;
+      }
+
+      deadlineRef.current =
+        Date.now() +
+        currentTime * 1000;
+
+      console.log(
+        "CONTEXT: TIMER START",
+        {
+          normalized:
+            currentTime,
+
+          deadline:
+            new Date(
+              deadlineRef.current
+            ).toISOString(),
+        }
+      );
+
+      const update = () => {
+        const deadline =
+          deadlineRef.current;
+
+        if (
+          deadline === null
+        ) {
+          return;
+        }
+
+        const remaining =
+          Math.max(
+            0,
+            Math.ceil(
+              (deadline -
+                Date.now()) /
+                1000
+            )
+          );
+
+        setTimeLeftState(
+          remaining
+        );
+
+        if (
+          remaining <= 0
+        ) {
+          if (
+            timerIntervalRef.current !==
+            null
+          ) {
+            window.clearInterval(
+              timerIntervalRef.current
+            );
+
+            timerIntervalRef.current =
+              null;
+          }
+
+          deadlineRef.current =
+            null;
+
+          setTimerRunning(false);
+
+          setTimeout(() => {
+            setOnTimeExpiredState(
+              (callback) => {
+                if (callback) {
+                  callback();
+                }
+
+                return callback;
+              }
+            );
+          }, 0);
+        }
+      };
+
+      update();
+
+      timerIntervalRef.current =
+        window.setInterval(
+          update,
+          250
+        );
+
+      setTimerRunning(true);
+    }, [timeLeft]);
+
+  // =====================================================
+  // RESTORE SESSION
+  //
+  // ЄДИНЕ МІСЦЕ,
+  // де серверний час перетворюється
+  // на локальний countdown.
+  // =====================================================
+
+  const restoreSession =
+    useCallback(
+      (
+        question: number,
+        answers: UserAnswers,
+        seconds: number,
+        startedAt:
+          | string
+          | null,
+        finished: boolean,
+        blocked: boolean
+      ) => {
+        console.log(
+          "CONTEXT: RESTORE SESSION CALLED",
+          {
+            seconds,
+            startedAt,
+            finished,
+            blocked,
+          }
+        );
+
+        setCurrentQuestion(
+          question
+        );
+
+        setSelectedAnswers(
+          answers
+        );
+
+        setSavedAnswers(
+          answers
+        );
+
+        const normalized =
+          Math.max(
+            0,
+            Math.floor(
+              Number(seconds) || 0
+            )
+          );
+
+        /*
+         * Спочатку повністю прибираємо
+         * попередній countdown.
+         */
+
+        if (
+          timerIntervalRef.current !==
+          null
+        ) {
+          window.clearInterval(
+            timerIntervalRef.current
+          );
+
+          timerIntervalRef.current =
+            null;
+        }
+
+        deadlineRef.current =
+          null;
+
+        setTimerRunning(false);
+
+        setTimeLeftState(
+          normalized
+        );
+
+        // =================================================
+        // НЕ МОЖНА ЗАПУСКАТИ
+        // =================================================
+
+        if (
+          !startedAt ||
+          finished ||
+          blocked ||
+          normalized <= 0
+        ) {
+          console.log(
+            "CONTEXT: TIMER NOT STARTED",
+            {
+              normalized,
+              startedAt,
+              finished,
+              blocked,
+            }
+          );
+
+          return;
+        }
+
+        // =================================================
+        // НОВИЙ DEADLINE
+        //
+        // ВАЖЛИВО:
+        //
+        // Сервер уже визначив актуальний
+        // залишок часу.
+        //
+        // Ми НЕ рахуємо:
+        //
+        // startedAt + duration
+        //
+        // бо сервер уже передав
+        // актуальний timeLeft.
+        // =================================================
+
+        deadlineRef.current =
+          Date.now() +
+          normalized * 1000;
+
+        console.log(
+          "CONTEXT: TIMER START",
+          {
+            normalized,
+            startedAt,
+
+            deadline:
+              new Date(
+                deadlineRef.current
+              ).toISOString(),
+          }
+        );
+
+        const update = () => {
+          const deadline =
+            deadlineRef.current;
+
+          if (
+            deadline === null
+          ) {
+            return;
+          }
+
+          const remaining =
+            Math.max(
+              0,
+              Math.ceil(
+                (deadline -
+                  Date.now()) /
+                  1000
+              )
+            );
+
+          setTimeLeftState(
+            remaining
+          );
+
+          if (
+            remaining <= 0
+          ) {
+            if (
+              timerIntervalRef.current !==
+              null
+            ) {
+              window.clearInterval(
+                timerIntervalRef.current
+              );
+
+              timerIntervalRef.current =
+                null;
+            }
+
+            deadlineRef.current =
+              null;
+
+            setTimerRunning(
+              false
+            );
+
+            setTimeout(() => {
+              setOnTimeExpiredState(
+                (callback) => {
+                  if (callback) {
+                    callback();
+                  }
+
+                  return callback;
+                }
+              );
+            }, 0);
+          }
+        };
+
+        update();
+
+        timerIntervalRef.current =
+          window.setInterval(
+            update,
+            250
+          );
+
+        setTimerRunning(true);
+      },
+      []
+    );
+
+  // =====================================================
+  // CLEANUP
+  // =====================================================
+
+  useEffect(() => {
+    return () => {
+      if (
+        timerIntervalRef.current !==
+        null
+      ) {
+        window.clearInterval(
+          timerIntervalRef.current
+        );
+
+        timerIntervalRef.current =
+          null;
+      }
+    };
   }, []);
+
+  // =====================================================
+  // RESET
+  // =====================================================
+
+  const resetTest =
+    useCallback(() => {
+      if (
+        timerIntervalRef.current !==
+        null
+      ) {
+        window.clearInterval(
+          timerIntervalRef.current
+        );
+
+        timerIntervalRef.current =
+          null;
+      }
+
+      sessionStorage.removeItem(
+        "testSessionId"
+      );
+
+      localStorage.removeItem(
+        "testSessionId"
+      );
+
+      setSessionIdState(null);
+
+      setTest(null);
+
+      setCurrentQuestion(0);
+
+      setSelectedAnswers({});
+
+      setSavedAnswers({});
+
+      setTimeLeftState(0);
+
+      setTimerRunning(false);
+
+      deadlineRef.current =
+        null;
+    }, []);
 
   // =====================================================
   // PROVIDER
@@ -425,6 +837,7 @@ export function TestSessionProvider({
         setTimeLeft,
 
         timerRunning,
+
         startTimer,
         stopTimer,
 
@@ -439,13 +852,15 @@ export function TestSessionProvider({
   );
 }
 
-// =======================================================
+// =====================================================
 // HOOK
-// =======================================================
+// =====================================================
 
 export function useTestSession() {
   const context =
-    useContext(TestSessionContext);
+    useContext(
+      TestSessionContext
+    );
 
   if (!context) {
     throw new Error(
