@@ -8,33 +8,52 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/app/lib/prisma";
 
 // =====================================================
+// TYPES
+// =====================================================
+
+type Props = {
+  params: Promise<{
+    testId: string;
+  }>;
+};
+
+// =====================================================
 // GET
 //
 // GET /api/session/[testId]?sessionId=123
 //
-// Повертає поточний стан сесії.
+// Повертає актуальний стан сесії.
 //
-// ВАЖЛИВО:
+// КРИТИЧНО ДЛЯ ТАЙМЕРА:
 //
-// GET НЕ ЗМІНЮЄ БАЗУ ДАНИХ.
+// GET НЕ ПЕРЕРАХОВУЄ timeLeft.
 //
-// timeLeft повертається саме зі сесії.
+// timeLeft береться безпосередньо з БД.
 //
-// Фактичний countdown запускається на клієнті
-// через TestSessionContext.
+// Countdown працює локально через
+// TestSessionContext.
 //
-// Адміністративні зміни (+5 хв, -5 хв) записуються
-// у timeLeft через /api/session/manage/[id]
-// і тому будуть отримані наступним GET.
+// КРИТИЧНО ДЛЯ СИНХРОНІЗАЦІЇ:
+//
+// GET щоразу читає з БД:
+//
+// - timeLeft;
+// - extraTime;
+// - blocked;
+// - blockReason;
+// - blockedAt;
+// - finished;
+// - currentQuestion;
+// - savedAnswers.
+//
+// Тому адміністративні зміни,
+// зроблені через /api/session/manage/[id],
+// будуть отримані клієнтом при наступному GET.
 // =====================================================
 
 export async function GET(
   request: NextRequest,
-  context: {
-    params: Promise<{
-      testId: string;
-    }>;
-  }
+  context: Props
 ) {
   try {
     // ===================================================
@@ -68,11 +87,8 @@ export async function GET(
     // SESSION ID
     // ===================================================
 
-    const { searchParams } =
-      new URL(request.url);
-
     const sessionIdParam =
-      searchParams.get(
+      request.nextUrl.searchParams.get(
         "sessionId"
       );
 
@@ -109,7 +125,7 @@ export async function GET(
     }
 
     // ===================================================
-    // ОТРИМУЄМО СЕСІЮ
+    // SESSION
     // ===================================================
 
     const session =
@@ -123,40 +139,63 @@ export async function GET(
           testId: true,
           participantId: true,
 
-          currentQuestion: true,
-          savedAnswers: true,
+          currentQuestion:
+            true,
 
-          timeLeft: true,
-          extraTime: true,
+          savedAnswers:
+            true,
 
-          finished: true,
-          finishedAt: true,
+          timeLeft:
+            true,
 
-          blocked: true,
-          blockReason: true,
-          blockedAt: true,
+          extraTime:
+            true,
 
-          startedAt: true,
-          createdAt: true,
-          updatedAt: true,
-          lastActivityAt: true,
+          finished:
+            true,
+
+          finishedAt:
+            true,
+
+          blocked:
+            true,
+
+          blockReason:
+            true,
+
+          blockedAt:
+            true,
+
+          startedAt:
+            true,
+
+          createdAt:
+            true,
+
+          updatedAt:
+            true,
+
+          lastActivityAt:
+            true,
 
           test: {
             select: {
-              duration: true,
+              duration:
+                true,
             },
           },
 
           result: {
             select: {
-              id: true,
+              id:
+                true,
             },
           },
         },
       });
 
     // ===================================================
-    // СЕСІЮ НЕ ЗНАЙДЕНО
+    // SESSION NOT FOUND
     // ===================================================
 
     if (!session) {
@@ -172,7 +211,7 @@ export async function GET(
     }
 
     // ===================================================
-    // ПЕРЕВІРКА TEST ID
+    // TEST ID CHECK
     // ===================================================
 
     if (
@@ -191,24 +230,13 @@ export async function GET(
     }
 
     // ===================================================
-    // TIME LEFT
+    // NORMALIZE VALUES
     //
-    // КЛЮЧОВА ЗМІНА:
+    // НЕ ВІДНІМАЄМО elapsed time.
     //
-    // НЕ перераховуємо:
-    //
-    // duration + extraTime - elapsed
-    //
-    // через startedAt.
-    //
-    // Повертаємо timeLeft із БД.
-    //
-    // Countdown працює локально в
-    // TestSessionContext.
-    //
-    // Адміністративні зміни часу записуються
-    // безпосередньо в timeLeft.
-    // =====================================================
+    // Це принципово для роботи клієнтського
+    // countdown у TestSessionContext.
+    // ===================================================
 
     const normalizedTimeLeft =
       Math.max(
@@ -231,12 +259,13 @@ export async function GET(
       );
 
     // ===================================================
-    // ВІДПОВІДЬ
+    // RESPONSE
     // ===================================================
 
     return NextResponse.json(
       {
-        id: session.id,
+        id:
+          session.id,
 
         testId:
           session.testId,
@@ -250,11 +279,21 @@ export async function GET(
         savedAnswers:
           session.savedAnswers,
 
+        // -------------------------------------------------
+        // ТАЙМЕР
+        //
+        // Повертаємо саме значення з БД.
+        // -------------------------------------------------
+
         timeLeft:
           normalizedTimeLeft,
 
         extraTime:
           normalizedExtraTime,
+
+        // -------------------------------------------------
+        // СТАН СЕСІЇ
+        // -------------------------------------------------
 
         finished:
           session.finished,
@@ -271,6 +310,10 @@ export async function GET(
         blockedAt:
           session.blockedAt,
 
+        // -------------------------------------------------
+        // ДАТИ
+        // -------------------------------------------------
+
         startedAt:
           session.startedAt,
 
@@ -282,6 +325,10 @@ export async function GET(
 
         lastActivityAt:
           session.lastActivityAt,
+
+        // -------------------------------------------------
+        // RESULT
+        // -------------------------------------------------
 
         resultId:
           session.result?.id ??
@@ -318,9 +365,9 @@ export async function GET(
 // Використовується для:
 //
 // 1. heartbeat;
-// 2. збереження currentQuestion;
-// 3. збереження savedAnswers;
-// 4. завершення сесії.
+// 2. currentQuestion;
+// 3. savedAnswers;
+// 4. finished.
 //
 // УЧАСНИК НЕ МОЖЕ ЗМІНЮВАТИ:
 //
@@ -330,15 +377,12 @@ export async function GET(
 // - blocked;
 // - blockReason;
 // - blockedAt.
+//
 // =====================================================
 
 export async function POST(
   request: NextRequest,
-  context: {
-    params: Promise<{
-      testId: string;
-    }>;
-  }
+  context: Props
 ) {
   try {
     // ===================================================
@@ -444,52 +488,77 @@ export async function POST(
     }
 
     // ===================================================
-    // ОТРИМУЄМО СЕСІЮ
+    // SESSION
     // ===================================================
 
     const session =
-      await prisma.testSession.findUnique({
+      await prisma.testSession.findFirst({
         where: {
-          id: numericSessionId,
+          id:
+            numericSessionId,
+
+          testId:
+            numericTestId,
         },
 
         select: {
           id: true,
           testId: true,
 
-          currentQuestion: true,
-          savedAnswers: true,
+          currentQuestion:
+            true,
 
-          timeLeft: true,
-          extraTime: true,
+          savedAnswers:
+            true,
 
-          finished: true,
-          finishedAt: true,
+          timeLeft:
+            true,
 
-          blocked: true,
-          blockReason: true,
-          blockedAt: true,
+          extraTime:
+            true,
 
-          startedAt: true,
-          lastActivityAt: true,
+          finished:
+            true,
+
+          finishedAt:
+            true,
+
+          blocked:
+            true,
+
+          blockReason:
+            true,
+
+          blockedAt:
+            true,
+
+          startedAt:
+            true,
+
+          lastActivityAt:
+            true,
+
+          updatedAt:
+            true,
 
           result: {
             select: {
-              id: true,
+              id:
+                true,
             },
           },
         },
       });
 
     // ===================================================
-    // СЕСІЮ НЕ ЗНАЙДЕНО
+    // SESSION NOT FOUND
     // ===================================================
 
     if (!session) {
       return NextResponse.json(
         {
           error:
-            "Сесію тестування не знайдено.",
+            "Сесію не знайдено.",
         },
         {
           status: 404,
@@ -498,7 +567,7 @@ export async function POST(
     }
 
     // ===================================================
-    // ПЕРЕВІРКА TEST ID
+    // TEST ID CHECK
     // ===================================================
 
     if (
@@ -516,51 +585,97 @@ export async function POST(
       );
     }
 
+    // ===================================================
+    // NOW
+    // ===================================================
+
     const now =
       new Date();
 
     // ===================================================
     // HEARTBEAT
     //
-    // Heartbeat змінює ТІЛЬКИ
-    // lastActivityAt.
+    // КРИТИЧНО:
+    //
+    // heartbeat НЕ змінює:
+    //
+    // - timeLeft;
+    // - extraTime;
+    // - lastActivityAt;
+    //
+    // Інакше heartbeat кожні кілька секунд
+    // пересуватиме точку відліку таймера.
+    //
+    // Також heartbeat НЕ змінює:
+    //
+    // - blocked;
+    // - blockReason;
+    // - blockedAt.
+    //
+    // Отже адміністративна команда
+    // не перезаписується учасником.
     // ===================================================
 
-    if (heartbeat === true) {
+    if (
+      heartbeat === true
+    ) {
       const updated =
         await prisma.testSession.update({
           where: {
-            id: session.id,
+            id:
+              session.id,
           },
 
           data: {
-            lastActivityAt:
-              now,
+            // ------------------------------------------------
+            // НАВМИСНО НЕ ЗМІНЮЄМО lastActivityAt
+            // ------------------------------------------------
           },
 
           select: {
             id: true,
             testId: true,
 
-            currentQuestion: true,
-            savedAnswers: true,
+            currentQuestion:
+              true,
 
-            timeLeft: true,
-            extraTime: true,
+            savedAnswers:
+              true,
 
-            finished: true,
-            finishedAt: true,
+            timeLeft:
+              true,
 
-            blocked: true,
-            blockReason: true,
-            blockedAt: true,
+            extraTime:
+              true,
 
-            startedAt: true,
-            lastActivityAt: true,
+            finished:
+              true,
+
+            finishedAt:
+              true,
+
+            blocked:
+              true,
+
+            blockReason:
+              true,
+
+            blockedAt:
+              true,
+
+            startedAt:
+              true,
+
+            lastActivityAt:
+              true,
+
+            updatedAt:
+              true,
 
             result: {
               select: {
-                id: true,
+                id:
+                  true,
               },
             },
           },
@@ -568,7 +683,14 @@ export async function POST(
 
       return NextResponse.json(
         {
-          id: updated.id,
+          success:
+            true,
+
+          heartbeat:
+            true,
+
+          id:
+            updated.id,
 
           testId:
             updated.testId,
@@ -578,6 +700,10 @@ export async function POST(
 
           savedAnswers:
             updated.savedAnswers,
+
+          // -------------------------------------------------
+          // НЕ ПЕРЕРАХОВУЄМО TIMER
+          // -------------------------------------------------
 
           timeLeft:
             Math.max(
@@ -627,22 +753,35 @@ export async function POST(
         {
           headers: {
             "Cache-Control":
-              "no-store, no-cache, must-revalidate",
+              "no-store, no-cache, must-revalidate, proxy-revalidate",
           },
         }
       );
     }
 
     // ===================================================
-    // ПІДГОТОВКА UPDATE
+    // UPDATE DATA
+    //
+    // ЗВИЧАЙНИЙ POST:
+    //
+    // currentQuestion
+    // savedAnswers
+    //
+    // НЕ чіпаємо:
+    //
+    // timeLeft
+    // extraTime
+    // blocked
+    // blockReason
+    // blockedAt
+    //
+    // lastActivityAt також НЕ чіпаємо,
+    // якщо це не завершення.
     // ===================================================
 
     const updateData:
       Prisma.TestSessionUpdateInput =
-      {
-        lastActivityAt:
-          now,
-      };
+      {};
 
     // ===================================================
     // CURRENT QUESTION
@@ -669,7 +808,8 @@ export async function POST(
       undefined
     ) {
       if (
-        savedAnswers === null
+        savedAnswers ===
+        null
       ) {
         updateData.savedAnswers =
           Prisma.JsonNull;
@@ -683,84 +823,122 @@ export async function POST(
     // ===================================================
     // FINISHED
     //
-    // Дозволяємо тільки:
+    // Завершення дозволене тільки через
+    // finished = true.
     //
-    // finished = true
+    // При завершенні:
     //
-    // finished = false НЕ МОЖЕ
-    // скасувати завершення.
+    // - finished = true
+    // - finishedAt = now
+    // - timeLeft = 0
+    // - lastActivityAt = now
+    //
+    // Це єдина звичайна операція учасника,
+    // яка змінює timeLeft.
     // ===================================================
 
-    if (finished === true) {
-      if (!session.finished) {
-        updateData.finished =
-          true;
+    if (
+      finished === true
+    ) {
+      updateData.finished =
+        true;
 
-        updateData.finishedAt =
-          session.finishedAt ??
-          now;
-      }
+      updateData.finishedAt =
+        session.finishedAt ??
+        now;
+
+      updateData.timeLeft =
+        0;
+
+      updateData.lastActivityAt =
+        now;
     }
 
     // ===================================================
-    // КРИТИЧНО
-    //
-    // Тут НЕМАЄ:
-    //
-    // startedAt
-    // timeLeft
-    // extraTime
-    // blocked
-    // blockReason
-    // blockedAt
-    //
-    // Тому учасник не може
-    // перезаписати адміністративні зміни.
+    // UPDATE
     // ===================================================
 
     const updated =
       await prisma.testSession.update({
         where: {
-          id: session.id,
+          id:
+            session.id,
         },
 
-        data: updateData,
+        data:
+          updateData,
 
         select: {
           id: true,
           testId: true,
 
-          currentQuestion: true,
-          savedAnswers: true,
+          currentQuestion:
+            true,
 
-          timeLeft: true,
-          extraTime: true,
+          savedAnswers:
+            true,
 
-          finished: true,
-          finishedAt: true,
+          timeLeft:
+            true,
 
-          blocked: true,
-          blockReason: true,
-          blockedAt: true,
+          extraTime:
+            true,
 
-          startedAt: true,
-          lastActivityAt: true,
+          finished:
+            true,
+
+          finishedAt:
+            true,
+
+          blocked:
+            true,
+
+          blockReason:
+            true,
+
+          blockedAt:
+            true,
+
+          startedAt:
+            true,
+
+          lastActivityAt:
+            true,
+
+          updatedAt:
+            true,
 
           result: {
             select: {
-              id: true,
+              id:
+                true,
             },
           },
         },
       });
 
     // ===================================================
-    // ВІДПОВІДЬ
+    // RESPONSE
+    //
+    // НЕ ПЕРЕРАХОВУЄМО timeLeft.
+    //
+    // Клієнтський TestSessionContext
+    // сам керує countdown.
+    //
+    // Наступний GET отримає нове значення
+    // timeLeft, якщо адміністратор його змінив.
     // ===================================================
 
     return NextResponse.json(
       {
-        id: updated.id,
+        success:
+          true,
+
+        heartbeat:
+          false,
+
+        id:
+          updated.id,
 
         testId:
           updated.testId,
@@ -819,7 +997,7 @@ export async function POST(
       {
         headers: {
           "Cache-Control":
-            "no-store, no-cache, must-revalidate",
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
         },
       }
     );
@@ -832,7 +1010,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Не вдалося оновити сесію.",
+          "Не вдалося оновити стан сесії.",
       },
       {
         status: 500,

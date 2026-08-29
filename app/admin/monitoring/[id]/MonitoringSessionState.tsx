@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import MonitoringQuestions from "./MonitoringQuestions";
 
@@ -9,17 +9,6 @@ type Props = {
   sessionId: number;
 
   totalQuestions: number;
-
-  // =====================================================
-  // РЕАЛЬНІ ID ПИТАНЬ
-  //
-  // Наприклад:
-  //
-  // [17, 21, 25, 31, 44]
-  //
-  // Це НЕ номери питань.
-  // Це id записів Question у БД.
-  // =====================================================
 
   questionIds: number[];
 
@@ -71,58 +60,41 @@ type SessionState = {
 // ФОРМАТУВАННЯ ЧАСУ
 // =====================================================
 
-function formatTime(
-  seconds: number
-) {
-  const normalized =
-    Math.max(
-      0,
-      Math.floor(seconds)
-    );
+function formatTime(seconds: number) {
+  const normalized = Math.max(
+    0,
+    Math.floor(seconds)
+  );
 
-  const hours =
-    Math.floor(
-      normalized / 3600
-    );
+  const hours = Math.floor(
+    normalized / 3600
+  );
 
-  const minutes =
-    Math.floor(
-      (normalized % 3600) / 60
-    );
+  const minutes = Math.floor(
+    (normalized % 3600) / 60
+  );
 
   const remainingSeconds =
     normalized % 60;
 
   if (hours > 0) {
-    return `${String(
-      hours
-    ).padStart(
+    return `${String(hours).padStart(
       2,
       "0"
-    )}:${String(
-      minutes
-    ).padStart(
+    )}:${String(minutes).padStart(
       2,
       "0"
     )}:${String(
       remainingSeconds
-    ).padStart(
-      2,
-      "0"
-    )}`;
+    ).padStart(2, "0")}`;
   }
 
-  return `${String(
-    minutes
-  ).padStart(
+  return `${String(minutes).padStart(
     2,
     "0"
   )}:${String(
     remainingSeconds
-  ).padStart(
-    2,
-    "0"
-  )}`;
+  ).padStart(2, "0")}`;
 }
 
 // =====================================================
@@ -148,12 +120,6 @@ export default function MonitoringSessionState({
 }: Props) {
   // =====================================================
   // ПОТОЧНЕ ПИТАННЯ
-  //
-  // У БД:
-  //
-  // 0 = питання №1
-  // 1 = питання №2
-  // 2 = питання №3
   // =====================================================
 
   const [
@@ -170,16 +136,6 @@ export default function MonitoringSessionState({
 
   // =====================================================
   // ЗБЕРЕЖЕНІ ВІДПОВІДІ
-  //
-  // КЛЮЧІ — РЕАЛЬНІ question.id
-  //
-  // Наприклад:
-  //
-  // {
-  //   "17": [2],
-  //   "21": [1, 3],
-  //   "25": [4]
-  // }
   // =====================================================
 
   const [
@@ -187,12 +143,15 @@ export default function MonitoringSessionState({
     setSavedAnswers,
   ] = useState<
     Record<number, number[]>
-  >(
-    initialSavedAnswers ?? {}
-  );
+  >(initialSavedAnswers ?? {});
 
   // =====================================================
   // ЧАС
+  //
+  // ЦЕ ЛОКАЛЬНИЙ DISPLAY COUNTDOWN.
+  //
+  // Серверний timeLeft НЕ буде
+  // перезаписувати його кожні 2 секунди.
   // =====================================================
 
   const [
@@ -206,6 +165,59 @@ export default function MonitoringSessionState({
       )
     )
   );
+
+  // =====================================================
+  // DEADLINE ТАЙМЕРА
+  // =====================================================
+
+  const deadlineRef =
+    useRef<number | null>(null);
+
+  // =====================================================
+  // ПОПЕРЕДНЄ СЕРВЕРНЕ ЗНАЧЕННЯ
+  //
+  // Потрібне для визначення:
+  //
+  // чи змінив адміністратор timeLeft.
+  //
+  // Якщо значення змінилося не через
+  // наш локальний countdown — перебудовуємо
+  // deadline.
+  // =====================================================
+
+  const serverTimeLeftRef =
+    useRef(
+      Math.max(
+        0,
+        Math.floor(
+          initialTimeLeft
+        )
+      )
+    );
+
+  // =====================================================
+  // ПОПЕРЕДНЄ ВІДОБРАЖЕНЕ ЗНАЧЕННЯ
+  //
+  // Використовується для синхронізації
+  // серверного значення з локальним.
+  // =====================================================
+
+  const displayedTimeLeftRef =
+    useRef(
+      Math.max(
+        0,
+        Math.floor(
+          initialTimeLeft
+        )
+      )
+    );
+
+  // =====================================================
+  // ЧИ ЗАПУЩЕНО ЛОКАЛЬНИЙ COUNTDOWN
+  // =====================================================
+
+  const timerStartedRef =
+    useRef(false);
 
   // =====================================================
   // ДОДАТКОВИЙ ЧАС
@@ -239,9 +251,7 @@ export default function MonitoringSessionState({
     setBlockReason,
   ] = useState<
     string | null
-  >(
-    initialBlockReason
-  );
+  >(initialBlockReason);
 
   // =====================================================
   // ЗАВЕРШЕННЯ
@@ -276,11 +286,147 @@ export default function MonitoringSessionState({
     );
 
   // =====================================================
+  // ЗАПУСК ЛОКАЛЬНОГО COUNTDOWN
+  //
+  // ВАЖЛИВО:
+  //
+  // Таймер адміністратора НЕ повинен
+  // залежати від того, як часто приходить GET.
+  //
+  // GET тільки синхронізує deadline.
+  // =====================================================
+
+  function startLocalCountdown(
+    seconds: number
+  ) {
+    const normalized =
+      Math.max(
+        0,
+        Math.floor(
+          Number(seconds) || 0
+        )
+      );
+
+    if (normalized <= 0) {
+      deadlineRef.current =
+        null;
+
+      timerStartedRef.current =
+        false;
+
+      setTimeLeft(0);
+
+      displayedTimeLeftRef.current =
+        0;
+
+      return;
+    }
+
+    deadlineRef.current =
+      Date.now() +
+      normalized * 1000;
+
+    timerStartedRef.current =
+      true;
+
+    setTimeLeft(normalized);
+
+    displayedTimeLeftRef.current =
+      normalized;
+  }
+
+  // =====================================================
+  // ЛОКАЛЬНИЙ COUNTDOWN
+  //
+  // ОНОВЛЮЄМО UI КОЖНУ СЕКУНДУ.
+  //
+  // 01:00:00
+  // 00:59:59
+  // 00:59:58
+  // ...
+  //
+  // НІЯКОГО GET ТУТ НЕМАЄ.
+  // =====================================================
+
+  useEffect(() => {
+    if (
+      initialFinished ||
+      initialBlocked ||
+      initialTimeLeft <= 0
+    ) {
+      return;
+    }
+
+    startLocalCountdown(
+      initialTimeLeft
+    );
+
+    const interval =
+      window.setInterval(() => {
+        const deadline =
+          deadlineRef.current;
+
+        if (
+          deadline === null
+        ) {
+          return;
+        }
+
+        const remaining =
+          Math.max(
+            0,
+            Math.ceil(
+              (deadline -
+                Date.now()) /
+                1000
+            )
+          );
+
+        setTimeLeft(
+          remaining
+        );
+
+        displayedTimeLeftRef.current =
+          remaining;
+
+        if (
+          remaining <= 0
+        ) {
+          deadlineRef.current =
+            null;
+
+          timerStartedRef.current =
+            false;
+        }
+      }, 250);
+
+    return () => {
+      window.clearInterval(
+        interval
+      );
+
+      deadlineRef.current =
+        null;
+
+      timerStartedRef.current =
+        false;
+    };
+  }, []);
+
+  // =====================================================
   // ОТРИМАННЯ АКТУАЛЬНОГО СТАНУ СЕСІЇ
   //
-  // Кожні 2 секунди отримуємо стан із сервера.
+  // Кожні 2 секунди.
   //
-  // GET нічого не змінює в БД.
+  // КРИТИЧНО:
+  //
+  // Ми НЕ робимо:
+  //
+  // setTimeLeft(data.timeLeft)
+  //
+  // при кожному GET.
+  //
+  // Інакше таймер буде стрибати.
   // =====================================================
 
   useEffect(() => {
@@ -337,14 +483,6 @@ export default function MonitoringSessionState({
 
         // =================================================
         // ЗБЕРЕЖЕНІ ВІДПОВІДІ
-        //
-        // КРИТИЧНО:
-        //
-        // data.savedAnswers має ключі:
-        //
-        // question.id
-        //
-        // а НЕ порядкові номери питань.
         // =================================================
 
         if (
@@ -361,21 +499,148 @@ export default function MonitoringSessionState({
         }
 
         // =================================================
-        // ЧАС
+        // СЕРВЕРНИЙ ЧАС
+        //
+        // ОСНОВНА ЛОГІКА.
+        //
+        // Не перезаписуємо countdown,
+        // якщо серверне значення відрізняється
+        // лише через природне проходження часу.
+        //
+        // Якщо адміністратор змінив timeLeft,
+        // значення буде перебудовано.
         // =================================================
 
         if (
           typeof data.timeLeft ===
           "number"
         ) {
-          setTimeLeft(
+          const serverTime =
             Math.max(
               0,
               Math.floor(
                 data.timeLeft
               )
-            )
-          );
+            );
+
+          const previousServerTime =
+            serverTimeLeftRef.current;
+
+          const localDisplayedTime =
+            displayedTimeLeftRef.current;
+
+          /*
+           * Перше отримання серверного значення.
+           */
+
+          if (
+            !timerStartedRef.current
+          ) {
+            serverTimeLeftRef.current =
+              serverTime;
+
+            if (
+              serverTime > 0 &&
+              !data.finished &&
+              !data.blocked
+            ) {
+              startLocalCountdown(
+                serverTime
+              );
+            } else {
+              setTimeLeft(
+                serverTime
+              );
+
+              displayedTimeLeftRef.current =
+                serverTime;
+            }
+          } else {
+            /*
+             * Визначаємо, чи сервер змінив
+             * timeLeft адміністративною дією.
+             *
+             * Нормальний countdown:
+             *
+             * server:
+             * 3600
+             *
+             * local:
+             * 3598
+             *
+             * Це НЕ адміністративна зміна.
+             *
+             * Але якщо було:
+             *
+             * local:
+             * 3598
+             *
+             * server:
+             * 3898
+             *
+             * це +5 хвилин.
+             *
+             * Або:
+             *
+             * local:
+             * 3598
+             *
+             * server:
+             * 1800
+             *
+             * це адміністративна зміна.
+             */
+
+            const expectedUpper =
+              previousServerTime;
+
+            const naturalLower =
+              Math.max(
+                0,
+                previousServerTime -
+                  4
+              );
+
+            const isNaturalCountdown =
+              serverTime <=
+                expectedUpper &&
+              serverTime >=
+                naturalLower;
+
+            /*
+             * Якщо значення сервера
+             * суттєво відрізняється від
+             * очікуваного countdown —
+             * це адміністративна зміна.
+             */
+
+            const administrativeChange =
+              !isNaturalCountdown &&
+              Math.abs(
+                serverTime -
+                  localDisplayedTime
+              ) > 2;
+
+            if (
+              administrativeChange
+            ) {
+              console.log(
+                "MONITORING: SERVER TIMER CHANGE",
+                {
+                  previousServerTime,
+                  serverTime,
+                  localDisplayedTime,
+                }
+              );
+
+              startLocalCountdown(
+                serverTime
+              );
+            }
+          }
+
+          serverTimeLeftRef.current =
+            serverTime;
         }
 
         // =================================================
@@ -407,8 +672,7 @@ export default function MonitoringSessionState({
         );
 
         setBlockReason(
-          data.blockReason ??
-            null
+          data.blockReason ?? null
         );
 
         // =================================================
@@ -420,6 +684,23 @@ export default function MonitoringSessionState({
             data.finished
           )
         );
+
+        // =================================================
+        // ЯКЩО ЗАБЛОКОВАНО
+        //
+        // Зупиняємо локальний countdown.
+        // =================================================
+
+        if (
+          data.blocked ||
+          data.finished
+        ) {
+          deadlineRef.current =
+            null;
+
+          timerStartedRef.current =
+            false;
+        }
       } catch (error) {
         if (!cancelled) {
           console.error(
@@ -459,11 +740,7 @@ export default function MonitoringSessionState({
   ]);
 
   // =====================================================
-  // НОМЕР ПОТОЧНОГО ПИТАННЯ ДЛЯ ВІДОБРАЖЕННЯ
-  //
-  // 0 → №1
-  // 1 → №2
-  // 2 → №3
+  // НОМЕР ПОТОЧНОГО ПИТАННЯ
   // =====================================================
 
   const displayedCurrentQuestion =
@@ -479,12 +756,6 @@ export default function MonitoringSessionState({
 
   // =====================================================
   // КІЛЬКІСТЬ ЗБЕРЕЖЕНИХ ВІДПОВІДЕЙ
-  //
-  // ВАЖЛИВО:
-  //
-  // Рахуємо тільки ті ключі savedAnswers,
-  // які відповідають реальним question.id
-  // цього тесту.
   // =====================================================
 
   const savedQuestionsCount =
@@ -611,10 +882,6 @@ export default function MonitoringSessionState({
       {questionsOpen && (
         <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-5">
 
-          {/* ===============================================
-              ЗАГОЛОВОК СПИСКУ
-          =============================================== */}
-
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
 
             <h3 className="text-lg font-bold text-gray-800">
@@ -630,10 +897,6 @@ export default function MonitoringSessionState({
               {questionsCount}
             </div>
           </div>
-
-          {/* ===============================================
-              ПИТАННЯ
-          =============================================== */}
 
           <MonitoringQuestions
             totalQuestions={
