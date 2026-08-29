@@ -14,7 +14,117 @@ type Props = {
 };
 
 // =====================================================
-// GET — отримання конкретної сесії
+// HELPERS
+// =====================================================
+
+function normalizeSeconds(value: unknown): number {
+  return Math.max(
+    0,
+    Math.floor(Number(value) || 0)
+  );
+}
+
+// =====================================================
+// РЕАЛЬНИЙ ЗАЛИШОК ЧАСУ АКТИВНОЇ СЕСІЇ
+//
+// ЄДИНА ФОРМУЛА:
+//
+// duration + extraTime - elapsed
+//
+// elapsed рахується ВІД startedAt.
+//
+// lastActivityAt НЕ використовується
+// для розрахунку таймера.
+// =====================================================
+
+function calculateActiveTimeLeft(
+  startedAt: Date | null,
+  durationMinutes: number,
+  extraTime: number,
+  now: Date
+): number {
+  if (!startedAt) {
+    return 0;
+  }
+
+  const elapsedSeconds =
+    Math.max(
+      0,
+      Math.floor(
+        (
+          now.getTime() -
+          startedAt.getTime()
+        ) / 1000
+      )
+    );
+
+  const durationSeconds =
+    normalizeSeconds(
+      durationMinutes * 60
+    );
+
+  const normalizedExtraTime =
+    normalizeSeconds(
+      extraTime
+    );
+
+  return Math.max(
+    0,
+    durationSeconds +
+      normalizedExtraTime -
+      elapsedSeconds
+  );
+}
+
+// =====================================================
+// SESSION INCLUDE
+// =====================================================
+
+const sessionInclude = {
+  participant: true,
+
+  test: {
+    select: {
+      id: true,
+      title: true,
+      subject: true,
+      duration: true,
+      maxPoints: true,
+
+      questions: {
+        orderBy: {
+          order: "asc" as const,
+        },
+
+        select: {
+          id: true,
+          order: true,
+
+          question: {
+            select: {
+              id: true,
+              type: true,
+              text: true,
+              points: true,
+            },
+          },
+        },
+      },
+    },
+  },
+
+  result: true,
+} as const;
+
+// =====================================================
+// GET
+//
+// GET /api/session/manage/[id]
+//
+// Для активної сесії повертає реальний залишок.
+//
+// ВАЖЛИВО:
+// БД при звичайному GET НЕ змінюємо.
 // =====================================================
 
 export async function GET(
@@ -26,10 +136,6 @@ export async function GET(
 
     const sessionId = Number(id);
 
-    // =================================================
-    // ПЕРЕВІРКА ID
-    // =================================================
-
     if (
       !Number.isInteger(sessionId) ||
       sessionId <= 0
@@ -37,7 +143,8 @@ export async function GET(
       return NextResponse.json(
         {
           success: false,
-          error: "Некоректний id сесії.",
+          error:
+            "Некоректний id сесії.",
         },
         {
           status: 400,
@@ -45,62 +152,21 @@ export async function GET(
       );
     }
 
-    // =================================================
-    // ОТРИМАННЯ СЕСІЇ
-    // =================================================
-
     const session =
       await prisma.testSession.findUnique({
         where: {
           id: sessionId,
         },
 
-        include: {
-          participant: true,
-
-          test: {
-            select: {
-              id: true,
-              title: true,
-              subject: true,
-              duration: true,
-              maxPoints: true,
-
-              questions: {
-                orderBy: {
-                  order: "asc",
-                },
-
-                select: {
-                  id: true,
-                  order: true,
-
-                  question: {
-                    select: {
-                      id: true,
-                      type: true,
-                      text: true,
-                      points: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-
-          result: true,
-        },
+        include: sessionInclude,
       });
-
-    // =================================================
-    // СЕСІЮ НЕ ЗНАЙДЕНО
-    // =================================================
 
     if (!session) {
       return NextResponse.json(
         {
           success: false,
-          error: "Сесію не знайдено.",
+          error:
+            "Сесію не знайдено.",
         },
         {
           status: 404,
@@ -108,92 +174,38 @@ export async function GET(
       );
     }
 
-    // =================================================
-    // АКТУАЛІЗАЦІЯ ЧАСУ ДЛЯ АДМІНПАНЕЛІ
-    //
-    // НЕ ЗМІНЮЄМО БД.
-    //
-    // Для активної сесії:
-    //
-    // duration + extraTime - elapsed
-    //
-    // elapsed рахується від startedAt,
-    // а не від lastActivityAt.
-    // =================================================
+    const now = new Date();
 
     let actualTimeLeft =
-      Math.max(
-        0,
-        Math.floor(
-          session.timeLeft
-        )
+      normalizeSeconds(
+        session.timeLeft
       );
 
-    // -------------------------------------------------
-    // Активна сесія
-    // -------------------------------------------------
+    const normalizedExtraTime =
+      normalizeSeconds(
+        session.extraTime
+      );
+
+    // =================================================
+    // АКТИВНА СЕСІЯ
+    // =================================================
 
     if (
       !session.finished &&
       !session.blocked &&
       session.startedAt
     ) {
-      const now =
-        new Date();
-
-      const elapsedSeconds =
-        Math.max(
-          0,
-          Math.floor(
-            (
-              now.getTime() -
-              session.startedAt.getTime()
-            ) / 1000
-          )
-        );
-
-      const durationSeconds =
-        Math.max(
-          0,
-          Math.floor(
-            session.test.duration * 60
-          )
-        );
-
-      const extraTime =
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              session.extraTime
-            ) || 0
-          )
-        );
-
       actualTimeLeft =
-        Math.max(
-          0,
-          durationSeconds +
-            extraTime -
-            elapsedSeconds
+        calculateActiveTimeLeft(
+          session.startedAt,
+          session.test.duration,
+          normalizedExtraTime,
+          now
         );
     }
 
     // =================================================
-    // СИНХРОНІЗОВАНА СЕСІЯ
-    //
-    // Усі інші дані залишаються такими,
-    // як вони збережені в БД:
-    //
-    // currentQuestion
-    // savedAnswers
-    // extraTime
-    // blocked
-    // finished
-    //
-    // Змінюємо тільки timeLeft
-    // для актуального відображення
-    // в адміністративній панелі.
+    // СИНХРОНІЗОВАНА ВІДПОВІДЬ
     // =================================================
 
     const synchronizedSession = {
@@ -203,30 +215,45 @@ export async function GET(
         actualTimeLeft,
 
       extraTime:
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              session.extraTime
-            ) || 0
-          )
-        ),
+        normalizedExtraTime,
     };
 
-    // =================================================
-    // ВІДПОВІДЬ
-    // =================================================
+    return NextResponse.json(
+      {
+        success: true,
 
-    return NextResponse.json({
-      success: true,
+        session:
+          synchronizedSession,
 
-      session:
-        synchronizedSession,
+        timeLeft:
+          actualTimeLeft,
 
-      resultId:
-        session.result?.id ??
-        null,
-    });
+        extraTime:
+          normalizedExtraTime,
+
+        blocked:
+          session.blocked,
+
+        blockReason:
+          session.blockReason,
+
+        finished:
+          session.finished,
+
+        finishedAt:
+          session.finishedAt,
+
+        resultId:
+          session.result?.id ??
+          null,
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+        },
+      }
+    );
   } catch (error) {
     console.error(
       "GET SESSION MANAGE ERROR:",
@@ -249,15 +276,15 @@ export async function GET(
 }
 
 // =====================================================
-// POST — керування сесією
+// POST
 //
-// Підтримуються:
+// Підтримує:
 //
 // block
 // unblock
 // addTime
-// invalidate
 // annul
+// invalidate
 // =====================================================
 
 export async function POST(
@@ -269,10 +296,6 @@ export async function POST(
 
     const sessionId = Number(id);
 
-    // =================================================
-    // ПЕРЕВІРКА ID
-    // =================================================
-
     if (
       !Number.isInteger(sessionId) ||
       sessionId <= 0
@@ -280,7 +303,8 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: "Некоректний id сесії.",
+          error:
+            "Некоректний id сесії.",
         },
         {
           status: 400,
@@ -288,32 +312,23 @@ export async function POST(
       );
     }
 
-    // =================================================
-    // BODY
-    // =================================================
-
-    const body = await request.json();
+    const body =
+      await request.json();
 
     let action = body.action;
 
-    // =================================================
-    // СУМІСНІСТЬ
-    //
-    // Старий action:
-    //
-    // invalidate
-    //
-    // перетворюємо на:
-    //
-    // annul
-    // =================================================
+    // -------------------------------------------------
+    // Сумісність зі старим action
+    // -------------------------------------------------
 
-    if (action === "invalidate") {
+    if (
+      action === "invalidate"
+    ) {
       action = "annul";
     }
 
     // =================================================
-    // ОТРИМАННЯ СЕСІЇ
+    // ОТРИМУЄМО СЕСІЮ
     // =================================================
 
     const existingSession =
@@ -322,50 +337,15 @@ export async function POST(
           id: sessionId,
         },
 
-        include: {
-          participant: true,
-
-          test: {
-            select: {
-              id: true,
-              title: true,
-              subject: true,
-              duration: true,
-              maxPoints: true,
-
-              questions: {
-                orderBy: {
-                  order: "asc",
-                },
-
-                select: {
-                  id: true,
-                  order: true,
-
-                  question: {
-                    select: {
-                      id: true,
-                      points: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-
-          result: true,
-        },
+        include: sessionInclude,
       });
-
-    // =================================================
-    // СЕСІЮ НЕ ЗНАЙДЕНО
-    // =================================================
 
     if (!existingSession) {
       return NextResponse.json(
         {
           success: false,
-          error: "Сесію не знайдено.",
+          error:
+            "Сесію не знайдено.",
         },
         {
           status: 404,
@@ -373,12 +353,16 @@ export async function POST(
       );
     }
 
+    const now = new Date();
+
     // =================================================
-    // БЛОКУВАННЯ
+    // BLOCK
     // =================================================
 
     if (action === "block") {
-      if (existingSession.finished) {
+      if (
+        existingSession.finished
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -391,10 +375,11 @@ export async function POST(
         );
       }
 
-      if (existingSession.blocked) {
+      if (
+        existingSession.blocked
+      ) {
         return NextResponse.json({
           success: true,
-
           action: "block",
 
           message:
@@ -403,37 +388,50 @@ export async function POST(
           session:
             existingSession,
 
+          timeLeft:
+            normalizeSeconds(
+              existingSession.timeLeft
+            ),
+
+          extraTime:
+            normalizeSeconds(
+              existingSession.extraTime
+            ),
+
+          blocked: true,
+
+          blockReason:
+            existingSession.blockReason,
+
+          finished:
+            existingSession.finished,
+
           resultId:
             existingSession.result?.id ??
             null,
         });
       }
 
-      const now = new Date();
-
-      const lastActivity =
-        existingSession.lastActivityAt ??
-        existingSession.updatedAt ??
-        existingSession.startedAt;
-
-      const elapsedSeconds =
-        Math.max(
-          0,
-          Math.floor(
-            (
-              now.getTime() -
-              lastActivity.getTime()
-            ) / 1000
-          )
-        );
+      // =================================================
+      // ФІКСУЄМО РЕАЛЬНИЙ ЗАЛИШОК
+      //
+      // НЕ через lastActivityAt.
+      //
+      // А через:
+      //
+      // startedAt
+      // duration
+      // extraTime
+      // =================================================
 
       const actualTimeLeft =
-        Math.max(
-          0,
-          Math.floor(
-            existingSession.timeLeft -
-              elapsedSeconds
-          )
+        calculateActiveTimeLeft(
+          existingSession.startedAt,
+          existingSession.test.duration,
+          normalizeSeconds(
+            existingSession.extraTime
+          ),
+          now
         );
 
       const session =
@@ -449,7 +447,8 @@ export async function POST(
               body.reason ??
               "Тестування заблоковано через порушення правил тестування.",
 
-            blockedAt: now,
+            blockedAt:
+              now,
 
             timeLeft:
               actualTimeLeft,
@@ -458,21 +457,7 @@ export async function POST(
               now,
           },
 
-          include: {
-            participant: true,
-
-            test: {
-              select: {
-                id: true,
-                title: true,
-                subject: true,
-                duration: true,
-                maxPoints: true,
-              },
-            },
-
-            result: true,
-          },
+          include: sessionInclude,
         });
 
       return NextResponse.json({
@@ -483,7 +468,20 @@ export async function POST(
         session,
 
         timeLeft:
-          session.timeLeft,
+          actualTimeLeft,
+
+        extraTime:
+          normalizeSeconds(
+            session.extraTime
+          ),
+
+        blocked: true,
+
+        blockReason:
+          session.blockReason,
+
+        finished:
+          session.finished,
 
         resultId:
           session.result?.id ??
@@ -492,11 +490,13 @@ export async function POST(
     }
 
     // =================================================
-    // РОЗБЛОКУВАННЯ
+    // UNBLOCK
     // =================================================
 
     if (action === "unblock") {
-      if (existingSession.finished) {
+      if (
+        existingSession.finished
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -509,7 +509,9 @@ export async function POST(
         );
       }
 
-      if (!existingSession.blocked) {
+      if (
+        !existingSession.blocked
+      ) {
         return NextResponse.json({
           success: true,
 
@@ -521,13 +523,42 @@ export async function POST(
           session:
             existingSession,
 
+          timeLeft:
+            normalizeSeconds(
+              existingSession.timeLeft
+            ),
+
+          extraTime:
+            normalizeSeconds(
+              existingSession.extraTime
+            ),
+
+          blocked: false,
+
+          blockReason: null,
+
+          finished:
+            existingSession.finished,
+
           resultId:
             existingSession.result?.id ??
             null,
         });
       }
 
-      const now = new Date();
+      // =================================================
+      // РОЗБЛОКУВАННЯ
+      //
+      // timeLeft НЕ ПЕРЕРАХОВУЄМО.
+      //
+      // Час, який залишився на момент
+      // блокування, зберігається.
+      // =================================================
+
+      const preservedTimeLeft =
+        normalizeSeconds(
+          existingSession.timeLeft
+        );
 
       const session =
         await prisma.testSession.update({
@@ -542,24 +573,14 @@ export async function POST(
 
             blockedAt: null,
 
-            lastActivityAt: now,
+            timeLeft:
+              preservedTimeLeft,
+
+            lastActivityAt:
+              now,
           },
 
-          include: {
-            participant: true,
-
-            test: {
-              select: {
-                id: true,
-                title: true,
-                subject: true,
-                duration: true,
-                maxPoints: true,
-              },
-            },
-
-            result: true,
-          },
+          include: sessionInclude,
         });
 
       return NextResponse.json({
@@ -570,7 +591,19 @@ export async function POST(
         session,
 
         timeLeft:
-          session.timeLeft,
+          preservedTimeLeft,
+
+        extraTime:
+          normalizeSeconds(
+            session.extraTime
+          ),
+
+        blocked: false,
+
+        blockReason: null,
+
+        finished:
+          session.finished,
 
         resultId:
           session.result?.id ??
@@ -579,11 +612,187 @@ export async function POST(
     }
 
     // =================================================
-    // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
+    // ADD TIME
+    // =================================================
+
+    if (action === "addTime") {
+      const minutes =
+        Number(body.minutes);
+
+      if (
+        !Number.isFinite(minutes) ||
+        minutes <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Некоректна кількість додаткових хвилин.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        existingSession.finished
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Завершену сесію неможливо продовжити.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      if (
+        existingSession.blocked
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Неможливо додати час заблокованій сесії.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const secondsToAdd =
+        Math.floor(
+          minutes * 60
+        );
+
+      if (
+        secondsToAdd <= 0
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "Кількість доданого часу повинна бути більшою за 0.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      // =================================================
+      // КЛЮЧОВИЙ МОМЕНТ
+      //
+      // Спочатку отримуємо ЧАС, ЯКИЙ РЕАЛЬНО
+      // ЗАЛИШИВСЯ В УЧАСНИКА.
+      //
+      // НЕ використовуємо lastActivityAt.
+      // =================================================
+
+      const currentTimeLeft =
+        calculateActiveTimeLeft(
+          existingSession.startedAt,
+          existingSession.test.duration,
+          normalizeSeconds(
+            existingSession.extraTime
+          ),
+          now
+        );
+
+      const currentExtraTime =
+        normalizeSeconds(
+          existingSession.extraTime
+        );
+
+      // =================================================
+      // НОВИЙ ЧАС
+      // =================================================
+
+      const newTimeLeft =
+        currentTimeLeft +
+        secondsToAdd;
+
+      const newExtraTime =
+        currentExtraTime +
+        secondsToAdd;
+
+      // =================================================
+      // ЗБЕРІГАЄМО
+      // =================================================
+
+      const session =
+        await prisma.testSession.update({
+          where: {
+            id: sessionId,
+          },
+
+          data: {
+            timeLeft:
+              newTimeLeft,
+
+            extraTime:
+              newExtraTime,
+
+            lastActivityAt:
+              now,
+          },
+
+          include: sessionInclude,
+        });
+
+      return NextResponse.json({
+        success: true,
+
+        action: "addTime",
+
+        addedMinutes:
+          minutes,
+
+        addedSeconds:
+          secondsToAdd,
+
+        previousTimeLeft:
+          currentTimeLeft,
+
+        timeLeft:
+          newTimeLeft,
+
+        previousExtraTime:
+          currentExtraTime,
+
+        extraTime:
+          newExtraTime,
+
+        blocked:
+          session.blocked,
+
+        blockReason:
+          session.blockReason,
+
+        finished:
+          session.finished,
+
+        session,
+
+        resultId:
+          session.result?.id ??
+          null,
+      });
+    }
+
+    // =================================================
+    // ANNUL
     // =================================================
 
     if (action === "annul") {
-      if (existingSession.result) {
+      if (
+        existingSession.result
+      ) {
         return NextResponse.json({
           success: true,
 
@@ -636,10 +845,32 @@ export async function POST(
 
           session:
             existingSession,
+
+          blocked: true,
+
+          finished: true,
+
+          timeLeft: 0,
         });
       }
 
-      const now = new Date();
+      // =================================================
+      // АКТУАЛЬНИЙ ЧАС ДО АНУЛЮВАННЯ
+      // =================================================
+
+      const actualTimeLeft =
+        existingSession.blocked
+          ? normalizeSeconds(
+              existingSession.timeLeft
+            )
+          : calculateActiveTimeLeft(
+              existingSession.startedAt,
+              existingSession.test.duration,
+              normalizeSeconds(
+                existingSession.extraTime
+              ),
+              now
+            );
 
       const questionsCount =
         existingSession.test.questions.length;
@@ -654,16 +885,16 @@ export async function POST(
             existingSession.test.duration *
               60
           )
+        ) +
+        normalizeSeconds(
+          existingSession.extraTime
         );
 
       const timeSpent =
         Math.max(
           0,
           totalTime -
-            Math.max(
-              0,
-              existingSession.timeLeft
-            )
+            actualTimeLeft
         );
 
       const finishReason =
@@ -671,6 +902,10 @@ export async function POST(
 
       const finishMessage =
         "Порушення правил тестування";
+
+      // =================================================
+      // TRANSACTION
+      // =================================================
 
       const result =
         await prisma.$transaction(
@@ -684,7 +919,8 @@ export async function POST(
                 data: {
                   finished: true,
 
-                  finishedAt: now,
+                  finishedAt:
+                    now,
 
                   timeLeft: 0,
 
@@ -697,7 +933,8 @@ export async function POST(
                     existingSession.blockedAt ??
                     now,
 
-                  lastActivityAt: now,
+                  lastActivityAt:
+                    now,
                 },
               });
 
@@ -733,9 +970,11 @@ export async function POST(
 
                   finishReason,
 
-                  createdAt: now,
+                  createdAt:
+                    now,
 
-                  finishedAt: now,
+                  finishedAt:
+                    now,
 
                   startedAt:
                     existingSession.startedAt,
@@ -812,191 +1051,23 @@ export async function POST(
 
         session:
           result.session,
+
+        // =================================================
+        // КРИТИЧНО ДЛЯ УЧАСНИКА
+        // =================================================
+
+        blocked: true,
+
+        finished: true,
+
+        timeLeft: 0,
+
+        
       });
     }
 
     // =================================================
-    // ДОДАВАННЯ ЧАСУ
-    // =================================================
-
-    if (action === "addTime") {
-      const minutes = Number(
-        body.minutes
-      );
-
-      if (
-        !Number.isFinite(minutes) ||
-        minutes <= 0
-      ) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Некоректна кількість додаткових хвилин.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (existingSession.finished) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Завершену сесію неможливо продовжити.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      if (existingSession.blocked) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Неможливо додати час заблокованій сесії.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      const secondsToAdd =
-        Math.floor(
-          minutes * 60
-        );
-
-      if (secondsToAdd <= 0) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              "Кількість доданого часу повинна бути більшою за 0.",
-          },
-          {
-            status: 400,
-          }
-        );
-      }
-
-      const now = new Date();
-
-      const lastActivity =
-        existingSession.lastActivityAt ??
-        existingSession.updatedAt ??
-        existingSession.startedAt;
-
-      const elapsedSeconds =
-        Math.max(
-          0,
-          Math.floor(
-            (
-              now.getTime() -
-              lastActivity.getTime()
-            ) / 1000
-          )
-        );
-
-      const currentTimeLeft =
-        Math.max(
-          0,
-          Math.floor(
-            existingSession.timeLeft -
-              elapsedSeconds
-          )
-        );
-
-      const currentExtraTime =
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              existingSession.extraTime ??
-                0
-            )
-          )
-        );
-
-      const newTimeLeft =
-        currentTimeLeft +
-        secondsToAdd;
-
-      const newExtraTime =
-        currentExtraTime +
-        secondsToAdd;
-
-      const session =
-        await prisma.testSession.update({
-          where: {
-            id: sessionId,
-          },
-
-          data: {
-            timeLeft:
-              newTimeLeft,
-
-            extraTime:
-              newExtraTime,
-
-            lastActivityAt:
-              now,
-          },
-
-          include: {
-            participant: true,
-
-            test: {
-              select: {
-                id: true,
-                title: true,
-                subject: true,
-                duration: true,
-                maxPoints: true,
-              },
-            },
-
-            result: true,
-          },
-        });
-
-      return NextResponse.json({
-        success: true,
-
-        action: "addTime",
-
-        addedMinutes:
-          minutes,
-
-        addedSeconds:
-          secondsToAdd,
-
-        previousTimeLeft:
-          currentTimeLeft,
-
-        timeLeft:
-          session.timeLeft,
-
-        previousExtraTime:
-          currentExtraTime,
-
-        extraTime:
-          session.extraTime,
-
-        session,
-
-        resultId:
-          session.result?.id ??
-          null,
-      });
-    }
-
-    // =================================================
-    // НЕВІДОМА ОПЕРАЦІЯ
+    // UNKNOWN ACTION
     // =================================================
 
     return NextResponse.json(
@@ -1011,10 +1082,6 @@ export async function POST(
       }
     );
   } catch (error) {
-    // =================================================
-    // ДЕТАЛЬНА ПОМИЛКА
-    // =================================================
-
     console.error(
       "POST SESSION MANAGE ERROR:",
       error
