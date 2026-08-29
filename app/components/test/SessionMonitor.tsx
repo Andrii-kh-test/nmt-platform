@@ -9,9 +9,7 @@ import {
 
 import { useRouter } from "next/navigation";
 
-import {
-  useTestSession,
-} from "@/app/context/TestSessionContext";
+import { useTestSession } from "@/app/context/TestSessionContext";
 
 // =====================================================
 // SERVER SESSION
@@ -75,46 +73,28 @@ function normalizeSavedAnswers(
     return {};
   }
 
-  const result: Record<
-    number,
-    number[]
-  > = {};
+  const result: Record<number, number[]> = {};
 
   for (const [
     key,
     valueForQuestion,
   ] of Object.entries(
-    value as Record<
-      string,
-      unknown
-    >
+    value as Record<string, unknown>
   )) {
-    if (
-      !Array.isArray(
-        valueForQuestion
-      )
-    ) {
+    if (!Array.isArray(valueForQuestion)) {
       continue;
     }
 
-    const questionId =
-      Number(key);
+    const questionId = Number(key);
 
-    if (
-      !Number.isInteger(
-        questionId
-      )
-    ) {
+    if (!Number.isInteger(questionId)) {
       continue;
     }
 
     result[questionId] =
       valueForQuestion.filter(
-        (
-          item
-        ): item is number =>
-          typeof item ===
-            "number" &&
+        (item): item is number =>
+          typeof item === "number" &&
           Number.isInteger(item)
       );
   }
@@ -159,25 +139,19 @@ export default function SessionMonitor({
   const [
     blockReasonUI,
     setBlockReasonUI,
-  ] = useState<string | null>(
-    null
-  );
+  ] = useState<string | null>(null);
 
   // =====================================================
   // REFS
   // =====================================================
 
-  const mountedRef =
-    useRef(false);
+  const mountedRef = useRef(false);
 
-  const initialSyncDoneRef =
-    useRef(false);
+  const initialSyncDoneRef = useRef(false);
 
-  const pollingRef =
-    useRef(false);
+  const pollingRef = useRef(false);
 
-  const heartbeatRef =
-    useRef(false);
+  const heartbeatRef = useRef(false);
 
   const lastServerTimeRef =
     useRef<number | null>(null);
@@ -208,10 +182,7 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (
-      !testId ||
-      sessionId
-    ) {
+    if (!testId || sessionId) {
       return;
     }
 
@@ -238,9 +209,7 @@ export default function SessionMonitor({
     }
 
     const numericSessionId =
-      Number(
-        storedSessionId
-      );
+      Number(storedSessionId);
 
     if (
       !Number.isInteger(
@@ -255,9 +224,7 @@ export default function SessionMonitor({
       return;
     }
 
-    setSessionId(
-      numericSessionId
-    );
+    setSessionId(numericSessionId);
   }, [
     testId,
     sessionId,
@@ -268,198 +235,184 @@ export default function SessionMonitor({
   // APPLY SERVER SESSION
   // =====================================================
 
-  const applySession =
-    useCallback(
-      (
-        session: ServerSession
-      ) => {
-        if (
-          !mountedRef.current
-        ) {
-          return;
-        }
+  const applySession = useCallback(
+    (session: ServerSession) => {
+      if (!mountedRef.current) {
+        return;
+      }
 
-        const normalizedTime =
-          Math.max(
-            0,
-            Math.floor(
-              Number(
-                session.timeLeft
-              ) || 0
-            )
-          );
-
-        const answers =
-          normalizeSavedAnswers(
-            session.savedAnswers
-          );
-
-        console.log(
-          "SESSION MONITOR: APPLY SESSION",
-          {
-            sessionId:
-              session.id,
-
-            timeLeft:
-              normalizedTime,
-
-            startedAt:
-              session.startedAt,
-
-            finished:
-              session.finished,
-
-            blocked:
-              session.blocked,
-
-            resultId:
-              session.resultId,
-          }
+      const normalizedTime =
+        Math.max(
+          0,
+          Math.floor(
+            Number(session.timeLeft) || 0
+          )
         );
 
-        lastServerTimeRef.current =
-          normalizedTime;
+      const answers =
+        normalizeSavedAnswers(
+          session.savedAnswers
+        );
 
-        // =================================================
-        // BLOCK UI
-        //
-        // Тільки показуємо або приховуємо
-        // модальне вікно.
-        //
-        // ЛОГІКА ТАЙМЕРА НЕ ЗМІНЮЄТЬСЯ.
-        // =================================================
+      console.log(
+        "SESSION MONITOR: APPLY SESSION",
+        {
+          sessionId: session.id,
 
-        setBlockedUI(
+          timeLeft: normalizedTime,
+
+          startedAt: session.startedAt,
+
+          finished: session.finished,
+
+          blocked: session.blocked,
+
+          resultId: session.resultId,
+        }
+      );
+
+      lastServerTimeRef.current =
+        normalizedTime;
+
+      // =================================================
+      // BLOCK UI
+      //
+      // Тільки показуємо або приховуємо
+      // модальне вікно.
+      //
+      // ЛОГІКА ТАЙМЕРА НЕ ЗМІНЮЄТЬСЯ.
+      // =================================================
+
+      setBlockedUI(session.blocked);
+
+      setBlockReasonUI(
+        session.blocked
+          ? session.blockReason ??
+              "Тестування заблоковано адміністратором."
+          : null
+      );
+
+      // =================================================
+      // FINISHED
+      //
+      // Якщо сесію завершено:
+      //
+      // 1. відновлюємо фінальний стан;
+      // 2. якщо існує resultId — переходимо
+      //    на сторінку результату учасника.
+      //
+      // ВАЖЛИВО:
+      // маршрут /result/[id], а не /results/[id].
+      // =================================================
+
+      if (session.finished) {
+        restoreSession(
+          session.currentQuestion,
+          answers,
+          normalizedTime,
+          session.startedAt,
+          true,
           session.blocked
         );
 
-        setBlockReasonUI(
-          session.blocked
-            ? session.blockReason ??
-                "Тестування заблоковано адміністратором."
-            : null
-        );
-
-        // =================================================
-        // FINISHED
-        //
-        // Якщо сесію завершено:
-        //
-        // 1. відновлюємо фінальний стан;
-        // 2. якщо існує resultId — переходимо
-        //    на сторінку результату учасника.
-        //
-        // ВАЖЛИВО:
-        // маршрут /result/[id], а не /results/[id].
-        // =================================================
-
         if (
-          session.finished
+          !resultRedirectedRef.current &&
+          typeof session.resultId ===
+            "number" &&
+          session.resultId > 0
         ) {
-          restoreSession(
-            session.currentQuestion,
-            answers,
-            normalizedTime,
-            session.startedAt,
-            true,
-            session.blocked
+          resultRedirectedRef.current =
+            true;
+
+          console.log(
+            "SESSION MONITOR: TEST FINISHED, REDIRECTING TO RESULT",
+            {
+              resultId:
+                session.resultId,
+            }
           );
 
-          if (
-            !resultRedirectedRef.current &&
-            typeof session.resultId ===
-              "number" &&
-            session.resultId > 0
-          ) {
-            resultRedirectedRef.current =
-              true;
-
-            console.log(
-              "SESSION MONITOR: TEST FINISHED, REDIRECTING TO RESULT",
-              {
-                resultId:
-                  session.resultId,
-              }
-            );
-
-            router.replace(
-              `/result/${session.resultId}`
-            );
-          }
-
-          return;
-        }
-
-        // =================================================
-        // BLOCKED
-        // =================================================
-
-        if (
-          session.blocked
-        ) {
-          restoreSession(
-            session.currentQuestion,
-            answers,
-            normalizedTime,
-            session.startedAt,
-            false,
-            true
+          router.replace(
+            `/result/${session.resultId}`
           );
-
-          return;
         }
 
-        // =================================================
-        // NOT STARTED
-        // =================================================
+        return;
+      }
 
-        if (
-          !session.startedAt
-        ) {
-          console.warn(
-            "SESSION MONITOR: TEST NOT STARTED"
-          );
+      // =================================================
+      // BLOCKED
+      // =================================================
 
-          return;
-        }
-
-        // =================================================
-        // EXPIRED
-        // =================================================
-
-        if (
-          normalizedTime <= 0
-        ) {
-          restoreSession(
-            session.currentQuestion,
-            answers,
-            0,
-            session.startedAt,
-            false,
-            false
-          );
-
-          return;
-        }
-
-        // =================================================
-        // ACTIVE
-        // =================================================
-
+      if (session.blocked) {
         restoreSession(
           session.currentQuestion,
           answers,
           normalizedTime,
           session.startedAt,
           false,
+          true
+        );
+
+        return;
+      }
+
+      // =================================================
+      // NOT STARTED
+      // =================================================
+
+      if (!session.startedAt) {
+        console.warn(
+          "SESSION MONITOR: TEST NOT STARTED"
+        );
+
+        return;
+      }
+
+      // =================================================
+      // EXPIRED
+      // =================================================
+
+      if (normalizedTime <= 0) {
+        restoreSession(
+          session.currentQuestion,
+          answers,
+          0,
+          session.startedAt,
+          false,
           false
         );
-      },
-      [
-        restoreSession,
-        router,
-      ]
-    );
+
+        return;
+      }
+
+      // =================================================
+      // ACTIVE
+      //
+      // ВАЖЛИВО ДЛЯ РОЗБЛОКУВАННЯ:
+      //
+      // Коли blocked змінюється з true на false,
+      // цей блок виконується знову.
+      //
+      // restoreSession(..., false, false)
+      // повертає активний стан сесії та відновлює
+      // нормальну роботу таймера.
+      // =================================================
+
+      restoreSession(
+        session.currentQuestion,
+        answers,
+        normalizedTime,
+        session.startedAt,
+        false,
+        false
+      );
+    },
+    [
+      restoreSession,
+      router,
+    ]
+  );
 
   // =====================================================
   // FETCH SESSION
@@ -471,259 +424,245 @@ export default function SessionMonitor({
   // через GET /api/session/[testId].
   // =====================================================
 
-  const fetchSession =
-    useCallback(
-      async (
-        forceSync = false
-      ) => {
-        if (
-          !sessionId ||
-          !testId
-        ) {
-          return;
-        }
+  const fetchSession = useCallback(
+    async (forceSync = false) => {
+      if (!sessionId || !testId) {
+        return;
+      }
 
-        if (
-          pollingRef.current
-        ) {
-          return;
-        }
+      if (pollingRef.current) {
+        return;
+      }
 
-        pollingRef.current =
-          true;
+      pollingRef.current = true;
 
-        try {
-          const response =
-            await fetch(
-              `/api/session/${testId}?sessionId=${sessionId}`,
-              {
-                method: "GET",
+      try {
+        const response = await fetch(
+          `/api/session/${testId}?sessionId=${sessionId}`,
+          {
+            method: "GET",
 
-                cache: "no-store",
+            cache: "no-store",
 
-                headers: {
-                  "Cache-Control":
-                    "no-cache",
-                },
-              }
-            );
-
-          if (
-            !response.ok
-          ) {
-            console.error(
-              "SESSION MONITOR GET ERROR:",
-              response.status
-            );
-
-            return;
+            headers: {
+              "Cache-Control":
+                "no-cache",
+            },
           }
+        );
 
-          const data =
-            (await response.json()) as
-              | ServerSession
-              | {
-                  error?: string;
-                };
-
-          if (
-            !mountedRef.current
-          ) {
-            return;
-          }
-
-          if (
-            !("id" in data) ||
-            typeof data.id !==
-              "number"
-          ) {
-            console.error(
-              "SESSION MONITOR: некоректна відповідь сервера",
-              data
-            );
-
-            return;
-          }
-
-          const serverSession =
-            data as ServerSession;
-
-          const serverTime =
-            Math.max(
-              0,
-              Math.floor(
-                Number(
-                  serverSession.timeLeft
-                ) || 0
-              )
-            );
-
-          // =================================================
-          // INITIAL SYNC
-          //
-          // Перший GET після відкриття
-          // синхронізує Context із сервером.
-          // =================================================
-
-          if (
-            !initialSyncDoneRef.current
-          ) {
-            console.log(
-              "SESSION MONITOR: INITIAL SYNC",
-              {
-                sessionId,
-
-                serverTime,
-
-                startedAt:
-                  serverSession.startedAt,
-
-                finished:
-                  serverSession.finished,
-
-                resultId:
-                  serverSession.resultId,
-              }
-            );
-
-            initialSyncDoneRef.current =
-              true;
-
-            applySession(
-              serverSession
-            );
-
-            return;
-          }
-
-          // =================================================
-          // FINISHED / BLOCKED / EXPIRED
-          // =================================================
-
-          if (
-            serverSession.finished ||
-            serverSession.blocked ||
-            serverTime <= 0
-          ) {
-            applySession(
-              serverSession
-            );
-
-            return;
-          }
-
-          // =================================================
-          // FORCE SYNC
-          //
-          // Повернення у вкладку,
-          // відновлення мережі тощо.
-          // =================================================
-
-          if (
-            forceSync
-          ) {
-            console.log(
-              "SESSION MONITOR: FORCE SYNC",
-              {
-                serverTime,
-              }
-            );
-
-            applySession(
-              serverSession
-            );
-
-            return;
-          }
-
-          // =================================================
-          // SERVER TIME CHANGE
-          //
-          // Адміністратор:
-          //
-          // +5 хв
-          // +10 хв
-          // +30 хв
-          //
-          // або інша зміна часу.
-          // =================================================
-
-          const previousServerTime =
-            lastServerTimeRef.current;
-
-          if (
-            previousServerTime !==
-              null &&
-            Math.abs(
-              serverTime -
-                previousServerTime
-            ) >= 2
-          ) {
-            console.log(
-              "SESSION MONITOR: SERVER TIME CHANGED",
-              {
-                previous:
-                  previousServerTime,
-
-                current:
-                  serverTime,
-              }
-            );
-
-            applySession(
-              serverSession
-            );
-
-            return;
-          }
-
-          lastServerTimeRef.current =
-            serverTime;
-
-          // =================================================
-          // QUESTION
-          // =================================================
-
-          setCurrentQuestion(
-            Number.isInteger(
-              serverSession.currentQuestion
-            )
-              ? serverSession.currentQuestion
-              : 0
-          );
-        } catch (error) {
+        if (!response.ok) {
           console.error(
             "SESSION MONITOR GET ERROR:",
-            error
+            response.status
           );
-        } finally {
-          pollingRef.current =
-            false;
+
+          return;
         }
-      },
-      [
-        sessionId,
-        testId,
-        applySession,
-        setCurrentQuestion,
-      ]
-    );
+
+        const data =
+          (await response.json()) as
+            | ServerSession
+            | {
+                error?: string;
+              };
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        if (
+          !("id" in data) ||
+          typeof data.id !== "number"
+        ) {
+          console.error(
+            "SESSION MONITOR: некоректна відповідь сервера",
+            data
+          );
+
+          return;
+        }
+
+        const serverSession =
+          data as ServerSession;
+
+        const serverTime =
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                serverSession.timeLeft
+              ) || 0
+            )
+          );
+
+        // =================================================
+        // INITIAL SYNC
+        //
+        // Перший GET після відкриття
+        // синхронізує Context із сервером.
+        // =================================================
+
+        if (
+          !initialSyncDoneRef.current
+        ) {
+          console.log(
+            "SESSION MONITOR: INITIAL SYNC",
+            {
+              sessionId,
+
+              serverTime,
+
+              startedAt:
+                serverSession.startedAt,
+
+              finished:
+                serverSession.finished,
+
+              resultId:
+                serverSession.resultId,
+            }
+          );
+
+          initialSyncDoneRef.current =
+            true;
+
+          applySession(
+            serverSession
+          );
+
+          return;
+        }
+
+        // =================================================
+        // FINISHED / BLOCKED / EXPIRED
+        //
+        // BLOCKED тут ОБОВ'ЯЗКОВО перевіряється
+        // на кожному polling.
+        //
+        // Тому після розблокування адміністратором:
+        //
+        // blocked === false
+        //
+        // і нижче буде виконано ACTIVE,
+        // який відновить таймер.
+        // =================================================
+
+        if (
+          serverSession.finished ||
+          serverSession.blocked ||
+          serverTime <= 0
+        ) {
+          applySession(
+            serverSession
+          );
+
+          return;
+        }
+
+        // =================================================
+        // FORCE SYNC
+        //
+        // Повернення у вкладку,
+        // відновлення мережі тощо.
+        // =================================================
+
+        if (forceSync) {
+          console.log(
+            "SESSION MONITOR: FORCE SYNC",
+            {
+              serverTime,
+            }
+          );
+
+          applySession(
+            serverSession
+          );
+
+          return;
+        }
+
+        // =================================================
+        // SERVER TIME CHANGE
+        //
+        // Адміністратор:
+        //
+        // +5 хв
+        // +10 хв
+        // +30 хв
+        //
+        // або інша зміна часу.
+        // =================================================
+
+        const previousServerTime =
+          lastServerTimeRef.current;
+
+        if (
+          previousServerTime !== null &&
+          Math.abs(
+            serverTime -
+              previousServerTime
+          ) >= 2
+        ) {
+          console.log(
+            "SESSION MONITOR: SERVER TIME CHANGED",
+            {
+              previous:
+                previousServerTime,
+
+              current:
+                serverTime,
+            }
+          );
+
+          applySession(
+            serverSession
+          );
+
+          return;
+        }
+
+        lastServerTimeRef.current =
+          serverTime;
+
+        // =================================================
+        // QUESTION
+        // =================================================
+
+        setCurrentQuestion(
+          Number.isInteger(
+            serverSession.currentQuestion
+          )
+            ? serverSession.currentQuestion
+            : 0
+        );
+      } catch (error) {
+        console.error(
+          "SESSION MONITOR GET ERROR:",
+          error
+        );
+      } finally {
+        pollingRef.current = false;
+      }
+    },
+    [
+      sessionId,
+      testId,
+      applySession,
+      setCurrentQuestion,
+    ]
+  );
 
   // =====================================================
   // INITIAL FETCH
   // =====================================================
 
   useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
+    if (!sessionId || !testId) {
       return;
     }
 
-    void fetchSession(
-      true
-    );
+    void fetchSession(true);
   }, [
     sessionId,
     testId,
@@ -735,27 +674,17 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
+    if (!sessionId || !testId) {
       return;
     }
 
     const interval =
-      window.setInterval(
-        () => {
-          void fetchSession(
-            false
-          );
-        },
-        pollInterval
-      );
+      window.setInterval(() => {
+        void fetchSession(false);
+      }, pollInterval);
 
     return () => {
-      window.clearInterval(
-        interval
-      );
+      window.clearInterval(interval);
     };
   }, [
     sessionId,
@@ -769,88 +698,69 @@ export default function SessionMonitor({
   // =====================================================
 
   const sendHeartbeat =
-    useCallback(
-      async () => {
-        if (
-          !sessionId ||
-          !testId
-        ) {
-          return;
-        }
+    useCallback(async () => {
+      if (!sessionId || !testId) {
+        return;
+      }
 
-        if (
-          heartbeatRef.current
-        ) {
-          return;
-        }
+      if (heartbeatRef.current) {
+        return;
+      }
 
-        heartbeatRef.current =
-          true;
+      heartbeatRef.current = true;
 
-        try {
-          await fetch(
-            `/api/session/${testId}`,
-            {
-              method: "POST",
+      try {
+        await fetch(
+          `/api/session/${testId}`,
+          {
+            method: "POST",
 
-              headers: {
-                "Content-Type":
-                  "application/json",
+            headers: {
+              "Content-Type":
+                "application/json",
 
-                "Cache-Control":
-                  "no-cache",
-              },
+              "Cache-Control":
+                "no-cache",
+            },
 
-              cache: "no-store",
+            cache: "no-store",
 
-              body: JSON.stringify({
-                sessionId,
+            body: JSON.stringify({
+              sessionId,
 
-                heartbeat:
-                  true,
-              }),
-            }
-          );
-        } catch (error) {
-          console.error(
-            "SESSION HEARTBEAT ERROR:",
-            error
-          );
-        } finally {
-          heartbeatRef.current =
-            false;
-        }
-      },
-      [
-        sessionId,
-        testId,
-      ]
-    );
+              heartbeat: true,
+            }),
+          }
+        );
+      } catch (error) {
+        console.error(
+          "SESSION HEARTBEAT ERROR:",
+          error
+        );
+      } finally {
+        heartbeatRef.current = false;
+      }
+    }, [
+      sessionId,
+      testId,
+    ]);
 
   // =====================================================
   // HEARTBEAT INTERVAL
   // =====================================================
 
   useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
+    if (!sessionId || !testId) {
       return;
     }
 
     const interval =
-      window.setInterval(
-        () => {
-          void sendHeartbeat();
-        },
-        heartbeatInterval
-      );
+      window.setInterval(() => {
+        void sendHeartbeat();
+      }, heartbeatInterval);
 
     return () => {
-      window.clearInterval(
-        interval
-      );
+      window.clearInterval(interval);
     };
   }, [
     sessionId,
@@ -864,28 +774,22 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
+    if (!sessionId || !testId) {
       return;
     }
 
-    const handleVisibility =
-      () => {
-        if (
-          document.visibilityState ===
-          "visible"
-        ) {
-          console.log(
-            "SESSION MONITOR: TAB VISIBLE"
-          );
+    const handleVisibility = () => {
+      if (
+        document.visibilityState ===
+        "visible"
+      ) {
+        console.log(
+          "SESSION MONITOR: TAB VISIBLE"
+        );
 
-          void fetchSession(
-            true
-          );
-        }
-      };
+        void fetchSession(true);
+      }
+    };
 
     document.addEventListener(
       "visibilitychange",
@@ -909,25 +813,19 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (
-      !sessionId ||
-      !testId
-    ) {
+    if (!sessionId || !testId) {
       return;
     }
 
-    const handleOnline =
-      () => {
-        console.log(
-          "SESSION MONITOR: ONLINE"
-        );
+    const handleOnline = () => {
+      console.log(
+        "SESSION MONITOR: ONLINE"
+      );
 
-        void fetchSession(
-          true
-        );
+      void fetchSession(true);
 
-        void sendHeartbeat();
-      };
+      void sendHeartbeat();
+    };
 
     window.addEventListener(
       "online",
@@ -947,7 +845,7 @@ export default function SessionMonitor({
     sendHeartbeat,
   ]);
 
-    // =====================================================
+  // =====================================================
   // UI
   // =====================================================
 
@@ -962,39 +860,43 @@ export default function SessionMonitor({
             flex
             items-center
             justify-center
-            bg-slate-950/70
-            p-4
-            backdrop-blur-sm
+            bg-black/60
+            px-4
+            py-6
+            backdrop-blur-[2px]
           "
         >
           <div
             className="
               relative
               w-full
-              max-w-md
+              max-w-xl
               overflow-hidden
-              rounded-3xl
+              rounded-[28px]
               bg-white
-              px-8
-              py-9
-              text-center
+              px-6
+              py-8
               shadow-[0_25px_70px_rgba(0,0,0,0.25)]
+              sm:px-10
+              sm:py-10
             "
           >
-            {/* =========================================
+            {/* =================================================
                 DECORATIVE BACKGROUND
-            ========================================= */}
+            ================================================= */}
 
             <div
               className="
                 pointer-events-none
                 absolute
-                -right-20
-                -top-20
-                h-48
-                w-48
+                left-1/2
+                top-[-90px]
+                h-[260px]
+                w-[260px]
+                -translate-x-1/2
                 rounded-full
-                bg-[#7A1F2B]/5
+                border
+                border-[#7A1F2B]/10
               "
             />
 
@@ -1002,156 +904,302 @@ export default function SessionMonitor({
               className="
                 pointer-events-none
                 absolute
-                -bottom-24
-                -left-20
-                h-52
-                w-52
+                left-1/2
+                top-[-65px]
+                h-[210px]
+                w-[210px]
+                -translate-x-1/2
                 rounded-full
-                bg-[#7A1F2B]/5
+                border
+                border-[#7A1F2B]/10
               "
             />
 
-            {/* =========================================
-                ICON
-            ========================================= */}
+            {/* =================================================
+                LOCK ICON
+            ================================================= */}
 
-            <div
-              className="
-                relative
-                mx-auto
-                mb-6
-                flex
-                h-20
-                w-20
-                items-center
-                justify-center
-                rounded-full
-                bg-[#7A1F2B]/10
-              "
-            >
+            <div className="relative mx-auto mb-7 flex h-32 w-32 items-center justify-center">
+              {/* Outer soft circle */}
+
               <div
                 className="
+                  absolute
+                  inset-0
+                  rounded-full
+                  bg-[#7A1F2B]/[0.035]
+                "
+              />
+
+              {/* Middle circle */}
+
+              <div
+                className="
+                  absolute
+                  inset-2
+                  rounded-full
+                  border
+                  border-[#7A1F2B]/10
+                  bg-[#7A1F2B]/[0.025]
+                "
+              />
+
+              {/* Main white circle */}
+
+              <div
+                className="
+                  relative
                   flex
-                  h-14
-                  w-14
+                  h-24
+                  w-24
                   items-center
                   justify-center
                   rounded-full
-                  bg-[#7A1F2B]
-                  shadow-lg
-                  shadow-[#7A1F2B]/20
+                  border-2
+                  border-[#7A1F2B]
+                  bg-white
+                  shadow-[0_8px_30px_rgba(122,31,43,0.10)]
                 "
               >
-                {/* Pause icon */}
+                {/* Lock */}
+
                 <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
+                  viewBox="0 0 64 64"
+                  className="
+                    h-14
+                    w-14
+                    text-[#7A1F2B]
+                  "
                   fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  className="h-7 w-7 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
                 >
-                  <rect
-                    x="6"
-                    y="5"
-                    width="4"
-                    height="14"
-                    rx="1"
+                  {/* Shackle */}
+
+                  <path
+                    d="
+                      M20 29V21
+                      C20 14.925 24.925 10 31 10
+                      H33
+                      C39.075 10 44 14.925 44 21
+                      V29
+                    "
+                    stroke="currentColor"
+                    strokeWidth="7"
+                    strokeLinecap="round"
                   />
+
+                  {/* Body */}
+
                   <rect
-                    x="14"
-                    y="5"
-                    width="4"
-                    height="14"
-                    rx="1"
+                    x="13"
+                    y="26"
+                    width="38"
+                    height="29"
+                    rx="7"
+                    fill="currentColor"
+                  />
+
+                  {/* Keyhole */}
+
+                  <circle
+                    cx="32"
+                    cy="38"
+                    r="4"
+                    fill="white"
+                  />
+
+                  <path
+                    d="M32 41V47"
+                    stroke="white"
+                    strokeWidth="4"
+                    strokeLinecap="round"
                   />
                 </svg>
               </div>
             </div>
 
-            {/* =========================================
+            {/* =================================================
+                DECORATIVE DIVIDER
+            ================================================= */}
+
+            <div className="mb-7 flex items-center justify-center">
+              <div className="h-px flex-1 bg-[#7A1F2B]/15" />
+
+              <div
+                className="
+                  mx-4
+                  h-2
+                  w-2
+                  rounded-full
+                  bg-[#7A1F2B]
+                "
+              />
+
+              <div className="h-px flex-1 bg-[#7A1F2B]/15" />
+            </div>
+
+            {/* =================================================
                 TITLE
-            ========================================= */}
+            ================================================= */}
 
             <h2
               className="
-                relative
-                text-2xl
-                font-bold
+                text-center
+                text-3xl
+                font-extrabold
                 tracking-tight
                 text-[#7A1F2B]
+                sm:text-4xl
               "
             >
-              Тестування заблоковано
+              Заблоковано
             </h2>
 
-            {/* =========================================
+            {/* =================================================
                 DESCRIPTION
-            ========================================= */}
+            ================================================= */}
 
             <p
               className="
-                relative
-                mt-4
+                mx-auto
+                mt-5
+                max-w-md
+                text-center
                 text-base
                 leading-7
-                text-gray-700
+                text-gray-600
+                sm:text-lg
+                sm:leading-8
               "
             >
-              {blockReasonUI ??
-                "Будь ласка, очікуйте подальших вказівок адміністратора."}
+              Адміністратор зупинив виконання
+              <br className="hidden sm:block" />
+              {" "}Вашого тестування.
             </p>
 
-            {/* =========================================
-                INFORMATION BLOCK
-            ========================================= */}
+            {/* =================================================
+                WAITING MESSAGE
+            ================================================= */}
 
             <div
               className="
-                relative
-                mt-6
+                mt-8
+                flex
+                items-center
+                gap-5
                 rounded-2xl
-                border
-                border-gray-100
-                bg-gray-50
+                bg-[#7A1F2B]/[0.055]
                 px-5
-                py-4
+                py-5
+                sm:px-6
+                sm:py-6
               "
             >
+              {/* Clock icon */}
+
               <div
                 className="
                   flex
+                  h-16
+                  w-16
+                  shrink-0
                   items-center
                   justify-center
-                  gap-2
-                  text-sm
-                  font-medium
-                  text-gray-600
+                  rounded-full
+                  border-2
+                  border-[#7A1F2B]
+                  bg-white
                 "
               >
                 <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
+                  viewBox="0 0 64 64"
+                  className="
+                    h-9
+                    w-9
+                    text-[#7A1F2B]
+                  "
                   fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="h-4 w-4 text-[#7A1F2B]"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
                 >
+                  {/* Clock circle */}
+
                   <circle
-                    cx="12"
-                    cy="12"
-                    r="9"
+                    cx="32"
+                    cy="32"
+                    r="23"
+                    stroke="currentColor"
+                    strokeWidth="4"
                   />
+
+                  {/* Hour hand */}
+
                   <path
+                    d="M32 18V32L41 38"
+                    stroke="currentColor"
+                    strokeWidth="4"
                     strokeLinecap="round"
-                    d="M12 8v4l2.5 1.5"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Clock center */}
+
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="2.5"
+                    fill="currentColor"
+                  />
+
+                  {/* Small clock marks */}
+
+                  <path
+                    d="M32 9V12"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+
+                  <path
+                    d="M55 32H52"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+
+                  <path
+                    d="M32 55V52"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+
+                  <path
+                    d="M9 32H12"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
                   />
                 </svg>
-
-                <span>
-                  Очікуйте подальших вказівок адміністратора
-                </span>
               </div>
+
+              {/* Waiting text */}
+
+              <p
+                className="
+                  text-base
+                  font-medium
+                  leading-6
+                  text-[#7A1F2B]
+                  sm:text-lg
+                  sm:leading-7
+                "
+              >
+                Очікуйте подальших вказівок
+                <br className="hidden sm:block" />
+                {" "}адміністратора.
+              </p>
             </div>
           </div>
         </div>
