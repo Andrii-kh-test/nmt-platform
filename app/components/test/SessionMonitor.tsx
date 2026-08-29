@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
 } from "react";
 
 import {
@@ -128,6 +129,26 @@ export default function SessionMonitor({
 
     setCurrentQuestion,
   } = useTestSession();
+
+  // =====================================================
+  // BLOCK UI
+  //
+  // Тільки стан модального вікна.
+  //
+  // ЛОГІКУ ТАЙМЕРА НЕ ЗМІНЮЄМО.
+  // =====================================================
+
+  const [
+    blockedUI,
+    setBlockedUI,
+  ] = useState(false);
+
+  const [
+    blockReasonUI,
+    setBlockReasonUI,
+  ] = useState<string | null>(
+    null
+  );
 
   // =====================================================
   // REFS
@@ -273,6 +294,26 @@ export default function SessionMonitor({
 
         lastServerTimeRef.current =
           normalizedTime;
+
+        // =================================================
+        // BLOCK UI
+        //
+        // Тільки показуємо або приховуємо
+        // модальне вікно.
+        //
+        // ЛОГІКА ТАЙМЕРА НЕ ЗМІНЮЄТЬСЯ.
+        // =================================================
+
+        setBlockedUI(
+          session.blocked
+        );
+
+        setBlockReasonUI(
+          session.blocked
+            ? session.blockReason ??
+                "Тестування заблоковано адміністратором."
+            : null
+        );
 
         // =================================================
         // FINISHED
@@ -842,5 +883,95 @@ export default function SessionMonitor({
     sendHeartbeat,
   ]);
 
-  return null;
+  // =====================================================
+  // UI
+  // =====================================================
+
+  return (
+    <>
+      {blockedUI && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-[9999]
+            flex
+            items-center
+            justify-center
+            bg-black/60
+            p-4
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-lg
+              rounded-2xl
+              bg-white
+              p-8
+              text-center
+              shadow-2xl
+            "
+          >
+            <div
+              className="
+                mx-auto
+                mb-5
+                flex
+                h-16
+                w-16
+                items-center
+                justify-center
+                rounded-full
+                bg-red-100
+              "
+            >
+              <span
+                className="
+                  text-3xl
+                  font-bold
+                  text-red-600
+                "
+              >
+                !
+              </span>
+            </div>
+
+            <h2
+              className="
+                text-2xl
+                font-bold
+                text-[#7A1F2B]
+              "
+            >
+              Тест заблоковано
+            </h2>
+
+            <p
+              className="
+                mt-4
+                text-base
+                leading-7
+                text-gray-700
+              "
+            >
+              {blockReasonUI ??
+                "Тестування заблоковано адміністратором."}
+            </p>
+
+            <p
+              className="
+                mt-5
+                text-sm
+                text-gray-500
+              "
+            >
+              Будь ласка, очікуйте рішення
+              адміністратора.
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }

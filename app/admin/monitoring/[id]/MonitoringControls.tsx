@@ -61,11 +61,6 @@ export default function MonitoringControls({
         }
       );
 
-      // =================================================
-      // Формуємо body без складної вкладеної
-      // конструкції spread + ternary.
-      // =================================================
-
       const body: {
         action: Action;
         minutes?: number;
@@ -153,37 +148,55 @@ export default function MonitoringControls({
       // =================================================
       // АНУЛЮВАННЯ РЕЗУЛЬТАТУ
       //
-      // API використовує action = "annul".
+      // API повертає:
+      //
+      // resultId: result.result.id
+      //
+      // Після успішного анулювання
+      // переходимо безпосередньо
+      // на сторінку результату.
       // =================================================
 
-      if (action === "annul") {
+      if (
+        action === "annul" ||
+        action === "invalidate"
+      ) {
         setInvalidated(true);
 
         setBlocked(true);
 
-        setMessage(
-          "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
+        const resultId =
+          data?.resultId;
+
+        console.log(
+          "ADMIN ANNUL RESULT ID:",
+          resultId
         );
 
-        setTimeout(() => {
-          router.refresh();
-        }, 1000);
-      }
+        if (
+          typeof resultId ===
+            "number" &&
+          resultId > 0
+        ) {
+          router.push(
+            `/results/${resultId}`
+          );
 
-      // =================================================
-      // Сумісність із можливим старим action
-      // "invalidate".
-      //
-      // Основна кнопка нижче використовує "annul".
-      // =================================================
+          return;
+        }
 
-      if (action === "invalidate") {
-        setInvalidated(true);
-
-        setBlocked(true);
+        /*
+         * Захист від ситуації, коли API
+         * не повернув resultId.
+         *
+         * У такому випадку залишаємо
+         * адміністратора на поточній
+         * сторінці замість переходу
+         * на неіснуючий маршрут.
+         */
 
         setMessage(
-          "Результат анульовано. Учаснику буде показано результат 0 балів із причиною «Порушення правил тестування»."
+          "Результат анульовано. Результат створено, але ID результату не отримано."
         );
 
         setTimeout(() => {
