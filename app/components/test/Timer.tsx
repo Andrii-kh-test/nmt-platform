@@ -47,11 +47,7 @@ export default function Timer() {
         {String(seconds).padStart(2, "0")}
       </div>
 
-      <div className="text-xs text-gray-400">
-        {timerRunning
-          ? "Таймер працює"
-          : "Таймер зупинений"}
-      </div>
+  
     </div>
   );
 }
