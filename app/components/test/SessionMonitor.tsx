@@ -36,13 +36,6 @@ type ServerSession = {
 
   startedAt: string | null;
 
-  // ===================================================
-  // RESULT
-  //
-  // ID результату, який створюється після завершення
-  // або анулювання тестування.
-  // ===================================================
-
   resultId: number | null;
 };
 
@@ -115,20 +108,13 @@ export default function SessionMonitor({
 
   const {
     sessionId,
-
     setSessionId,
-
     restoreSession,
-
     setCurrentQuestion,
   } = useTestSession();
 
   // =====================================================
   // BLOCK UI
-  //
-  // Тільки стан модального вікна.
-  //
-  // ЛОГІКУ ТАЙМЕРА НЕ ЗМІНЮЄМО.
   // =====================================================
 
   const [
@@ -145,21 +131,36 @@ export default function SessionMonitor({
   // REFS
   // =====================================================
 
-  const mountedRef = useRef(false);
+  const mountedRef =
+    useRef(false);
 
-  const initialSyncDoneRef = useRef(false);
+  const initialSyncDoneRef =
+    useRef(false);
 
-  const pollingRef = useRef(false);
+  const pollingRef =
+    useRef(false);
 
-  const heartbeatRef = useRef(false);
+  const heartbeatRef =
+    useRef(false);
 
   const lastServerTimeRef =
     useRef<number | null>(null);
 
   // =====================================================
-  // RESULT REDIRECT REF
+  // BLOCK STATE REF
   //
-  // Захищаємося від повторних redirect.
+  // Дозволяє чітко визначати момент:
+  //
+  // BLOCKED -> UNBLOCKED
+  //
+  // і примусово синхронізувати Context.
+  // =====================================================
+
+  const lastBlockedRef =
+    useRef<boolean | null>(null);
+
+  // =====================================================
+  // RESULT REDIRECT REF
   // =====================================================
 
   const resultRedirectedRef =
@@ -224,7 +225,9 @@ export default function SessionMonitor({
       return;
     }
 
-    setSessionId(numericSessionId);
+    setSessionId(
+      numericSessionId
+    );
   }, [
     testId,
     sessionId,
@@ -235,434 +238,572 @@ export default function SessionMonitor({
   // APPLY SERVER SESSION
   // =====================================================
 
-  const applySession = useCallback(
-    (session: ServerSession) => {
-      if (!mountedRef.current) {
-        return;
-      }
-
-      const normalizedTime =
-        Math.max(
-          0,
-          Math.floor(
-            Number(session.timeLeft) || 0
-          )
-        );
-
-      const answers =
-        normalizeSavedAnswers(
-          session.savedAnswers
-        );
-
-      console.log(
-        "SESSION MONITOR: APPLY SESSION",
-        {
-          sessionId: session.id,
-
-          timeLeft: normalizedTime,
-
-          startedAt: session.startedAt,
-
-          finished: session.finished,
-
-          blocked: session.blocked,
-
-          resultId: session.resultId,
-        }
-      );
-
-      lastServerTimeRef.current =
-        normalizedTime;
-
-      // =================================================
-      // BLOCK UI
-      //
-      // Тільки показуємо або приховуємо
-      // модальне вікно.
-      //
-      // ЛОГІКА ТАЙМЕРА НЕ ЗМІНЮЄТЬСЯ.
-      // =================================================
-
-      setBlockedUI(session.blocked);
-
-      setBlockReasonUI(
-        session.blocked
-          ? session.blockReason ??
-              "Тестування заблоковано адміністратором."
-          : null
-      );
-
-      // =================================================
-      // FINISHED
-      //
-      // Якщо сесію завершено:
-      //
-      // 1. відновлюємо фінальний стан;
-      // 2. якщо існує resultId — переходимо
-      //    на сторінку результату учасника.
-      //
-      // ВАЖЛИВО:
-      // маршрут /result/[id], а не /results/[id].
-      // =================================================
-
-      if (session.finished) {
-        restoreSession(
-          session.currentQuestion,
-          answers,
-          normalizedTime,
-          session.startedAt,
-          true,
-          session.blocked
-        );
-
+  const applySession =
+    useCallback(
+      (
+        session: ServerSession
+      ) => {
         if (
-          !resultRedirectedRef.current &&
-          typeof session.resultId ===
-            "number" &&
-          session.resultId > 0
+          !mountedRef.current
         ) {
-          resultRedirectedRef.current =
-            true;
-
-          console.log(
-            "SESSION MONITOR: TEST FINISHED, REDIRECTING TO RESULT",
-            {
-              resultId:
-                session.resultId,
-            }
-          );
-
-          router.replace(
-            `/result/${session.resultId}`
-          );
-        }
-
-        return;
-      }
-
-      // =================================================
-      // BLOCKED
-      // =================================================
-
-      if (session.blocked) {
-        restoreSession(
-          session.currentQuestion,
-          answers,
-          normalizedTime,
-          session.startedAt,
-          false,
-          true
-        );
-
-        return;
-      }
-
-      // =================================================
-      // NOT STARTED
-      // =================================================
-
-      if (!session.startedAt) {
-        console.warn(
-          "SESSION MONITOR: TEST NOT STARTED"
-        );
-
-        return;
-      }
-
-      // =================================================
-      // EXPIRED
-      // =================================================
-
-      if (normalizedTime <= 0) {
-        restoreSession(
-          session.currentQuestion,
-          answers,
-          0,
-          session.startedAt,
-          false,
-          false
-        );
-
-        return;
-      }
-
-      // =================================================
-      // ACTIVE
-      //
-      // ВАЖЛИВО ДЛЯ РОЗБЛОКУВАННЯ:
-      //
-      // Коли blocked змінюється з true на false,
-      // цей блок виконується знову.
-      //
-      // restoreSession(..., false, false)
-      // повертає активний стан сесії та відновлює
-      // нормальну роботу таймера.
-      // =================================================
-
-      restoreSession(
-        session.currentQuestion,
-        answers,
-        normalizedTime,
-        session.startedAt,
-        false,
-        false
-      );
-    },
-    [
-      restoreSession,
-      router,
-    ]
-  );
-
-  // =====================================================
-  // FETCH SESSION
-  //
-  // ЦЕЙ КОМПОНЕНТ НЕ ВИКЛИКАЄ
-  // POST /api/test/begin.
-  //
-  // Він тільки читає активну сесію
-  // через GET /api/session/[testId].
-  // =====================================================
-
-  const fetchSession = useCallback(
-    async (forceSync = false) => {
-      if (!sessionId || !testId) {
-        return;
-      }
-
-      if (pollingRef.current) {
-        return;
-      }
-
-      pollingRef.current = true;
-
-      try {
-        const response = await fetch(
-          `/api/session/${testId}?sessionId=${sessionId}`,
-          {
-            method: "GET",
-
-            cache: "no-store",
-
-            headers: {
-              "Cache-Control":
-                "no-cache",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error(
-            "SESSION MONITOR GET ERROR:",
-            response.status
-          );
-
           return;
         }
 
-        const data =
-          (await response.json()) as
-            | ServerSession
-            | {
-                error?: string;
-              };
-
-        if (!mountedRef.current) {
-          return;
-        }
-
-        if (
-          !("id" in data) ||
-          typeof data.id !== "number"
-        ) {
-          console.error(
-            "SESSION MONITOR: некоректна відповідь сервера",
-            data
-          );
-
-          return;
-        }
-
-        const serverSession =
-          data as ServerSession;
-
-        const serverTime =
+        const normalizedTime =
           Math.max(
             0,
             Math.floor(
               Number(
-                serverSession.timeLeft
+                session.timeLeft
               ) || 0
             )
           );
 
-        // =================================================
-        // INITIAL SYNC
-        //
-        // Перший GET після відкриття
-        // синхронізує Context із сервером.
-        // =================================================
-
-        if (
-          !initialSyncDoneRef.current
-        ) {
-          console.log(
-            "SESSION MONITOR: INITIAL SYNC",
-            {
-              sessionId,
-
-              serverTime,
-
-              startedAt:
-                serverSession.startedAt,
-
-              finished:
-                serverSession.finished,
-
-              resultId:
-                serverSession.resultId,
-            }
+        const answers =
+          normalizeSavedAnswers(
+            session.savedAnswers
           );
 
-          initialSyncDoneRef.current =
-            true;
+        const wasBlocked =
+          lastBlockedRef.current;
 
-          applySession(
-            serverSession
-          );
+        const isNowBlocked =
+          session.blocked;
 
-          return;
-        }
+        const wasUnblocked =
+          wasBlocked === true &&
+          isNowBlocked === false;
 
-        // =================================================
-        // FINISHED / BLOCKED / EXPIRED
-        //
-        // BLOCKED тут ОБОВ'ЯЗКОВО перевіряється
-        // на кожному polling.
-        //
-        // Тому після розблокування адміністратором:
-        //
-        // blocked === false
-        //
-        // і нижче буде виконано ACTIVE,
-        // який відновить таймер.
-        // =================================================
+        console.log(
+          "SESSION MONITOR: APPLY SESSION",
+          {
+            sessionId:
+              session.id,
 
-        if (
-          serverSession.finished ||
-          serverSession.blocked ||
-          serverTime <= 0
-        ) {
-          applySession(
-            serverSession
-          );
+            timeLeft:
+              normalizedTime,
 
-          return;
-        }
+            startedAt:
+              session.startedAt,
 
-        // =================================================
-        // FORCE SYNC
-        //
-        // Повернення у вкладку,
-        // відновлення мережі тощо.
-        // =================================================
+            finished:
+              session.finished,
 
-        if (forceSync) {
-          console.log(
-            "SESSION MONITOR: FORCE SYNC",
-            {
-              serverTime,
-            }
-          );
+            blocked:
+              session.blocked,
 
-          applySession(
-            serverSession
-          );
+            wasBlocked,
 
-          return;
-        }
+            wasUnblocked,
+
+            resultId:
+              session.resultId,
+          }
+        );
 
         // =================================================
-        // SERVER TIME CHANGE
-        //
-        // Адміністратор:
-        //
-        // +5 хв
-        // +10 хв
-        // +30 хв
-        //
-        // або інша зміна часу.
+        // ЗБЕРІГАЄМО ОСТАННІЙ СТАН BLOCKED
         // =================================================
 
-        const previousServerTime =
-          lastServerTimeRef.current;
-
-        if (
-          previousServerTime !== null &&
-          Math.abs(
-            serverTime -
-              previousServerTime
-          ) >= 2
-        ) {
-          console.log(
-            "SESSION MONITOR: SERVER TIME CHANGED",
-            {
-              previous:
-                previousServerTime,
-
-              current:
-                serverTime,
-            }
-          );
-
-          applySession(
-            serverSession
-          );
-
-          return;
-        }
+        lastBlockedRef.current =
+          isNowBlocked;
 
         lastServerTimeRef.current =
-          serverTime;
+          normalizedTime;
 
         // =================================================
-        // QUESTION
+        // BLOCK UI
         // =================================================
 
-        setCurrentQuestion(
-          Number.isInteger(
-            serverSession.currentQuestion
-          )
-            ? serverSession.currentQuestion
-            : 0
+        setBlockedUI(
+          session.blocked
         );
-      } catch (error) {
-        console.error(
-          "SESSION MONITOR GET ERROR:",
-          error
+
+        setBlockReasonUI(
+          session.blocked
+            ? session.blockReason ??
+                "Тестування заблоковано адміністратором."
+            : null
         );
-      } finally {
-        pollingRef.current = false;
-      }
-    },
-    [
-      sessionId,
-      testId,
-      applySession,
-      setCurrentQuestion,
-    ]
-  );
+
+        // =================================================
+        // FINISHED
+        // =================================================
+
+        if (
+          session.finished
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            normalizedTime,
+            session.startedAt,
+            true,
+            session.blocked
+          );
+
+          if (
+            !resultRedirectedRef.current &&
+            typeof session.resultId ===
+              "number" &&
+            session.resultId > 0
+          ) {
+            resultRedirectedRef.current =
+              true;
+
+            console.log(
+              "SESSION MONITOR: TEST FINISHED, REDIRECTING TO RESULT",
+              {
+                resultId:
+                  session.resultId,
+              }
+            );
+
+            router.replace(
+              `/result/${session.resultId}`
+            );
+          }
+
+          return;
+        }
+
+        // =================================================
+        // BLOCKED
+        // =================================================
+
+        if (
+          session.blocked
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            normalizedTime,
+            session.startedAt,
+            false,
+            true
+          );
+
+          return;
+        }
+
+        // =================================================
+        // NOT STARTED
+        // =================================================
+
+        if (
+          !session.startedAt
+        ) {
+          console.warn(
+            "SESSION MONITOR: TEST NOT STARTED"
+          );
+
+          return;
+        }
+
+        // =================================================
+        // EXPIRED
+        // =================================================
+
+        if (
+          normalizedTime <= 0
+        ) {
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            0,
+            session.startedAt,
+            false,
+            false
+          );
+
+          return;
+        }
+
+        // =================================================
+        // UNBLOCKED
+        //
+        // ОСОБЛИВО ВАЖЛИВО:
+        //
+        // після:
+        //
+        // blocked = true
+        //
+        // адміністратор робить:
+        //
+        // blocked = false
+        //
+        // ми ПОВТОРНО передаємо в Context:
+        //
+        // blocked = false
+        //
+        // і збережений timeLeft.
+        //
+        // Це прибирає модальне вікно та повертає
+        // активний стан таймера.
+        // =================================================
+
+        if (
+          wasUnblocked
+        ) {
+          console.log(
+            "SESSION MONITOR: SESSION UNBLOCKED — RESTORING ACTIVE TIMER",
+            {
+              timeLeft:
+                normalizedTime,
+
+              startedAt:
+                session.startedAt,
+            }
+          );
+
+          restoreSession(
+            session.currentQuestion,
+            answers,
+            normalizedTime,
+            session.startedAt,
+            false,
+            false
+          );
+
+          setBlockedUI(false);
+
+          setBlockReasonUI(null);
+
+          return;
+        }
+
+        // =================================================
+        // ACTIVE
+        // =================================================
+
+        restoreSession(
+          session.currentQuestion,
+          answers,
+          normalizedTime,
+          session.startedAt,
+          false,
+          false
+        );
+      },
+      [
+        restoreSession,
+        router,
+      ]
+    );
+
+  // =====================================================
+  // FETCH SESSION
+  // =====================================================
+
+  const fetchSession =
+    useCallback(
+      async (
+        forceSync = false
+      ) => {
+        if (
+          !sessionId ||
+          !testId
+        ) {
+          return;
+        }
+
+        if (
+          pollingRef.current
+        ) {
+          return;
+        }
+
+        pollingRef.current =
+          true;
+
+        try {
+          const response =
+            await fetch(
+              `/api/session/${testId}?sessionId=${sessionId}`,
+              {
+                method: "GET",
+
+                cache: "no-store",
+
+                headers: {
+                  "Cache-Control":
+                    "no-cache",
+                },
+              }
+            );
+
+          if (
+            !response.ok
+          ) {
+            console.error(
+              "SESSION MONITOR GET ERROR:",
+              response.status
+            );
+
+            return;
+          }
+
+          const data =
+            (await response.json()) as
+              | ServerSession
+              | {
+                  error?: string;
+                };
+
+          if (
+            !mountedRef.current
+          ) {
+            return;
+          }
+
+          if (
+            !("id" in data) ||
+            typeof data.id !==
+              "number"
+          ) {
+            console.error(
+              "SESSION MONITOR: некоректна відповідь сервера",
+              data
+            );
+
+            return;
+          }
+
+          const serverSession =
+            data as ServerSession;
+
+          const serverTime =
+            Math.max(
+              0,
+              Math.floor(
+                Number(
+                  serverSession.timeLeft
+                ) || 0
+              )
+            );
+
+          // =================================================
+          // INITIAL SYNC
+          // =================================================
+
+          if (
+            !initialSyncDoneRef.current
+          ) {
+            console.log(
+              "SESSION MONITOR: INITIAL SYNC",
+              {
+                sessionId,
+
+                serverTime,
+
+                startedAt:
+                  serverSession.startedAt,
+
+                finished:
+                  serverSession.finished,
+
+                blocked:
+                  serverSession.blocked,
+
+                resultId:
+                  serverSession.resultId,
+              }
+            );
+
+            initialSyncDoneRef.current =
+              true;
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // BLOCK STATE CHANGE
+          //
+          // Це головна перевірка для розблокування.
+          //
+          // Якщо сервер повернув:
+          //
+          // true -> false
+          //
+          // applySession() викликається НЕЗАЛЕЖНО
+          // від зміни часу.
+          // =================================================
+
+          const previousBlocked =
+            lastBlockedRef.current;
+
+          if (
+            previousBlocked === true &&
+            serverSession.blocked === false
+          ) {
+            console.log(
+              "SESSION MONITOR: BLOCK -> UNBLOCK DETECTED",
+              {
+                timeLeft:
+                  serverTime,
+              }
+            );
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // BLOCKED
+          // =================================================
+
+          if (
+            serverSession.blocked
+          ) {
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // FINISHED
+          // =================================================
+
+          if (
+            serverSession.finished
+          ) {
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // EXPIRED
+          // =================================================
+
+          if (
+            serverTime <= 0
+          ) {
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // FORCE SYNC
+          // =================================================
+
+          if (
+            forceSync
+          ) {
+            console.log(
+              "SESSION MONITOR: FORCE SYNC",
+              {
+                serverTime,
+              }
+            );
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          // =================================================
+          // SERVER TIME CHANGE
+          //
+          // Адміністратор:
+          //
+          // +5
+          // +10
+          // +30
+          // =================================================
+
+          const previousServerTime =
+            lastServerTimeRef.current;
+
+          if (
+            previousServerTime !==
+              null &&
+            Math.abs(
+              serverTime -
+                previousServerTime
+            ) >= 2
+          ) {
+            console.log(
+              "SESSION MONITOR: SERVER TIME CHANGED",
+              {
+                previous:
+                  previousServerTime,
+
+                current:
+                  serverTime,
+              }
+            );
+
+            applySession(
+              serverSession
+            );
+
+            return;
+          }
+
+          lastServerTimeRef.current =
+            serverTime;
+
+          // =================================================
+          // QUESTION
+          // =================================================
+
+          setCurrentQuestion(
+            Number.isInteger(
+              serverSession.currentQuestion
+            )
+              ? serverSession.currentQuestion
+              : 0
+          );
+        } catch (error) {
+          console.error(
+            "SESSION MONITOR GET ERROR:",
+            error
+          );
+        } finally {
+          pollingRef.current =
+            false;
+        }
+      },
+      [
+        sessionId,
+        testId,
+        applySession,
+        setCurrentQuestion,
+      ]
+    );
 
   // =====================================================
   // INITIAL FETCH
   // =====================================================
 
   useEffect(() => {
-    if (!sessionId || !testId) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
-    void fetchSession(true);
+    void fetchSession(
+      true
+    );
   }, [
     sessionId,
     testId,
@@ -674,17 +815,27 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (!sessionId || !testId) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
     const interval =
-      window.setInterval(() => {
-        void fetchSession(false);
-      }, pollInterval);
+      window.setInterval(
+        () => {
+          void fetchSession(
+            false
+          );
+        },
+        pollInterval
+      );
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(
+        interval
+      );
     };
   }, [
     sessionId,
@@ -698,69 +849,88 @@ export default function SessionMonitor({
   // =====================================================
 
   const sendHeartbeat =
-    useCallback(async () => {
-      if (!sessionId || !testId) {
-        return;
-      }
+    useCallback(
+      async () => {
+        if (
+          !sessionId ||
+          !testId
+        ) {
+          return;
+        }
 
-      if (heartbeatRef.current) {
-        return;
-      }
+        if (
+          heartbeatRef.current
+        ) {
+          return;
+        }
 
-      heartbeatRef.current = true;
+        heartbeatRef.current =
+          true;
 
-      try {
-        await fetch(
-          `/api/session/${testId}`,
-          {
-            method: "POST",
+        try {
+          await fetch(
+            `/api/session/${testId}`,
+            {
+              method: "POST",
 
-            headers: {
-              "Content-Type":
-                "application/json",
+              headers: {
+                "Content-Type":
+                  "application/json",
 
-              "Cache-Control":
-                "no-cache",
-            },
+                "Cache-Control":
+                  "no-cache",
+              },
 
-            cache: "no-store",
+              cache: "no-store",
 
-            body: JSON.stringify({
-              sessionId,
+              body: JSON.stringify({
+                sessionId,
 
-              heartbeat: true,
-            }),
-          }
-        );
-      } catch (error) {
-        console.error(
-          "SESSION HEARTBEAT ERROR:",
-          error
-        );
-      } finally {
-        heartbeatRef.current = false;
-      }
-    }, [
-      sessionId,
-      testId,
-    ]);
+                heartbeat:
+                  true,
+              }),
+            }
+          );
+        } catch (error) {
+          console.error(
+            "SESSION HEARTBEAT ERROR:",
+            error
+          );
+        } finally {
+          heartbeatRef.current =
+            false;
+        }
+      },
+      [
+        sessionId,
+        testId,
+      ]
+    );
 
   // =====================================================
   // HEARTBEAT INTERVAL
   // =====================================================
 
   useEffect(() => {
-    if (!sessionId || !testId) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
     const interval =
-      window.setInterval(() => {
-        void sendHeartbeat();
-      }, heartbeatInterval);
+      window.setInterval(
+        () => {
+          void sendHeartbeat();
+        },
+        heartbeatInterval
+      );
 
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(
+        interval
+      );
     };
   }, [
     sessionId,
@@ -774,22 +944,28 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (!sessionId || !testId) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
-    const handleVisibility = () => {
-      if (
-        document.visibilityState ===
-        "visible"
-      ) {
-        console.log(
-          "SESSION MONITOR: TAB VISIBLE"
-        );
+    const handleVisibility =
+      () => {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          console.log(
+            "SESSION MONITOR: TAB VISIBLE"
+          );
 
-        void fetchSession(true);
-      }
-    };
+          void fetchSession(
+            true
+          );
+        }
+      };
 
     document.addEventListener(
       "visibilitychange",
@@ -813,19 +989,25 @@ export default function SessionMonitor({
   // =====================================================
 
   useEffect(() => {
-    if (!sessionId || !testId) {
+    if (
+      !sessionId ||
+      !testId
+    ) {
       return;
     }
 
-    const handleOnline = () => {
-      console.log(
-        "SESSION MONITOR: ONLINE"
-      );
+    const handleOnline =
+      () => {
+        console.log(
+          "SESSION MONITOR: ONLINE"
+        );
 
-      void fetchSession(true);
+        void fetchSession(
+          true
+        );
 
-      void sendHeartbeat();
-    };
+        void sendHeartbeat();
+      };
 
     window.addEventListener(
       "online",
@@ -920,8 +1102,6 @@ export default function SessionMonitor({
             ================================================= */}
 
             <div className="relative mx-auto mb-7 flex h-32 w-32 items-center justify-center">
-              {/* Outer soft circle */}
-
               <div
                 className="
                   absolute
@@ -930,8 +1110,6 @@ export default function SessionMonitor({
                   bg-[#7A1F2B]/[0.035]
                 "
               />
-
-              {/* Middle circle */}
 
               <div
                 className="
@@ -943,8 +1121,6 @@ export default function SessionMonitor({
                   bg-[#7A1F2B]/[0.025]
                 "
               />
-
-              {/* Main white circle */}
 
               <div
                 className="
@@ -961,8 +1137,6 @@ export default function SessionMonitor({
                   shadow-[0_8px_30px_rgba(122,31,43,0.10)]
                 "
               >
-                {/* Lock */}
-
                 <svg
                   viewBox="0 0 64 64"
                   className="
@@ -974,8 +1148,6 @@ export default function SessionMonitor({
                   xmlns="http://www.w3.org/2000/svg"
                   aria-hidden="true"
                 >
-                  {/* Shackle */}
-
                   <path
                     d="
                       M20 29V21
@@ -989,8 +1161,6 @@ export default function SessionMonitor({
                     strokeLinecap="round"
                   />
 
-                  {/* Body */}
-
                   <rect
                     x="13"
                     y="26"
@@ -999,8 +1169,6 @@ export default function SessionMonitor({
                     rx="7"
                     fill="currentColor"
                   />
-
-                  {/* Keyhole */}
 
                   <circle
                     cx="32"
@@ -1096,8 +1264,6 @@ export default function SessionMonitor({
                 sm:py-6
               "
             >
-              {/* Clock icon */}
-
               <div
                 className="
                   flex
@@ -1123,8 +1289,6 @@ export default function SessionMonitor({
                   xmlns="http://www.w3.org/2000/svg"
                   aria-hidden="true"
                 >
-                  {/* Clock circle */}
-
                   <circle
                     cx="32"
                     cy="32"
@@ -1132,8 +1296,6 @@ export default function SessionMonitor({
                     stroke="currentColor"
                     strokeWidth="4"
                   />
-
-                  {/* Hour hand */}
 
                   <path
                     d="M32 18V32L41 38"
@@ -1143,16 +1305,12 @@ export default function SessionMonitor({
                     strokeLinejoin="round"
                   />
 
-                  {/* Clock center */}
-
                   <circle
                     cx="32"
                     cy="32"
                     r="2.5"
                     fill="currentColor"
                   />
-
-                  {/* Small clock marks */}
 
                   <path
                     d="M32 9V12"
@@ -1183,8 +1341,6 @@ export default function SessionMonitor({
                   />
                 </svg>
               </div>
-
-              {/* Waiting text */}
 
               <p
                 className="
