@@ -13,22 +13,16 @@ import { prisma } from "@/app/lib/prisma";
  *
  * GET /api/complex-tests/[id]/session?sessionId=123
  *
- * Повертає поточний стан комбінованої сесії.
+ * Повертає поточний стан комбінованої сесії
+ * та повну структуру комбінованого тесту.
  *
  * КРИТИЧНО:
  *
  * GET НЕ перераховує timeLeft.
  * GET НЕ змінює БД.
  *
- * timeLeft береться безпосередньо з ComplexTestSession.
- *
- * Це дозволяє адміністративним змінам:
- *
- * +5 хв
- * +10 хв
- * +30 хв
- *
- * одразу ставати авторитетним значенням для учасника.
+ * timeLeft береться безпосередньо з
+ * ComplexTestSession.
  * ============================================================
  */
 
@@ -116,7 +110,11 @@ export async function GET(
      * ОТРИМАННЯ СЕСІЇ
      *
      * Тільки SELECT.
+     *
      * ЖОДНОГО UPDATE.
+     *
+     * timeLeft береться безпосередньо
+     * з ComplexTestSession.
      * ========================================================
      */
 
@@ -158,12 +156,19 @@ export async function GET(
               title: true,
               description: true,
               duration: true,
-              accessCode: true,
+
+              /*
+               * accessCode навмисно не повертаємо
+               * учаснику.
+               */
+
               codeRequired: true,
               isPublished: true,
               isArchived: true,
+
               examType: true,
               section: true,
+
               createdAt: true,
               updatedAt: true,
 
@@ -244,74 +249,208 @@ export async function GET(
 
     /*
      * ========================================================
-     * ПІДГОТОВКА ДАНИХ ТЕСТІВ
+     * ПІДГОТОВКА COMPLЕX TEST
      *
-     * Перетворюємо Prisma-структуру:
+     * ВАЖЛИВО:
      *
-     * TestQuestion
-     *   -> question
+     * complexTest буде повернений
+     * НА ВЕРХНЬОМУ РІВНІ response.
      *
-     * у структуру, яку очікує
-     * ComplexTestSessionContext.
+     * Тобто клієнт отримає:
+     *
+     * {
+     *   success: true,
+     *   session: {...},
+     *   complexTest: {...}
+     * }
+     *
      * ========================================================
      */
 
     const complexTest = {
-      id: session.complexTest.id,
-      title: session.complexTest.title,
+      id:
+        session.complexTest.id,
+
+      title:
+        session.complexTest.title,
+
       description:
         session.complexTest.description,
-      duration: session.complexTest.duration,
-      examType: session.complexTest.examType,
-      section: session.complexTest.section,
 
-      tests: session.complexTest.tests.map(
-        (item) => ({
-          id: item.id,
-          order: item.order,
+      duration:
+        session.complexTest.duration,
 
-          test: {
-            id: item.test.id,
-            title: item.test.title,
-            subject: item.test.subject,
-            duration: item.test.duration,
+      examType:
+        session.complexTest.examType,
 
-            questions:
-              item.test.questions.map(
-                (testQuestion) => ({
-                  id: testQuestion.question.id,
-                  text: testQuestion.question.text,
-                  type: testQuestion.question.type,
+      section:
+        session.complexTest.section,
 
-                  answerOptions:
-                    testQuestion.question.answerOptions.map(
-                      (option) => ({
-                        id: option.id,
-                        text: option.text,
-                      })
-                    ),
-                })
-              ),
-          },
-        })
-      ),
+      tests:
+        session.complexTest.tests.map(
+          (item) => ({
+            id:
+              item.id,
+
+            order:
+              item.order,
+
+            test: {
+              id:
+                item.test.id,
+
+              title:
+                item.test.title,
+
+              subject:
+                item.test.subject,
+
+              duration:
+                item.test.duration,
+
+              questions:
+                item.test.questions.map(
+                  (
+                    testQuestion
+                  ) => ({
+                    id:
+                      testQuestion
+                        .question
+                        .id,
+
+                    order:
+                      testQuestion
+                        .order,
+
+                    text:
+                      testQuestion
+                        .question
+                        .text,
+
+                    type:
+                      testQuestion
+                        .question
+                        .type,
+
+                    points:
+                      testQuestion
+                        .question
+                        .points,
+
+                    answerOptions:
+                      testQuestion
+                        .question
+                        .answerOptions.map(
+                          (
+                            option
+                          ) => ({
+                            id:
+                              option.id,
+
+                            order:
+                              option.order,
+
+                            text:
+                              option.text,
+                          })
+                        ),
+                  })
+                ),
+            },
+          })
+        ),
+    };
+
+    /*
+     * ========================================================
+     * ПІДГОТОВКА SESSION
+     *
+     * Тут complexTest НЕ буде.
+     *
+     * Він повертається окремо.
+     * ========================================================
+     */
+
+    const responseSession = {
+      id:
+        session.id,
+
+      complexTestId:
+        session.complexTestId,
+
+      participantId:
+        session.participantId,
+
+      currentTestId:
+        session.currentTestId,
+
+      currentQuestion:
+        session.currentQuestion,
+
+      savedAnswers:
+        session.savedAnswers,
+
+      /*
+       * Авторитетне значення
+       * безпосередньо з БД.
+       */
+
+      timeLeft:
+        Math.max(
+          0,
+          Math.floor(
+            session.timeLeft
+          )
+        ),
+
+      extraTime:
+        Math.max(
+          0,
+          Math.floor(
+            session.extraTime
+          )
+        ),
+
+      finished:
+        session.finished,
+
+      finishedAt:
+        session.finishedAt,
+
+      blocked:
+        session.blocked,
+
+      blockReason:
+        session.blockReason,
+
+      blockedAt:
+        session.blockedAt,
+
+      startedAt:
+        session.startedAt,
+
+      createdAt:
+        session.createdAt,
+
+      updatedAt:
+        session.updatedAt,
+
+      lastActivityAt:
+        session.lastActivityAt,
     };
 
     /*
      * ========================================================
      * ВІДПОВІДЬ
      *
-     * timeLeft:
+     * СТРУКТУРА:
      *
-     * БЕРЕМО БЕЗПОСЕРЕДНЬО З БД.
+     * {
+     *   success,
+     *   session,
+     *   complexTest
+     * }
      *
-     * НІЯКОГО:
-     *
-     * startedAt
-     * lastActivityAt
-     * elapsedSeconds
-     *
-     * для перерахунку тут немає.
      * ========================================================
      */
 
@@ -319,67 +458,10 @@ export async function GET(
       {
         success: true,
 
-        session: {
-          id: session.id,
+        session:
+          responseSession,
 
-          complexTestId:
-            session.complexTestId,
-
-          participantId:
-            session.participantId,
-
-          currentTestId:
-            session.currentTestId,
-
-          currentQuestion:
-            session.currentQuestion,
-
-          savedAnswers:
-            session.savedAnswers,
-
-          timeLeft: Math.max(
-            0,
-            Math.floor(
-              session.timeLeft
-            )
-          ),
-
-          extraTime: Math.max(
-            0,
-            Math.floor(
-              session.extraTime
-            )
-          ),
-
-          finished:
-            session.finished,
-
-          finishedAt:
-            session.finishedAt,
-
-          blocked:
-            session.blocked,
-
-          blockReason:
-            session.blockReason,
-
-          blockedAt:
-            session.blockedAt,
-
-          startedAt:
-            session.startedAt,
-
-          createdAt:
-            session.createdAt,
-
-          updatedAt:
-            session.updatedAt,
-
-          lastActivityAt:
-            session.lastActivityAt,
-
-          complexTest,
-        },
+        complexTest,
       },
       {
         headers: {
@@ -432,9 +514,7 @@ export async function GET(
  *
  * finished = true
  *
- * Це не зміна адміністративного поля
- * з боку учасника, а команда завершити власну сесію.
- * Під час такого завершення сервер сам встановлює:
+ * Під час завершення сервер сам встановлює:
  *
  * finished = true
  * finishedAt = now
@@ -621,12 +701,6 @@ export async function POST(
     /*
      * ========================================================
      * ВЖЕ ЗАВЕРШЕНА
-     *
-     * Після завершення не дозволяємо
-     * змінювати відповіді або позицію.
-     *
-     * Повторний finished=true допускаємо,
-     * щоб повторний запит не спричиняв помилку.
      * ========================================================
      */
 
@@ -638,7 +712,8 @@ export async function POST(
             "Сесія вже завершена.",
 
           session: {
-            id: session.id,
+            id:
+              session.id,
 
             complexTestId:
               session.complexTestId,
@@ -652,21 +727,24 @@ export async function POST(
             savedAnswers:
               session.savedAnswers,
 
-            timeLeft: Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            ),
+            timeLeft:
+              Math.max(
+                0,
+                Math.floor(
+                  session.timeLeft
+                )
+              ),
 
-            extraTime: Math.max(
-              0,
-              Math.floor(
-                session.extraTime
-              )
-            ),
+            extraTime:
+              Math.max(
+                0,
+                Math.floor(
+                  session.extraTime
+                )
+              ),
 
-            finished: true,
+            finished:
+              true,
 
             finishedAt:
               session.finishedAt,
@@ -699,12 +777,6 @@ export async function POST(
     /*
      * ========================================================
      * ЗАБЛОКОВАНА СЕСІЯ
-     *
-     * Заблокований учасник не може
-     * змінювати прогрес або завершувати тест.
-     *
-     * Адміністратор може завершити/анулювати
-     * таку сесію через адміністративний API.
      * ========================================================
      */
 
@@ -725,19 +797,14 @@ export async function POST(
      * ========================================================
      * HEARTBEAT
      *
-     * ВАЖЛИВО:
+     * НІЧОГО НЕ ЗМІНЮЄМО В БД.
      *
-     * Для комбінованого тесту heartbeat
-     * не змінює:
+     * Особливо:
      *
-     * - timeLeft;
-     * - extraTime;
-     * - currentTestId;
-     * - currentQuestion;
-     * - savedAnswers;
-     * - startedAt.
+     * timeLeft
+     * extraTime
+     * startedAt
      *
-     * Просто підтверджує доступність сесії.
      * ========================================================
      */
 
@@ -748,7 +815,8 @@ export async function POST(
           heartbeat: true,
 
           session: {
-            id: session.id,
+            id:
+              session.id,
 
             complexTestId:
               session.complexTestId,
@@ -762,19 +830,21 @@ export async function POST(
             savedAnswers:
               session.savedAnswers,
 
-            timeLeft: Math.max(
-              0,
-              Math.floor(
-                session.timeLeft
-              )
-            ),
+            timeLeft:
+              Math.max(
+                0,
+                Math.floor(
+                  session.timeLeft
+                )
+              ),
 
-            extraTime: Math.max(
-              0,
-              Math.floor(
-                session.extraTime
-              )
-            ),
+            extraTime:
+              Math.max(
+                0,
+                Math.floor(
+                  session.extraTime
+                )
+              ),
 
             finished:
               session.finished,
@@ -811,19 +881,12 @@ export async function POST(
      * ========================================================
      * UPDATE DATA
      *
-     * Починаємо тільки з дозволених
-     * учаснику полів.
+     * Дозволені тільки:
      *
-     * КРИТИЧНО:
-     *
-     * Тут НЕ буде:
-     *
-     * timeLeft
-     * extraTime
-     * blocked
-     * blockReason
-     * blockedAt
-     * startedAt
+     * - currentTestId
+     * - currentQuestion
+     * - savedAnswers
+     * - finished
      *
      * ========================================================
      */
@@ -838,22 +901,19 @@ export async function POST(
      */
 
     if (
-      typeof currentTestId === "number" &&
+      typeof currentTestId ===
+        "number" &&
       Number.isInteger(
         currentTestId
       ) &&
       currentTestId > 0
     ) {
-      /*
-       * Перевіряємо, що вибраний предмет
-       * дійсно належить цьому комбінованому тесту.
-       */
-
       const complexTestItem =
         await prisma.complexTestItem.findFirst({
           where: {
             complexTestId,
-            testId: currentTestId,
+            testId:
+              currentTestId,
           },
 
           select: {
@@ -903,10 +963,12 @@ export async function POST(
      */
 
     if (
-      savedAnswers !== undefined
+      savedAnswers !==
+      undefined
     ) {
       if (
-        savedAnswers === null
+        savedAnswers ===
+        null
       ) {
         updateData.savedAnswers =
           Prisma.JsonNull;
@@ -919,45 +981,30 @@ export async function POST(
     /*
      * ========================================================
      * FINISHED
-     *
-     * Дозволено тільки:
-     *
-     * finished = true
-     *
-     * finished = false не може
-     * скасувати завершення.
-     *
-     * Під час завершення:
-     *
-     * finished = true
-     * finishedAt = now
-     * timeLeft = 0
-     *
-     * ВАЖЛИВО:
-     *
-     * timeLeft не береться з клієнта.
      * ========================================================
      */
 
     if (finished === true) {
-      const now = new Date();
+      const now =
+        new Date();
 
-      updateData.finished = true;
+      updateData.finished =
+        true;
 
       updateData.finishedAt =
         session.finishedAt ??
         now;
 
       /*
-       * Після завершення тесту
-       * залишок часу фіксуємо як 0.
+       * Сервер сам встановлює
+       * timeLeft = 0.
        *
-       * Це серверна дія як наслідок
-       * завершення сесії, а не довільна
-       * зміна timeLeft клієнтом.
+       * Клієнт не може передати
+       * власне значення timeLeft.
        */
 
-      updateData.timeLeft = 0;
+      updateData.timeLeft =
+        0;
     }
 
     /*
@@ -1009,7 +1056,8 @@ export async function POST(
         success: true,
 
         session: {
-          id: updated.id,
+          id:
+            updated.id,
 
           complexTestId:
             updated.complexTestId,
@@ -1023,19 +1071,21 @@ export async function POST(
           savedAnswers:
             updated.savedAnswers,
 
-          timeLeft: Math.max(
-            0,
-            Math.floor(
-              updated.timeLeft
-            )
-          ),
+          timeLeft:
+            Math.max(
+              0,
+              Math.floor(
+                updated.timeLeft
+              )
+            ),
 
-          extraTime: Math.max(
-            0,
-            Math.floor(
-              updated.extraTime
-            )
-          ),
+          extraTime:
+            Math.max(
+              0,
+              Math.floor(
+                updated.extraTime
+              )
+            ),
 
           finished:
             updated.finished,
