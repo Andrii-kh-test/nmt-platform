@@ -237,6 +237,20 @@ export default function ComplexTestPage() {
   const [loading, setLoading] =
     useState(true);
 
+  /*
+   * КРИТИЧНО:
+   *
+   * loading означає, що ми ще отримуємо сесію.
+   *
+   * sessionLoaded означає, що GET сесії
+   * вже успішно завершився.
+   *
+   * Автозавершення тесту дозволене
+   * ТІЛЬКИ після sessionLoaded === true.
+   */
+  const [sessionLoaded, setSessionLoaded] =
+    useState(false);
+
   const [saving, setSaving] =
     useState(false);
 
@@ -246,6 +260,13 @@ export default function ComplexTestPage() {
   const [error, setError] =
     useState("");
 
+  /*
+   * Початково 0 — це нормально.
+   *
+   * ВАЖЛИВО:
+   * поки sessionLoaded === false,
+   * це значення НЕ може завершити тест.
+   */
   const [timeLeft, setTimeLeft] =
     useState(0);
 
@@ -347,50 +368,62 @@ export default function ComplexTestPage() {
       apiTests: SessionResponse["complexTest"]["tests"],
       savedAnswers: unknown
     ): ComplexTestSubject[] => {
-      return apiTests.map(
-        (item) => ({
-          id: item.test.id,
+      return apiTests
+        .sort(
+          (a, b) =>
+            a.order - b.order
+        )
+        .map(
+          (item) => ({
+            id: item.test.id,
 
-          order: item.order,
+            order: item.order,
 
-          title:
-            item.test.title,
+            title:
+              item.test.title,
 
-          subject:
-            item.test.subject,
+            subject:
+              item.test.subject,
 
-          duration:
-            item.test.duration,
+            duration:
+              item.test.duration,
 
-          questions:
-            item.test.questions.map(
-              (question) => ({
-                id: question.id,
+            questions:
+              item.test.questions.map(
+                (
+                  question,
+                  questionIndex
+                ) => ({
+                  id: question.id,
 
-                order:
-                  question.id,
+                  order:
+                    questionIndex,
 
-                type:
-                  question.type,
+                  type:
+                    question.type,
 
-                text:
-                  question.text,
+                  text:
+                    question.text,
 
-                points: 1,
+                  /*
+                   * API сесії наразі не повертає
+                   * points, тому залишаємо 1.
+                   */
+                  points: 1,
 
-                answerOptions:
-                  question.answerOptions,
+                  answerOptions:
+                    question.answerOptions,
 
-                savedAnswer:
-                  getSavedAnswer(
-                    savedAnswers,
-                    item.test.id,
-                    question.id
-                  ),
-              })
-            ),
-        })
-      );
+                  savedAnswer:
+                    getSavedAnswer(
+                      savedAnswers,
+                      item.test.id,
+                      question.id
+                    ),
+                })
+              ),
+          })
+        );
     },
     []
   );
@@ -412,6 +445,7 @@ export default function ComplexTestPage() {
    * startedAt
    * lastActivityAt
    * elapsedSeconds
+   *
    * ============================================================
    */
 
@@ -430,13 +464,14 @@ export default function ComplexTestPage() {
         );
 
         setLoading(false);
+        setSessionLoaded(false);
 
         return;
       }
 
       try {
         setLoading(true);
-
+        setSessionLoaded(false);
         setError("");
 
         const response =
@@ -461,6 +496,10 @@ export default function ComplexTestPage() {
           );
         }
 
+        /*
+         * Перетворюємо ТЕСТИ ДО встановлення
+         * sessionLoaded = true.
+         */
         const convertedTests =
           convertTests(
             data.complexTest.tests,
@@ -501,24 +540,39 @@ export default function ComplexTestPage() {
          *
          * Значення приходить безпосередньо
          * з ComplexTestSession.
+         *
+         * Якщо сесія щойно створена на
+         * сторінці інструкцій, тут має бути:
+         *
+         * duration * 60
+         *
          * ======================================================
          */
 
-        setTimeLeft(
+        const serverTimeLeft =
           Math.max(
             0,
             Math.floor(
-              data.session.timeLeft
+              Number(
+                data.session.timeLeft
+              )
             )
-          )
+          );
+
+        setTimeLeft(
+          serverTimeLeft
         );
 
         setBlocked(
-          data.session.blocked
+          Boolean(
+            data.session.blocked
+          )
         );
 
         setFinished(
-          data.session.finished
+          Boolean(
+            data.session.finished
+          )
         );
 
         setSelectedTestId(
@@ -526,6 +580,16 @@ export default function ComplexTestPage() {
             convertedTests[0]?.id ??
             null
         );
+
+        /*
+         * КРИТИЧНО:
+         *
+         * Лише ПІСЛЯ того, як ми отримали
+         * сесію та її реальний timeLeft,
+         * дозволяємо ефекту автозавершення
+         * працювати.
+         */
+        setSessionLoaded(true);
       } catch (error) {
         console.error(
           "Load complex test session error:",
@@ -537,6 +601,8 @@ export default function ComplexTestPage() {
             ? error.message
             : "Не вдалося завантажити тест."
         );
+
+        setSessionLoaded(false);
       } finally {
         setLoading(false);
       }
@@ -601,6 +667,7 @@ export default function ComplexTestPage() {
 
   useEffect(() => {
     if (
+      !sessionLoaded ||
       loading ||
       finished ||
       blocked ||
@@ -636,6 +703,7 @@ export default function ComplexTestPage() {
       );
     };
   }, [
+    sessionLoaded,
     loading,
     finished,
     blocked,
@@ -646,21 +714,25 @@ export default function ComplexTestPage() {
    * ============================================================
    * АВТОМАТИЧНЕ ЗАВЕРШЕННЯ
    *
-   * КОЛИ ЛОКАЛЬНИЙ ТАЙМЕР ДОХОДИТЬ ДО 0,
-   * СЕРВЕРУ ПЕРЕДАЄМО:
+   * КРИТИЧНО:
    *
-   * finished = true
+   * sessionLoaded === true
    *
-   * СЕРВЕР САМ:
+   * Тільки після успішного GET сесії
+   * дозволяємо перевіряти timeLeft === 0.
    *
-   * finished = true
-   * finishedAt = now
-   * timeLeft = 0
+   * Таким чином початковий:
+   *
+   * useState(0)
+   *
+   * НЕ МОЖЕ завершити тест до завантаження
+   * реального timeLeft із БД.
    * ============================================================
    */
 
   useEffect(() => {
     if (
+      !sessionLoaded ||
       loading ||
       finished ||
       blocked ||
@@ -675,7 +747,6 @@ export default function ComplexTestPage() {
     async function finishByTimer() {
       try {
         setFinishing(true);
-
         setError("");
 
         const response =
@@ -770,6 +841,7 @@ export default function ComplexTestPage() {
       cancelled = true;
     };
   }, [
+    sessionLoaded,
     loading,
     finished,
     blocked,
@@ -795,14 +867,12 @@ export default function ComplexTestPage() {
 
     const hours =
       Math.floor(
-        safeSeconds /
-          3600
+        safeSeconds / 3600
       );
 
     const minutes =
       Math.floor(
-        (safeSeconds %
-          3600) /
+        (safeSeconds % 3600) /
           60
       );
 
@@ -916,11 +986,7 @@ export default function ComplexTestPage() {
    * ============================================================
    * ЗБЕРЕЖЕННЯ ВІДПОВІДІ
    *
-   * ВАЖЛИВО:
-   *
-   * Ваш API НЕ МАЄ PATCH.
-   *
-   * Тому використовуємо POST.
+   * API використовує POST.
    *
    * Передаємо ПОВНИЙ savedAnswers.
    * ============================================================
@@ -1144,11 +1210,6 @@ export default function ComplexTestPage() {
   /*
    * ============================================================
    * ПЕРЕМИКАННЯ ПРЕДМЕТА
-   *
-   * POST:
-   *
-   * currentTestId
-   * currentQuestion
    * ============================================================
    */
 
@@ -1251,7 +1312,6 @@ export default function ComplexTestPage() {
 
     try {
       setFinishing(true);
-
       setError("");
 
       const response =
@@ -1312,6 +1372,8 @@ export default function ComplexTestPage() {
               }
             : previous
       );
+
+      setTimeLeft(0);
     } catch (error) {
       console.error(
         "Finish complex test error:",
@@ -1648,11 +1710,9 @@ export default function ComplexTestPage() {
         </div>
       </header>
 
-      {/*
-       * ========================================================
-       * ПРЕДМЕТИ
-       * ========================================================
-       */}
+      {/* ========================================================
+          ПРЕДМЕТИ
+          ======================================================== */}
 
       <div className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl overflow-x-auto px-4 md:px-8">
@@ -1763,11 +1823,9 @@ export default function ComplexTestPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">
-        {/*
-         * ======================================================
-         * ЗАГОЛОВОК ПРЕДМЕТА
-         * ======================================================
-         */}
+        {/* ======================================================
+            ЗАГОЛОВОК ПРЕДМЕТА
+            ====================================================== */}
 
         <div className="mb-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -1806,11 +1864,9 @@ export default function ComplexTestPage() {
           </div>
         </div>
 
-        {/*
-         * ======================================================
-         * ПОМИЛКА
-         * ======================================================
-         */}
+        {/* ======================================================
+            ПОМИЛКА
+            ====================================================== */}
 
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
@@ -1832,11 +1888,9 @@ export default function ComplexTestPage() {
           </div>
         )}
 
-        {/*
-         * ======================================================
-         * ПИТАННЯ
-         * ======================================================
-         */}
+        {/* ======================================================
+            ПИТАННЯ
+            ====================================================== */}
 
         <div className="space-y-6">
           {currentTest.questions.map(
@@ -2017,11 +2071,9 @@ export default function ComplexTestPage() {
           )}
         </div>
 
-        {/*
-         * ======================================================
-         * ЗАГАЛЬНИЙ ПРОГРЕС
-         * ======================================================
-         */}
+        {/* ======================================================
+            ЗАГАЛЬНИЙ ПРОГРЕС
+            ====================================================== */}
 
         <div className="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2062,11 +2114,9 @@ export default function ComplexTestPage() {
         </div>
       </div>
 
-      {/*
-       * ========================================================
-       * FOOTER
-       * ========================================================
-       */}
+      {/* ========================================================
+          FOOTER
+          ======================================================== */}
 
       <footer className="border-t border-gray-200 bg-white py-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 px-8 text-center">
@@ -2093,11 +2143,9 @@ export default function ComplexTestPage() {
         </div>
       </footer>
 
-      {/*
-       * ========================================================
-       * МОДАЛЬНЕ ВІКНО ЗАВЕРШЕННЯ
-       * ========================================================
-       */}
+      {/* ========================================================
+          МОДАЛЬНЕ ВІКНО ЗАВЕРШЕННЯ
+          ======================================================== */}
 
       {finishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
