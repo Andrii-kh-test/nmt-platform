@@ -51,7 +51,9 @@ function shuffle<T>(array: T[]): T[] {
   return result;
 }
 
-function getParticipantFullName(participant: ParticipantData): string {
+function getParticipantFullName(
+  participant: ParticipantData
+): string {
   return [
     participant.lastName,
     participant.firstName,
@@ -68,7 +70,9 @@ function createIdentityOptions(
   const participantName = getParticipantFullName(participant);
 
   const randomNames = shuffle(
-    RANDOM_NAMES.filter((name) => name !== participantName)
+    RANDOM_NAMES.filter(
+      (name) => name !== participantName
+    )
   ).slice(0, 2);
 
   return shuffle([
@@ -99,9 +103,8 @@ export default function ComplexTestIdentityPage() {
   const [participant, setParticipant] =
     useState<ParticipantData | null>(null);
 
-  const [identityOptions, setIdentityOptions] = useState<
-    IdentityOption[]
-  >([]);
+  const [identityOptions, setIdentityOptions] =
+    useState<IdentityOption[]>([]);
 
   const [selectedIdentity, setSelectedIdentity] =
     useState<number | null>(null);
@@ -124,9 +127,8 @@ export default function ComplexTestIdentityPage() {
     }
 
     try {
-      const parsed: ParticipantData = JSON.parse(
-        storedParticipant
-      );
+      const parsed: ParticipantData =
+        JSON.parse(storedParticipant);
 
       if (
         !parsed.lastName ||
@@ -138,8 +140,14 @@ export default function ComplexTestIdentityPage() {
       }
 
       setParticipant(parsed);
-      setIdentityOptions(createIdentityOptions(parsed));
+      setIdentityOptions(
+        createIdentityOptions(parsed)
+      );
     } catch {
+      sessionStorage.removeItem(
+        `complex-test-participant-${id}`
+      );
+
       router.replace(`/complex-tests/${id}/start`);
     }
   }, [id, router]);
@@ -154,6 +162,7 @@ export default function ComplexTestIdentityPage() {
       setIdentityConfirmed(true);
     } else {
       setIdentityConfirmed(false);
+
       setError(
         "Ви обрали неправильне ПІБ. Будь ласка, оберіть своє ПІБ."
       );
@@ -162,6 +171,9 @@ export default function ComplexTestIdentityPage() {
 
   const handleStartTest = async () => {
     if (!participant) {
+      setError(
+        "Не знайдено дані учасника тестування."
+      );
       return;
     }
 
@@ -174,8 +186,11 @@ export default function ComplexTestIdentityPage() {
     setError("");
 
     /*
-     * Повноекранний режим запускаємо безпосередньо
-     * після натискання користувачем кнопки.
+     * Повноекранний режим запитуємо безпосередньо
+     * під час натискання кнопки користувачем.
+     *
+     * Це важливо для браузера: requestFullscreen()
+     * повинен бути пов'язаний із реальною дією користувача.
      */
     if (!document.fullscreenElement) {
       try {
@@ -187,6 +202,7 @@ export default function ComplexTestIdentityPage() {
         );
 
         setStarting(false);
+
         setError(
           "Не вдалося перейти у повноекранний режим. Спробуйте ще раз."
         );
@@ -222,13 +238,51 @@ export default function ComplexTestIdentityPage() {
         );
       }
 
+      /*
+       * API повертає sessionId, а не session.id.
+       *
+       * Структура відповіді:
+       * {
+       *   success: true,
+       *   sessionId: number,
+       *   participantId: number,
+       *   complexTestId: number,
+       *   ...
+       * }
+       */
+
+      if (
+        typeof data.sessionId !== "number" ||
+        !Number.isInteger(data.sessionId) ||
+        data.sessionId <= 0
+      ) {
+        throw new Error(
+          "Сервер не повернув коректний ідентифікатор сесії."
+        );
+      }
+
+      /*
+       * Зберігаємо мінімальну інформацію про сесію,
+       * яку використовують інші частини комбінованого тесту.
+       */
       sessionStorage.setItem(
         `complex-test-session-${id}`,
-        JSON.stringify(data.session)
+        JSON.stringify({
+          id: data.sessionId,
+          sessionId: data.sessionId,
+          participantId: data.participantId,
+          complexTestId: data.complexTestId,
+          timeLeft: data.timeLeft,
+          currentTestId: data.currentTestId,
+          currentQuestion: data.currentQuestion,
+        })
       );
 
+      /*
+       * Переходимо безпосередньо до сесії тестування.
+       */
       router.push(
-        `/complex-tests/${id}/test/${data.session.id}`
+        `/complex-tests/${id}/test/${data.sessionId}`
       );
     } catch (startError) {
       console.error(
@@ -246,7 +300,10 @@ export default function ComplexTestIdentityPage() {
     }
   };
 
-  if (!participant || identityOptions.length !== 3) {
+  if (
+    !participant ||
+    identityOptions.length !== 3
+  ) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-gray-600">
@@ -267,7 +324,8 @@ export default function ComplexTestIdentityPage() {
           </h1>
 
           <p className="text-lg text-gray-700 text-center mb-8">
-            Оберіть своє ПІБ із запропонованих варіантів.
+            Оберіть своє ПІБ із запропонованих
+            варіантів.
           </p>
 
           <div className="space-y-4">
