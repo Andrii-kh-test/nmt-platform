@@ -15,12 +15,21 @@ type Test = {
   questions: any[];
 };
 
+type Subject = {
+  id: number;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+};
+
 type Props = {
   tests: Test[];
+  subjects: Subject[];
 };
 
 export default function TestsPageClient({
   tests,
+  subjects,
 }: Props) {
   const [search, setSearch] = useState("");
 
@@ -44,6 +53,13 @@ export default function TestsPageClient({
       {} as Record<string, Test[]>
     );
   }, [tests, search]);
+
+  const sections = useMemo(() => {
+    return subjects.map((subject) => ({
+      subject: subject.name,
+      tests: groupedTests[subject.name] ?? [],
+    }));
+  }, [subjects, groupedTests]);
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -132,13 +148,13 @@ export default function TestsPageClient({
           onChange={setSearch}
         />
 
-        {/* Тести */}
-        {Object.keys(groupedTests).length === 0 ? (
+        {/* Розділи та тести */}
+        {sections.length === 0 ? (
 
           <div className="bg-white rounded-xl shadow-lg p-10 text-center mt-8">
 
             <h2 className="text-2xl font-semibold text-gray-700">
-              Нічого не знайдено
+              Розділів ще немає
             </h2>
 
           </div>
@@ -147,8 +163,8 @@ export default function TestsPageClient({
 
           <div className="space-y-8 mt-8">
 
-            {Object.entries(groupedTests).map(
-              ([subject, subjectTests]) => (
+            {sections.map(
+              ({ subject, tests: subjectTests }) => (
 
                 <SubjectBlock
                   key={subject}

@@ -1,49 +1,132 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import { saveTest } from "@/app/api/saveTest";
 import { useTestConstructor } from "@/app/context/TestConstructorContext";
 import { generateAccessCode } from "@/app/utils/generateAccessCode";
 
+type Subject = {
+  id: number;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+};
+
 export default function TestSettings() {
   const { test, updateTest } = useTestConstructor();
 
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjectsLoading, setSubjectsLoading] =
+    useState(true);
+
+  // ========================================
+  // ЗАВАНТАЖЕННЯ РОЗДІЛІВ
+  // ========================================
+
+  useEffect(() => {
+    async function loadSubjects() {
+      try {
+        const response = await fetch(
+          "/api/admin/subjects"
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(
+            result.message ||
+              "Не вдалося завантажити розділи."
+          );
+        }
+
+        setSubjects(result.subjects || []);
+      } catch (error) {
+        console.error(
+          "LOAD SUBJECTS ERROR:",
+          error
+        );
+      } finally {
+        setSubjectsLoading(false);
+      }
+    }
+
+    loadSubjects();
+  }, []);
+
+  // ========================================
+  // АВТОМАТИЧНО ВИЗНАЧАЄМО subjectId
+  // ДЛЯ ІСНУЮЧИХ ТЕСТІВ
+  // ========================================
+
+  useEffect(() => {
+    if (
+      subjects.length === 0 ||
+      test.subjectId
+    ) {
+      return;
+    }
+
+    const currentSubject =
+      subjects.find(
+        (subject) =>
+          subject.name === test.subject
+      );
+
+    if (currentSubject) {
+      updateTest(
+        "subjectId",
+        currentSubject.id
+      );
+    }
+  }, [
+    subjects,
+    test.subject,
+    test.subjectId,
+    updateTest,
+  ]);
+
+  // ========================================
+  // ЗБЕРЕЖЕННЯ ТЕСТУ
+  // ========================================
+
   async function handleSave() {
-  console.log("========== SAVE ==========");
-  console.log(test);
+    console.log("========== SAVE ==========");
+    console.log(test);
 
-  // Перевірка номера розташування
-  if (
-    !Number.isInteger(test.displayOrder) ||
-    test.displayOrder < 1
-  ) {
-    alert(
-      "Вкажіть номер розташування тесту на головній сторінці."
-    );
+    // Перевірка номера розташування
+    if (
+      !Number.isInteger(test.displayOrder) ||
+      test.displayOrder < 1
+    ) {
+      alert(
+        "Вкажіть номер розташування тесту на головній сторінці."
+      );
 
-    return;
+      return;
+    }
+
+    try {
+      const result = await saveTest(test);
+
+      console.log(result);
+
+      alert(
+        test.id
+          ? "Тест успішно оновлено!"
+          : "Тест успішно створено!"
+      );
+    } catch (error) {
+      console.error(error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Помилка під час збереження тесту.";
+
+      alert(message);
+    }
   }
-
-  try {
-    const result = await saveTest(test);
-
-    console.log(result);
-
-    alert(
-      test.id
-        ? "Тест успішно оновлено!"
-        : "Тест успішно створено!"
-    );
-  } catch (error) {
-    console.error(error);
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Помилка під час збереження тесту.";
-
-    alert(message);
-  }
-}
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -113,44 +196,73 @@ export default function TestSettings() {
         </div>
 
         {/* ==========================
-            ПРЕДМЕТ
+            РОЗДІЛ
         ========================== */}
 
         <div>
           <label className="block font-medium mb-2">
-            Предмет
+            Розділ
           </label>
 
           <select
-            value={test.subject}
-            onChange={(e) =>
+            value={test.subjectId ?? ""}
+            onChange={(e) => {
+              const subjectId =
+                Number(e.target.value);
+
+              const selectedSubject =
+                subjects.find(
+                  (subject) =>
+                    subject.id === subjectId
+                );
+
+              if (!selectedSubject) {
+                return;
+              }
+
+              updateTest(
+                "subjectId",
+                selectedSubject.id
+              );
+
               updateTest(
                 "subject",
-                e.target.value
-              )
-            }
-            className="w-full border rounded-lg p-3"
+                selectedSubject.name
+              );
+            }}
+            disabled={subjectsLoading}
+            className="w-full border rounded-lg p-3 disabled:bg-gray-100 disabled:text-gray-500"
           >
-            <option value="Українська мова">
-              Українська мова
-            </option>
+            {subjectsLoading ? (
+              <option value="">
+                Завантаження розділів...
+              </option>
+            ) : subjects.length === 0 ? (
+              <option value="">
+                Розділів ще немає
+              </option>
+            ) : (
+              <>
+                <option value="">
+                  Оберіть розділ
+                </option>
 
-            <option value="Українська література">
-              Українська література
-            </option>
-
-            <option value="Математика">
-              Математика
-            </option>
-
-            <option value="Історія України">
-              Історія України
-            </option>
-
-            <option value="Англійська мова">
-              Англійська мова
-            </option>
+                {subjects.map((subject) => (
+                  <option
+                    key={subject.id}
+                    value={subject.id}
+                  >
+                    {subject.name}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
+
+          <p className="text-sm text-gray-500 mt-2">
+            Розділ визначає, у якій категорії
+            тест відображатиметься в банку тестів.
+          </p>
         </div>
 
         {/* ==========================
@@ -253,21 +365,21 @@ export default function TestSettings() {
           </label>
 
           <input
-  type="number"
-  min={1}
-  step={1}
-  value={test.displayOrder || ""}
-  onChange={(e) =>
-    updateTest(
-      "displayOrder",
-      e.target.value === ""
-        ? 0
-        : Number(e.target.value)
-    )
-  }
-  className="w-full border rounded-lg p-3"
-  placeholder="Наприклад: 4"
-/>
+            type="number"
+            min={1}
+            step={1}
+            value={test.displayOrder || ""}
+            onChange={(e) =>
+              updateTest(
+                "displayOrder",
+                e.target.value === ""
+                  ? 0
+                  : Number(e.target.value)
+              )
+            }
+            className="w-full border rounded-lg p-3"
+            placeholder="Наприклад: 4"
+          />
 
           <p className="text-sm text-gray-500 mt-2">
             Визначає порядок розташування
