@@ -9,9 +9,12 @@ import {
 import { useParams, useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  Brain,
   CheckCircle2,
   Clock3,
   LockKeyhole,
+  Maximize2,
+  ShieldCheck,
 } from "lucide-react";
 
 type AnswerValue = string | string[] | null;
@@ -104,7 +107,6 @@ type SessionResponse = {
           id: number;
           text: string;
           type: string;
-          points?: number;
           answerOptions: AnswerOption[];
         }>;
       };
@@ -112,146 +114,9 @@ type SessionResponse = {
   };
 };
 
-/* ============================================================
-   ДОПУСТИМІ HTML-ТЕГИ В ТЕКСТАХ ЗАВДАНЬ
-   ============================================================ */
-
-const ALLOWED_HTML_TAGS = new Set([
-  "p",
-  "br",
-  "strong",
-  "b",
-  "em",
-  "i",
-  "u",
-  "s",
-  "sub",
-  "sup",
-  "ul",
-  "ol",
-  "li",
-  "span",
-]);
-
-/*
- * БД може містити:
- *
- * <p>Текст завдання</p>
- *
- * або:
- *
- * <p>Однаковий <strong>звук</strong>...</p>
- *
- * Ми не показуємо HTML-теги як текст.
- *
- * Одночасно прибираємо атрибути HTML,
- * щоб у тексті завдання не могли виконуватися
- * небезпечні конструкції.
- */
-function sanitizeQuestionHtml(
-  value: string
-): string {
-  if (!value) {
-    return "";
-  }
-
-  return value
-    .replace(
-      /<!--[\s\S]*?-->/g,
-      ""
-    )
-    .replace(
-      /<\s*\/?\s*([a-zA-Z0-9]+)(?:\s[^>]*)?>/g,
-      (
-        fullMatch,
-        tagName: string
-      ) => {
-        const normalized =
-          tagName.toLowerCase();
-
-        if (
-          !ALLOWED_HTML_TAGS.has(
-            normalized
-          )
-        ) {
-          return "";
-        }
-
-        const isClosing =
-          /^<\s*\//.test(
-            fullMatch
-          );
-
-        if (
-          normalized === "br"
-        ) {
-          return "<br>";
-        }
-
-        return isClosing
-          ? `</${normalized}>`
-          : `<${normalized}>`;
-      }
-    );
-}
-
-/*
- * Рендеринг тексту завдання.
- *
- * Якщо текст звичайний — показуємо як звичайний текст.
- * Якщо містить HTML — відображаємо форматування.
- */
-function QuestionText({
-  text,
-}: {
-  text: string;
-}) {
-  const containsHtml =
-    /<\s*[a-zA-Z][^>]*>/.test(
-      text
-    );
-
-  if (!containsHtml) {
-    return (
-      <div className="whitespace-pre-wrap text-base leading-7 text-gray-800 md:text-lg">
-        {text}
-      </div>
-    );
-  }
-
-  const safeHtml =
-    sanitizeQuestionHtml(text);
-
-  return (
-    <div
-      className="
-        question-html
-        text-base
-        leading-7
-        text-gray-800
-        md:text-lg
-        [&_p]:mb-3
-        [&_p:last-child]:mb-0
-        [&_strong]:font-bold
-        [&_b]:font-bold
-        [&_em]:italic
-        [&_i]:italic
-        [&_u]:underline
-        [&_s]:line-through
-        [&_ul]:my-3
-        [&_ul]:list-disc
-        [&_ul]:pl-6
-        [&_ol]:my-3
-        [&_ol]:list-decimal
-        [&_ol]:pl-6
-        [&_li]:mb-1
-      "
-      dangerouslySetInnerHTML={{
-        __html: safeHtml,
-      }}
-    />
-  );
-}
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
 
 function isRecord(
   value: unknown
@@ -266,10 +131,7 @@ function isRecord(
 function normalizeAnswer(
   value: unknown
 ): AnswerValue {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return null;
   }
 
@@ -313,20 +175,13 @@ function buildSavedAnswers(
   testId: number,
   questionId: number,
   answer: AnswerValue
-): Record<
-  string,
-  Record<string, AnswerValue>
-> {
+): Record<string, Record<string, AnswerValue>> {
   const result: Record<
     string,
     Record<string, AnswerValue>
   > = {};
 
-  if (
-    isRecord(
-      currentSavedAnswers
-    )
-  ) {
+  if (isRecord(currentSavedAnswers)) {
     for (const [
       testKey,
       testValue,
@@ -339,15 +194,9 @@ function buildSavedAnswers(
         for (const [
           questionKey,
           questionValue,
-        ] of Object.entries(
-          testValue
-        )) {
-          result[testKey][
-            questionKey
-          ] =
-            normalizeAnswer(
-              questionValue
-            );
+        ] of Object.entries(testValue)) {
+          result[testKey][questionKey] =
+            normalizeAnswer(questionValue);
         }
       }
     }
@@ -357,14 +206,229 @@ function buildSavedAnswers(
     result[String(testId)] = {};
   }
 
-  result[String(testId)][
-    String(questionId)
-  ] = answer;
+  result[String(testId)][String(questionId)] =
+    answer;
 
   return result;
 }
 
-function hasAnswer(
+function decodeHtmlEntities(
+  value: string
+): string {
+  return value.replace(
+    /&(#\d+|#x[a-f0-9]+|lt|gt|quot|apos|nbsp|amp);/gi,
+    (entity) => {
+      const normalized =
+        entity.toLowerCase();
+
+      if (normalized === "&lt;") {
+        return "<";
+      }
+
+      if (normalized === "&gt;") {
+        return ">";
+      }
+
+      if (normalized === "&quot;") {
+        return '"';
+      }
+
+      if (normalized === "&apos;") {
+        return "'";
+      }
+
+      if (normalized === "&nbsp;") {
+        return " ";
+      }
+
+      if (normalized === "&amp;") {
+        return "&";
+      }
+
+      if (normalized.startsWith("&#x")) {
+        const code = parseInt(
+          normalized.slice(3, -1),
+          16
+        );
+
+        return Number.isFinite(code)
+          ? String.fromCodePoint(code)
+          : entity;
+      }
+
+      if (normalized.startsWith("&#")) {
+        const code = parseInt(
+          normalized.slice(2, -1),
+          10
+        );
+
+        return Number.isFinite(code)
+          ? String.fromCodePoint(code)
+          : entity;
+      }
+
+      return entity;
+    }
+  );
+}
+
+function escapeHtmlAttribute(
+  value: string
+): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function sanitizeRichText(
+  value: string
+): string {
+  const source =
+    decodeHtmlEntities(
+      value ?? ""
+    );
+
+  const dangerousTags =
+    /<\s*(script|style|iframe|object|embed|svg|math|form|input|button|textarea|select|option|link|meta|base|template)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
+
+  const withoutDangerous =
+    source.replace(
+      dangerousTags,
+      ""
+    );
+
+  const allowedTags =
+    new Set([
+      "p",
+      "br",
+      "strong",
+      "b",
+      "em",
+      "i",
+      "u",
+      "s",
+      "mark",
+      "small",
+      "sub",
+      "sup",
+      "ul",
+      "ol",
+      "li",
+      "blockquote",
+      "div",
+      "span",
+      "table",
+      "thead",
+      "tbody",
+      "tfoot",
+      "tr",
+      "th",
+      "td",
+      "img",
+    ]);
+
+  return withoutDangerous.replace(
+    /<\s*(\/?)\s*([a-z0-9]+)([^>]*)>/gi,
+    (
+      _match,
+      slash,
+      tagName,
+      attributes
+    ) => {
+      const tag =
+        String(tagName).toLowerCase();
+
+      const closing =
+        String(slash) === "/";
+
+      if (!allowedTags.has(tag)) {
+        return "";
+      }
+
+      if (tag === "br") {
+        return closing
+          ? ""
+          : "<br />";
+      }
+
+      if (tag === "img") {
+        if (closing) {
+          return "";
+        }
+
+        const srcMatch =
+          String(attributes).match(
+            /\bsrc\s*=\s*(['"])(.*?)\1/i
+          );
+
+        const altMatch =
+          String(attributes).match(
+            /\balt\s*=\s*(['"])(.*?)\1/i
+          );
+
+        const src =
+          srcMatch?.[2] ?? "";
+
+        const alt =
+          altMatch?.[2] ?? "";
+
+        const validSrc =
+          /^(https?:\/\/|\/|\.\/|\.\.\/|data:image\/)/i.test(
+            src
+          );
+
+        if (!validSrc) {
+          return "";
+        }
+
+        return `<img src="${escapeHtmlAttribute(
+          src
+        )}" alt="${escapeHtmlAttribute(
+          alt
+        )}" class="max-w-full h-auto rounded-lg" />`;
+      }
+
+      if (closing) {
+        return `</${tag}>`;
+      }
+
+      return `<${tag}>`;
+    }
+  );
+}
+
+function RichText({
+  html,
+  className = "",
+}: {
+  html: string;
+  className?: string;
+}) {
+  const safeHtml = useMemo(
+    () => sanitizeRichText(html),
+    [html]
+  );
+
+  return (
+    <div
+      className={className}
+      dangerouslySetInnerHTML={{
+        __html: safeHtml,
+      }}
+    />
+  );
+}
+
+function getQuestionElementId(
+  testId: number,
+  questionId: number
+) {
+  return `complex-question-${testId}-${questionId}`;
+}
+
+function isAnswerProvided(
   answer: AnswerValue
 ): boolean {
   if (Array.isArray(answer)) {
@@ -377,6 +441,40 @@ function hasAnswer(
   );
 }
 
+function answersEqual(
+  first: AnswerValue,
+  second: AnswerValue
+): boolean {
+  if (
+    Array.isArray(first) &&
+    Array.isArray(second)
+  ) {
+    if (first.length !== second.length) {
+      return false;
+    }
+
+    const firstSorted =
+      [...first].map(String).sort();
+
+    const secondSorted =
+      [...second].map(String).sort();
+
+    return firstSorted.every(
+      (value, index) =>
+        value === secondSorted[index]
+    );
+  }
+
+  if (
+    Array.isArray(first) ||
+    Array.isArray(second)
+  ) {
+    return false;
+  }
+
+  return first === second;
+}
+
 export default function ComplexTestPage() {
   const router = useRouter();
   const params = useParams();
@@ -385,8 +483,7 @@ export default function ComplexTestPage() {
     ? params.id[0]
     : params.id;
 
-  const complexTestId =
-    Number(id);
+  const complexTestId = Number(id);
 
   const sessionStorageKey =
     `complex-test-session-${id}`;
@@ -398,14 +495,10 @@ export default function ComplexTestPage() {
     useState<SessionData | null>(null);
 
   const [complexTest, setComplexTest] =
-    useState<ComplexTestData | null>(
-      null
-    );
+    useState<ComplexTestData | null>(null);
 
   const [tests, setTests] =
-    useState<ComplexTestSubject[]>(
-      []
-    );
+    useState<ComplexTestSubject[]>([]);
 
   const [selectedTestId, setSelectedTestId] =
     useState<number | null>(null);
@@ -416,8 +509,8 @@ export default function ComplexTestPage() {
   const [sessionLoaded, setSessionLoaded] =
     useState(false);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [savingQuestionKey, setSavingQuestionKey] =
+    useState<string | null>(null);
 
   const [finishing, setFinishing] =
     useState(false);
@@ -437,13 +530,10 @@ export default function ComplexTestPage() {
   const [blocked, setBlocked] =
     useState(false);
 
-  /*
-   * ============================================================
-   * ЗАХИСТ
-   * ============================================================
-   */
+  const [activeQuestionId, setActiveQuestionId] =
+    useState<number | null>(null);
 
-  const [fullscreenActive, setFullscreenActive] =
+  const [isFullscreen, setIsFullscreen] =
     useState(false);
 
   const [securityReady, setSecurityReady] =
@@ -451,18 +541,6 @@ export default function ComplexTestPage() {
 
   const [securityWarning, setSecurityWarning] =
     useState("");
-
-  const [securityWarningCount, setSecurityWarningCount] =
-    useState(0);
-
-  const [tabHidden, setTabHidden] =
-    useState(false);
-
-  /*
-   * ============================================================
-   * ОТРИМАННЯ SESSION ID
-   * ============================================================
-   */
 
   useEffect(() => {
     if (!id) {
@@ -484,14 +562,10 @@ export default function ComplexTestPage() {
 
     try {
       const parsed =
-        JSON.parse(
-          storedSession
-        );
+        JSON.parse(storedSession);
 
       const storedSessionId =
-        Number(
-          parsed.sessionId
-        );
+        Number(parsed.sessionId);
 
       if (
         !Number.isInteger(
@@ -533,241 +607,217 @@ export default function ComplexTestPage() {
     sessionStorageKey,
   ]);
 
-  /*
-   * ============================================================
-   * ПЕРЕТВОРЕННЯ ТЕСТІВ
-   * ============================================================
-   */
+  const convertTests = useCallback(
+    (
+      apiTests:
+        SessionResponse["complexTest"]["tests"],
+      savedAnswers: unknown
+    ): ComplexTestSubject[] => {
+      return apiTests
+        .slice()
+        .sort(
+          (a, b) =>
+            a.order - b.order
+        )
+        .map(
+          (item) => ({
+            id: item.test.id,
 
-  const convertTests =
-    useCallback(
-      (
-        apiTests:
-          SessionResponse["complexTest"]["tests"],
-        savedAnswers: unknown
-      ): ComplexTestSubject[] => {
-        return [...apiTests]
-          .sort(
-            (a, b) =>
-              a.order - b.order
-          )
-          .map(
-            (item) => ({
-              id: item.test.id,
-
-              order: item.order,
-
-              title:
-                item.test.title,
-
-              subject:
-                item.test.subject,
-
-              duration:
-                item.test.duration,
-
-              questions:
-                [...item.test.questions]
-                  .sort(
-                    (a, b) =>
-                      a.id - b.id
-                  )
-                  .map(
-                    (
-                      question,
-                      questionIndex
-                    ) => ({
-                      id:
-                        question.id,
-
-                      order:
-                        questionIndex,
-
-                      type:
-                        question.type,
-
-                      text:
-                        question.text,
-
-                      points:
-                        Number(
-                          question.points ??
-                            1
-                        ),
-
-                      answerOptions:
-                        [...question.answerOptions].sort(
-                          (a, b) =>
-                            a.order -
-                            b.order
-                        ),
-
-                      savedAnswer:
-                        getSavedAnswer(
-                          savedAnswers,
-                          item.test.id,
-                          question.id
-                        ),
-                    })
-                  ),
-            })
-          );
-      },
-      []
-    );
-
-  /*
-   * ============================================================
-   * ЗАВАНТАЖЕННЯ СЕСІЇ
-   * ============================================================
-   */
-
-  const loadSession =
-    useCallback(
-      async (
-        currentSessionId: number
-      ) => {
-        if (
-          !Number.isInteger(
-            complexTestId
-          ) ||
-          complexTestId <= 0
-        ) {
-          setError(
-            "Некоректний id комбінованого тесту."
-          );
-
-          setLoading(false);
-          setSessionLoaded(false);
-
-          return;
-        }
-
-        try {
-          setLoading(true);
-          setSessionLoaded(false);
-          setError("");
-
-          const response =
-            await fetch(
-              `/api/complex-tests/${complexTestId}/session?sessionId=${currentSessionId}`,
-              {
-                method: "GET",
-                cache: "no-store",
-              }
-            );
-
-          const data =
-            (await response.json()) as SessionResponse;
-
-          if (
-            !response.ok ||
-            !data.success
-          ) {
-            throw new Error(
-              data.message ||
-                "Не вдалося завантажити сесію."
-            );
-          }
-
-          if (
-            !data.complexTest ||
-            !data.complexTest.tests
-          ) {
-            throw new Error(
-              "Сервер не повернув структуру комбінованого тесту."
-            );
-          }
-
-          const convertedTests =
-            convertTests(
-              data.complexTest.tests,
-              data.session.savedAnswers
-            );
-
-          setSession(
-            data.session
-          );
-
-          setComplexTest({
-            id:
-              data.complexTest.id,
+            order: item.order,
 
             title:
-              data.complexTest.title,
+              item.test.title,
 
-            description:
-              data.complexTest.description,
+            subject:
+              item.test.subject,
 
             duration:
-              data.complexTest.duration,
+              item.test.duration,
 
-            examType:
-              data.complexTest.examType,
+            questions:
+              item.test.questions.map(
+                (
+                  question,
+                  questionIndex
+                ) => ({
+                  id: question.id,
 
-            section:
-              data.complexTest.section,
-          });
+                  order:
+                    questionIndex,
 
-          setTests(
-            convertedTests
+                  type:
+                    question.type,
+
+                  text:
+                    question.text,
+
+                  points: 1,
+
+                  answerOptions:
+                    question.answerOptions,
+
+                  savedAnswer:
+                    getSavedAnswer(
+                      savedAnswers,
+                      item.test.id,
+                      question.id
+                    ),
+                })
+              ),
+          })
+        );
+    },
+    []
+  );
+
+  const loadSession = useCallback(
+    async (
+      currentSessionId: number
+    ) => {
+      if (
+        !Number.isInteger(
+          complexTestId
+        ) ||
+        complexTestId <= 0
+      ) {
+        setError(
+          "Некоректний id комбінованого тесту."
+        );
+
+        setLoading(false);
+        setSessionLoaded(false);
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setSessionLoaded(false);
+        setError("");
+
+        const response =
+          await fetch(
+            `/api/complex-tests/${complexTestId}/session?sessionId=${currentSessionId}`,
+            {
+              method: "GET",
+              cache: "no-store",
+            }
           );
 
-          const serverTimeLeft =
-            Math.max(
-              0,
-              Math.floor(
-                Number(
-                  data.session.timeLeft
-                )
-              )
-            );
+        const data =
+          (await response.json()) as SessionResponse;
 
-          setTimeLeft(
-            serverTimeLeft
+        if (
+          !response.ok ||
+          !data.success
+        ) {
+          throw new Error(
+            data.message ||
+              "Не вдалося завантажити сесію."
           );
-
-          setBlocked(
-            Boolean(
-              data.session.blocked
-            )
-          );
-
-          setFinished(
-            Boolean(
-              data.session.finished
-            )
-          );
-
-          setSelectedTestId(
-            data.session.currentTestId ??
-              convertedTests[0]?.id ??
-              null
-          );
-
-          setSessionLoaded(true);
-        } catch (error) {
-          console.error(
-            "Load complex test session error:",
-            error
-          );
-
-          setError(
-            error instanceof Error
-              ? error.message
-              : "Не вдалося завантажити тест."
-          );
-
-          setSessionLoaded(false);
-        } finally {
-          setLoading(false);
         }
-      },
-      [
-        complexTestId,
-        convertTests,
-      ]
-    );
+
+        const convertedTests =
+          convertTests(
+            data.complexTest.tests,
+            data.session.savedAnswers
+          );
+
+        setSession(
+          data.session
+        );
+
+        setComplexTest({
+          id:
+            data.complexTest.id,
+
+          title:
+            data.complexTest.title,
+
+          description:
+            data.complexTest.description,
+
+          duration:
+            data.complexTest.duration,
+
+          examType:
+            data.complexTest.examType,
+
+          section:
+            data.complexTest.section,
+        });
+
+        setTests(
+          convertedTests
+        );
+
+        const serverTimeLeft =
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                data.session.timeLeft
+              )
+            )
+          );
+
+        setTimeLeft(
+          serverTimeLeft
+        );
+
+        setBlocked(
+          Boolean(
+            data.session.blocked
+          )
+        );
+
+        setFinished(
+          Boolean(
+            data.session.finished
+          )
+        );
+
+        const initialTestId =
+          data.session.currentTestId ??
+          convertedTests[0]?.id ??
+          null;
+
+        setSelectedTestId(
+          initialTestId
+        );
+
+        setActiveQuestionId(
+          convertedTests.find(
+            (test) =>
+              test.id ===
+              initialTestId
+          )?.questions[0]?.id ??
+            null
+        );
+
+        setSessionLoaded(true);
+      } catch (error) {
+        console.error(
+          "Load complex test session error:",
+          error
+        );
+
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Не вдалося завантажити тест."
+        );
+
+        setSessionLoaded(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      complexTestId,
+      convertTests,
+    ]
+  );
 
   useEffect(() => {
     if (!sessionId) {
@@ -781,12 +831,6 @@ export default function ComplexTestPage() {
     sessionId,
     loadSession,
   ]);
-
-  /*
-   * ============================================================
-   * ПОТОЧНИЙ ПРЕДМЕТ
-   * ============================================================
-   */
 
   const currentTest =
     useMemo(() => {
@@ -807,15 +851,32 @@ export default function ComplexTestPage() {
       selectedTestId,
     ]);
 
-  /*
-   * ============================================================
-   * COUNTDOWN
-   *
-   * ВАЖЛИВО:
-   * timeLeft береться з БД.
-   * startedAt / lastActivityAt тут НЕ використовуються.
-   * ============================================================
-   */
+  useEffect(() => {
+    if (!currentTest) {
+      return;
+    }
+
+    const firstQuestion =
+      currentTest.questions[0];
+
+    if (
+      activeQuestionId === null ||
+      !currentTest.questions.some(
+        (question) =>
+          question.id ===
+          activeQuestionId
+      )
+    ) {
+      setActiveQuestionId(
+        firstQuestion?.id ??
+          null
+      );
+    }
+  }, [
+    currentTest?.id,
+    currentTest?.questions.length,
+    activeQuestionId,
+  ]);
 
   useEffect(() => {
     if (
@@ -832,7 +893,9 @@ export default function ComplexTestPage() {
       window.setInterval(() => {
         setTimeLeft(
           (previous) => {
-            if (previous <= 1) {
+            if (
+              previous <= 1
+            ) {
               window.clearInterval(
                 timer
               );
@@ -840,7 +903,9 @@ export default function ComplexTestPage() {
               return 0;
             }
 
-            return previous - 1;
+            return (
+              previous - 1
+            );
           }
         );
       }, 1000);
@@ -857,12 +922,6 @@ export default function ComplexTestPage() {
     blocked,
     timeLeft,
   ]);
-
-  /*
-   * ============================================================
-   * АВТОМАТИЧНЕ ЗАВЕРШЕННЯ
-   * ============================================================
-   */
 
   useEffect(() => {
     if (
@@ -894,10 +953,12 @@ export default function ComplexTestPage() {
                   "application/json",
               },
 
-              body: JSON.stringify({
-                sessionId,
-                finished: true,
-              }),
+              body:
+                JSON.stringify({
+                  sessionId,
+
+                  finished: true,
+                }),
             }
           );
 
@@ -914,7 +975,9 @@ export default function ComplexTestPage() {
           );
         }
 
-        if (cancelled) {
+        if (
+          cancelled
+        ) {
           return;
         }
 
@@ -945,7 +1008,9 @@ export default function ComplexTestPage() {
           error
         );
 
-        if (cancelled) {
+        if (
+          cancelled
+        ) {
           return;
         }
 
@@ -953,8 +1018,12 @@ export default function ComplexTestPage() {
           "Час тестування завершився, але не вдалося зафіксувати завершення."
         );
       } finally {
-        if (!cancelled) {
-          setFinishing(false);
+        if (
+          !cancelled
+        ) {
+          setFinishing(
+            false
+          );
         }
       }
     }
@@ -974,27 +1043,36 @@ export default function ComplexTestPage() {
     complexTestId,
   ]);
 
-  /*
-   * ============================================================
-   * ПОВНОЕКРАННИЙ РЕЖИМ
-   * ============================================================
-   */
-
-  const enterFullscreen =
+  const requestFullscreen =
     useCallback(
       async () => {
         try {
           if (
-            !document.fullscreenElement
+            document.fullscreenElement
           ) {
-            await document.documentElement.requestFullscreen();
+            setIsFullscreen(true);
+            setSecurityReady(true);
+            setSecurityWarning("");
+
+            return;
           }
 
-          setFullscreenActive(
-            Boolean(
-              document.fullscreenElement
-            )
-          );
+          const element =
+            document.documentElement as FullscreenElement;
+
+          if (
+            element.requestFullscreen
+          ) {
+            await element.requestFullscreen();
+          } else if (
+            element.webkitRequestFullscreen
+          ) {
+            await element.webkitRequestFullscreen();
+          } else {
+            throw new Error(
+              "Ваш браузер не підтримує повноекранний режим."
+            );
+          }
 
           setSecurityReady(true);
           setSecurityWarning("");
@@ -1004,8 +1082,12 @@ export default function ComplexTestPage() {
             error
           );
 
+          setSecurityReady(false);
+
           setSecurityWarning(
-            "Не вдалося перейти у повноекранний режим. Перевірте, чи дозволено браузеру використовувати повноекранний режим."
+            error instanceof Error
+              ? error.message
+              : "Не вдалося увімкнути повноекранний режим. Спробуйте ще раз."
           );
         }
       },
@@ -1013,241 +1095,193 @@ export default function ComplexTestPage() {
     );
 
   useEffect(() => {
-    function handleFullscreenChange() {
-      const active =
-        Boolean(
-          document.fullscreenElement
+    if (
+      !sessionLoaded ||
+      finished ||
+      blocked
+    ) {
+      return;
+    }
+
+    const handleFullscreenChange =
+      () => {
+        const fullscreen =
+          Boolean(
+            document.fullscreenElement
+          );
+
+        setIsFullscreen(
+          fullscreen
         );
 
-      setFullscreenActive(
-        active
-      );
+        if (fullscreen) {
+          setSecurityReady(
+            true
+          );
 
-      if (
-        securityReady &&
-        !active &&
-        !finished &&
-        !blocked
-      ) {
-        setSecurityWarningCount(
-          (previous) =>
-            previous + 1
+          setSecurityWarning(
+            ""
+          );
+        } else {
+          setSecurityReady(
+            false
+          );
+
+          setSecurityWarning(
+            "Повноекранний режим вимкнено. Для продовження тестування знову увійдіть у повноекранний режим."
+          );
+        }
+      };
+
+    const handleKeyDown =
+      (event: KeyboardEvent) => {
+        const key =
+          event.key.toLowerCase();
+
+        const modifier =
+          event.ctrlKey ||
+          event.metaKey;
+
+        const forbidden =
+          key === "f12" ||
+          key === "f5" ||
+          key === "f11" ||
+          key === "printscreen" ||
+          key === "tab" &&
+            event.ctrlKey ||
+            modifier &&
+              [
+                "c",
+                "x",
+                "v",
+                "a",
+                "s",
+                "p",
+                "u",
+                "f",
+                "r",
+                "w",
+                "t",
+                "n",
+              ].includes(key) ||
+            modifier &&
+              event.shiftKey &&
+              [
+                "i",
+                "j",
+                "c",
+                "r",
+                "t",
+                "n",
+              ].includes(key) ||
+            event.altKey &&
+              [
+                "arrowleft",
+                "arrowright",
+              ].includes(key);
+
+        if (!forbidden) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (
+          key === "printscreen"
+        ) {
+          setSecurityReady(false);
+          setSecurityWarning(
+            "Знімок екрана заборонено під час тестування."
+          );
+        }
+      };
+
+    const preventContextMenu =
+      (event: MouseEvent) => {
+        event.preventDefault();
+      };
+
+    const preventClipboard =
+      (event: Event) => {
+        event.preventDefault();
+      };
+
+    const preventDrag =
+      (event: DragEvent) => {
+        event.preventDefault();
+      };
+
+    const handleVisibilityChange =
+      () => {
+        if (
+          document.hidden
+        ) {
+          setSecurityReady(
+            false
+          );
+
+          setSecurityWarning(
+            "Ви залишили сторінку тестування. Для продовження поверніться до тесту та знову підтвердьте повноекранний режим."
+          );
+        }
+      };
+
+    const handleBlur =
+      () => {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          setSecurityReady(
+            false
+          );
+
+          setSecurityWarning(
+            "Фокус сторінки тестування втрачено. Поверніться до тесту."
+          );
+        }
+      };
+
+    const handleBeforeUnload =
+      (event: BeforeUnloadEvent) => {
+        event.preventDefault();
+        event.returnValue = "";
+      };
+
+    const handlePopState =
+      () => {
+        window.history.pushState(
+          null,
+          "",
+          window.location.href
+        );
+
+        setSecurityReady(
+          false
         );
 
         setSecurityWarning(
-          "Ви вийшли з повноекранного режиму. Для продовження тестування необхідно знову перейти у повноекранний режим."
+          "Під час тестування перехід назад заборонено."
         );
-      }
-    }
+      };
+
+    window.history.pushState(
+      null,
+      "",
+      window.location.href
+    );
 
     document.addEventListener(
       "fullscreenchange",
       handleFullscreenChange
     );
 
-    return () => {
-      document.removeEventListener(
-        "fullscreenchange",
-        handleFullscreenChange
-      );
-    };
-  }, [
-    securityReady,
-    finished,
-    blocked,
-  ]);
-
-  /*
-   * ============================================================
-   * ЗАХИСТ ВІД ПЕРЕХОДУ НА ІНШУ ВКЛАДКУ
-   * ============================================================
-   */
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      finished ||
-      blocked
-    ) {
-      return;
-    }
-
-    function handleVisibilityChange() {
-      if (
-        document.visibilityState ===
-        "hidden"
-      ) {
-        setTabHidden(true);
-
-        setSecurityWarningCount(
-          (previous) =>
-            previous + 1
-        );
-
-        setSecurityWarning(
-          "Зафіксовано вихід зі сторінки тестування. Поверніться до тесту."
-        );
-      } else {
-        setTabHidden(false);
-      }
-    }
-
     document.addEventListener(
-      "visibilitychange",
-      handleVisibilityChange
+      "keydown",
+      handleKeyDown,
+      true
     );
-
-    return () => {
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
-    };
-  }, [
-    sessionLoaded,
-    finished,
-    blocked,
-  ]);
-
-  /*
-   * ============================================================
-   * ЗАХИСТ ВІД BLUR / FOCUS
-   * ============================================================
-   */
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      finished ||
-      blocked
-    ) {
-      return;
-    }
-
-    let blurTimeout:
-      | number
-      | undefined;
-
-    function handleBlur() {
-      if (
-        document.visibilityState ===
-        "hidden"
-      ) {
-        return;
-      }
-
-      blurTimeout =
-        window.setTimeout(() => {
-          setSecurityWarningCount(
-            (previous) =>
-              previous + 1
-          );
-
-          setSecurityWarning(
-            "Увага: фокус сторінки тестування було втрачено."
-          );
-        }, 300);
-    }
-
-    function handleFocus() {
-      if (
-        blurTimeout !==
-        undefined
-      ) {
-        window.clearTimeout(
-          blurTimeout
-        );
-      }
-    }
-
-    window.addEventListener(
-      "blur",
-      handleBlur
-    );
-
-    window.addEventListener(
-      "focus",
-      handleFocus
-    );
-
-    return () => {
-      if (
-        blurTimeout !==
-        undefined
-      ) {
-        window.clearTimeout(
-          blurTimeout
-        );
-      }
-
-      window.removeEventListener(
-        "blur",
-        handleBlur
-      );
-
-      window.removeEventListener(
-        "focus",
-        handleFocus
-      );
-    };
-  }, [
-    sessionLoaded,
-    finished,
-    blocked,
-  ]);
-
-  /*
-   * ============================================================
-   * БЛОКУВАННЯ КОНТЕКСТНОГО МЕНЮ,
-   * ВИДІЛЕННЯ, КОПІЮВАННЯ,
-   * DRAG-AND-DROP
-   * ============================================================
-   */
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      finished ||
-      blocked
-    ) {
-      return;
-    }
-
-    function preventContextMenu(
-      event: MouseEvent
-    ) {
-      event.preventDefault();
-    }
-
-    function preventCopy(
-      event: ClipboardEvent
-    ) {
-      event.preventDefault();
-    }
-
-    function preventCut(
-      event: ClipboardEvent
-    ) {
-      event.preventDefault();
-    }
-
-    function preventPaste(
-      event: ClipboardEvent
-    ) {
-      event.preventDefault();
-    }
-
-    function preventDrag(
-      event: DragEvent
-    ) {
-      event.preventDefault();
-    }
-
-    function preventSelect(
-      event: Event
-    ) {
-      event.preventDefault();
-    }
 
     document.addEventListener(
       "contextmenu",
@@ -1256,17 +1290,22 @@ export default function ComplexTestPage() {
 
     document.addEventListener(
       "copy",
-      preventCopy
+      preventClipboard
     );
 
     document.addEventListener(
       "cut",
-      preventCut
+      preventClipboard
     );
 
     document.addEventListener(
       "paste",
-      preventPaste
+      preventClipboard
+    );
+
+    document.addEventListener(
+      "selectstart",
+      preventClipboard
     );
 
     document.addEventListener(
@@ -1275,11 +1314,51 @@ export default function ComplexTestPage() {
     );
 
     document.addEventListener(
-      "selectstart",
-      preventSelect
+      "visibilitychange",
+      handleVisibilityChange
     );
 
+    window.addEventListener(
+      "blur",
+      handleBlur
+    );
+
+    window.addEventListener(
+      "beforeunload",
+      handleBeforeUnload
+    );
+
+    window.addEventListener(
+      "popstate",
+      handlePopState
+    );
+
+    setIsFullscreen(
+      Boolean(
+        document.fullscreenElement
+      )
+    );
+
+    if (
+      document.fullscreenElement
+    ) {
+      setSecurityReady(
+        true
+      );
+    }
+
     return () => {
+      document.removeEventListener(
+        "fullscreenchange",
+        handleFullscreenChange
+      );
+
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown,
+        true
+      );
+
       document.removeEventListener(
         "contextmenu",
         preventContextMenu
@@ -1287,17 +1366,22 @@ export default function ComplexTestPage() {
 
       document.removeEventListener(
         "copy",
-        preventCopy
+        preventClipboard
       );
 
       document.removeEventListener(
         "cut",
-        preventCut
+        preventClipboard
       );
 
       document.removeEventListener(
         "paste",
-        preventPaste
+        preventClipboard
+      );
+
+      document.removeEventListener(
+        "selectstart",
+        preventClipboard
       );
 
       document.removeEventListener(
@@ -1306,367 +1390,30 @@ export default function ComplexTestPage() {
       );
 
       document.removeEventListener(
-        "selectstart",
-        preventSelect
+        "visibilitychange",
+        handleVisibilityChange
       );
-    };
-  }, [
-    sessionLoaded,
-    finished,
-    blocked,
-  ]);
 
-  /*
-   * ============================================================
-   * БЛОКУВАННЯ КЛАВІАТУРНИХ КОМБІНАЦІЙ
-   * ============================================================
-   */
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      finished ||
-      blocked
-    ) {
-      return;
-    }
-
-    function handleKeyDown(
-      event: KeyboardEvent
-    ) {
-      const key =
-        event.key.toLowerCase();
-
-      const ctrl =
-        event.ctrlKey;
-
-      const meta =
-        event.metaKey;
-
-      const shift =
-        event.shiftKey;
-
-      /*
-       * F12
-       */
-      if (
-        key === "f12"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Клавіша F12 заблокована під час тестування."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + C
-       */
-      if (
-        (ctrl || meta) &&
-        key === "c"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Копіювання матеріалів тесту заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + X
-       */
-      if (
-        (ctrl || meta) &&
-        key === "x"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Вирізання матеріалів тесту заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + V
-       */
-      if (
-        (ctrl || meta) &&
-        key === "v"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Вставлення матеріалів під час тестування заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + A
-       */
-      if (
-        (ctrl || meta) &&
-        key === "a"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + S
-       */
-      if (
-        (ctrl || meta) &&
-        key === "s"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Збереження сторінки під час тестування заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + P
-       */
-      if (
-        (ctrl || meta) &&
-        key === "p"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Друк матеріалів тесту заборонений."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + F
-       */
-      if (
-        (ctrl || meta) &&
-        key === "f"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Пошук по сторінці під час тестування заборонений."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + U
-       */
-      if (
-        (ctrl || meta) &&
-        key === "u"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Перегляд вихідного коду сторінки під час тестування заборонений."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + Shift + I
-       * Ctrl / Cmd + Shift + J
-       * Ctrl / Cmd + Shift + C
-       */
-      if (
-        (ctrl || meta) &&
-        shift &&
-        (
-          key === "i" ||
-          key === "j" ||
-          key === "c"
-        )
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Інструменти розробника заблоковані під час тестування."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + Shift + S
-       */
-      if (
-        (ctrl || meta) &&
-        shift &&
-        key === "s"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        return;
-      }
-
-      /*
-       * PrintScreen.
-       *
-       * Браузер не гарантує повного блокування
-       * системного скриншота, але перехоплюємо
-       * подію, якщо браузер її передає.
-       */
-      if (
-        key === "printscreen"
-      ) {
-        event.preventDefault();
-
-        setSecurityWarning(
-          "Створення знімків екрана під час тестування заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Alt + Left / Right
-       */
-      if (
-        event.altKey &&
-        (
-          key === "arrowleft" ||
-          key === "arrowright"
-        )
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        return;
-      }
-
-      /*
-       * F5 / Ctrl+R / Cmd+R
-       */
-      if (
-        key === "f5" ||
-        (
-          (ctrl || meta) &&
-          key === "r"
-        )
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        setSecurityWarning(
-          "Перезавантаження сторінки під час тестування заборонене."
-        );
-
-        return;
-      }
-
-      /*
-       * Ctrl / Cmd + Shift + R
-       */
-      if (
-        (ctrl || meta) &&
-        shift &&
-        key === "r"
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        return;
-      }
-    }
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-      true
-    );
-
-    return () => {
       window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-        true
+        "blur",
+        handleBlur
       );
-    };
-  }, [
-    sessionLoaded,
-    finished,
-    blocked,
-  ]);
 
-  /*
-   * ============================================================
-   * ЗАПОБІГАННЯ ЗАКРИТТЮ / ПЕРЕЗАВАНТАЖЕННЮ
-   * ============================================================
-   */
-
-  useEffect(() => {
-    if (
-      !sessionLoaded ||
-      finished ||
-      blocked
-    ) {
-      return;
-    }
-
-    function handleBeforeUnload(
-      event: BeforeUnloadEvent
-    ) {
-      event.preventDefault();
-
-      event.returnValue =
-        "Тестування ще не завершено.";
-    }
-
-    window.addEventListener(
-      "beforeunload",
-      handleBeforeUnload
-    );
-
-    return () => {
       window.removeEventListener(
         "beforeunload",
         handleBeforeUnload
       );
+
+      window.removeEventListener(
+        "popstate",
+        handlePopState
+      );
     };
   }, [
     sessionLoaded,
     finished,
     blocked,
   ]);
-
-  /*
-   * ============================================================
-   * ФОРМАТУВАННЯ ЧАСУ
-   * ============================================================
-   */
 
   function formatTime(
     seconds: number
@@ -1723,12 +1470,6 @@ export default function ComplexTestPage() {
     )}`;
   }
 
-  /*
-   * ============================================================
-   * ЛОКАЛЬНЕ ОНОВЛЕННЯ ВІДПОВІДІ
-   * ============================================================
-   */
-
   function updateLocalAnswer(
     testId: number,
     questionId: number,
@@ -1772,33 +1513,7 @@ export default function ComplexTestPage() {
           }
         )
     );
-
-    setSession(
-      (previous) => {
-        if (!previous) {
-          return previous;
-        }
-
-        return {
-          ...previous,
-
-          savedAnswers:
-            buildSavedAnswers(
-              previous.savedAnswers,
-              testId,
-              questionId,
-              answer
-            ),
-        };
-      }
-    );
   }
-
-  /*
-   * ============================================================
-   * ЗБЕРЕЖЕННЯ ВІДПОВІДІ
-   * ============================================================
-   */
 
   async function saveAnswer(
     testId: number,
@@ -1808,13 +1523,21 @@ export default function ComplexTestPage() {
     if (
       !sessionId ||
       finished ||
-      blocked
+      blocked ||
+      !isAnswerProvided(answer)
     ) {
       return;
     }
 
+    const questionKey =
+      `${testId}-${questionId}`;
+
     try {
-      setSaving(true);
+      setSavingQuestionKey(
+        questionKey
+      );
+
+      setError("");
 
       const nextSavedAnswers =
         buildSavedAnswers(
@@ -1835,15 +1558,16 @@ export default function ComplexTestPage() {
                 "application/json",
             },
 
-            body: JSON.stringify({
-              sessionId,
+            body:
+              JSON.stringify({
+                sessionId,
 
-              savedAnswers:
-                nextSavedAnswers,
+                savedAnswers:
+                  nextSavedAnswers,
 
-              currentTestId:
-                testId,
-            }),
+                currentTestId:
+                  testId,
+              }),
           }
         );
 
@@ -1860,7 +1584,9 @@ export default function ComplexTestPage() {
         );
       }
 
-      if (data.session) {
+      if (
+        data.session
+      ) {
         setSession(
           (previous) =>
             previous
@@ -1895,15 +1621,11 @@ export default function ComplexTestPage() {
           : "Не вдалося зберегти відповідь."
       );
     } finally {
-      setSaving(false);
+      setSavingQuestionKey(
+        null
+      );
     }
   }
-
-  /*
-   * ============================================================
-   * ОДНА ВІДПОВІДЬ
-   * ============================================================
-   */
 
   function selectSingleAnswer(
     testId: number,
@@ -1918,19 +1640,7 @@ export default function ComplexTestPage() {
       questionId,
       answer
     );
-
-    void saveAnswer(
-      testId,
-      questionId,
-      answer
-    );
   }
-
-  /*
-   * ============================================================
-   * КІЛЬКА ВІДПОВІДЕЙ
-   * ============================================================
-   */
 
   function selectMultipleAnswer(
     testId: number,
@@ -1980,19 +1690,7 @@ export default function ComplexTestPage() {
       questionId,
       answer
     );
-
-    void saveAnswer(
-      testId,
-      questionId,
-      answer
-    );
   }
-
-  /*
-   * ============================================================
-   * ЧИ ОБРАНА ВІДПОВІДЬ
-   * ============================================================
-   */
 
   function isOptionSelected(
     answer: AnswerValue,
@@ -2012,12 +1710,6 @@ export default function ComplexTestPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * ПЕРЕМИКАННЯ ПРЕДМЕТА
-   * ============================================================
-   */
-
   async function selectTest(
     testId: number
   ) {
@@ -2025,14 +1717,25 @@ export default function ComplexTestPage() {
       !sessionId ||
       finished ||
       blocked ||
-      saving ||
-      finishing
+      savingQuestionKey
     ) {
       return;
     }
 
     setSelectedTestId(
       testId
+    );
+
+    const firstQuestionId =
+      tests.find(
+        (test) =>
+          test.id ===
+          testId
+      )?.questions[0]?.id ??
+      null;
+
+    setActiveQuestionId(
+      firstQuestionId
     );
 
     try {
@@ -2047,15 +1750,16 @@ export default function ComplexTestPage() {
                 "application/json",
             },
 
-            body: JSON.stringify({
-              sessionId,
+            body:
+              JSON.stringify({
+                sessionId,
 
-              currentTestId:
-                testId,
+                currentTestId:
+                  testId,
 
-              currentQuestion:
-                0,
-            }),
+                currentQuestion:
+                  0,
+              }),
           }
         );
 
@@ -2100,36 +1804,6 @@ export default function ComplexTestPage() {
     }
   }
 
-  /*
-   * ============================================================
-   * ПРОКРУТКА ДО ПИТАННЯ
-   * ============================================================
-   */
-
-  function scrollToQuestion(
-    questionId: number
-  ) {
-    const element =
-      document.getElementById(
-        `question-${questionId}`
-      );
-
-    if (!element) {
-      return;
-    }
-
-    element.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }
-
-  /*
-   * ============================================================
-   * РУЧНЕ ЗАВЕРШЕННЯ
-   * ============================================================
-   */
-
   async function finishTest() {
     if (
       !sessionId ||
@@ -2154,11 +1828,12 @@ export default function ComplexTestPage() {
                 "application/json",
             },
 
-            body: JSON.stringify({
-              sessionId,
+            body:
+              JSON.stringify({
+                sessionId,
 
-              finished: true,
-            }),
+                finished: true,
+              }),
           }
         );
 
@@ -2202,20 +1877,6 @@ export default function ComplexTestPage() {
       );
 
       setTimeLeft(0);
-
-      /*
-       * Після завершення виходимо
-       * з повноекранного режиму.
-       */
-      if (
-        document.fullscreenElement
-      ) {
-        try {
-          await document.exitFullscreen();
-        } catch {
-          // браузер може відмовити
-        }
-      }
     } catch (error) {
       console.error(
         "Finish complex test error:",
@@ -2228,15 +1889,33 @@ export default function ComplexTestPage() {
           : "Не вдалося завершити тест."
       );
     } finally {
-      setFinishing(false);
+      setFinishing(
+        false
+      );
     }
   }
 
-  /*
-   * ============================================================
-   * ПРОГРЕС
-   * ============================================================
-   */
+  function scrollToQuestion(
+    testId: number,
+    questionId: number
+  ) {
+    setActiveQuestionId(
+      questionId
+    );
+
+    const element =
+      document.getElementById(
+        getQuestionElementId(
+          testId,
+          questionId
+        )
+      );
+
+    element?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }
 
   const totalQuestions =
     useMemo(() => {
@@ -2261,7 +1940,7 @@ export default function ComplexTestPage() {
           total +
           test.questions.filter(
             (question) =>
-              hasAnswer(
+              isAnswerProvided(
                 question.savedAnswer
               )
           ).length,
@@ -2269,33 +1948,13 @@ export default function ComplexTestPage() {
       );
     }, [tests]);
 
-  const currentAnswered =
-    useMemo(() => {
-      if (!currentTest) {
-        return 0;
-      }
-
-      return currentTest.questions.filter(
-        (question) =>
-          hasAnswer(
-            question.savedAnswer
-          )
-      ).length;
-    }, [currentTest]);
-
-  /*
-   * ============================================================
-   * LOADING
-   * ============================================================
-   */
-
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100">
+      <main className="min-h-screen bg-slate-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
-          <p className="mt-5 text-lg text-gray-600">
+          <p className="mt-4 text-base text-gray-500">
             Завантаження тесту...
           </p>
         </div>
@@ -2303,26 +1962,20 @@ export default function ComplexTestPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * ПОМИЛКА
-   * ============================================================
-   */
-
   if (
     error &&
     !complexTest
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6">
-        <div className="w-full max-w-xl rounded-2xl border border-red-200 bg-white p-10 text-center shadow-sm">
-          <AlertTriangle className="mx-auto h-12 w-12 text-red-500" />
+      <main className="min-h-screen bg-slate-100 flex items-center justify-center px-6">
+        <div className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-8 text-center">
+          <AlertTriangle className="mx-auto h-10 w-10 text-red-500" />
 
-          <h1 className="mt-5 text-2xl font-bold text-gray-800">
+          <h1 className="mt-4 text-xl font-semibold text-gray-800">
             Не вдалося завантажити тест
           </h1>
 
-          <p className="mt-4 text-red-600">
+          <p className="mt-3 text-red-600">
             {error}
           </p>
 
@@ -2333,7 +1986,7 @@ export default function ComplexTestPage() {
                 "/complex-tests"
               )
             }
-            className="mt-8 rounded-xl bg-[#7A1F2B] px-7 py-3 font-semibold text-white transition hover:opacity-90"
+            className="mt-6 rounded-lg bg-[#7A1F2B] px-6 py-3 font-semibold text-white transition hover:opacity-90"
           >
             Повернутися до тестів
           </button>
@@ -2342,45 +1995,31 @@ export default function ComplexTestPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * ЗАВЕРШЕНО
-   * ============================================================
-   */
-
   if (finished) {
     return (
-      <main className="flex min-h-screen flex-col bg-slate-100">
+      <main className="min-h-screen bg-slate-100 flex flex-col">
         <div className="flex flex-1 items-center justify-center px-6 py-12">
-          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle2 className="h-11 w-11 text-green-600" />
+          <div className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-10 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+              <CheckCircle2 className="h-9 w-9 text-green-600" />
             </div>
 
-            <h1 className="mt-6 text-3xl font-bold text-[#7A1F2B]">
+            <h1 className="mt-5 text-2xl font-semibold text-gray-800">
               Тест завершено
             </h1>
 
-            <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-gray-600">
-              Ваші відповіді
-              збережено.
-              Дякуємо за
-              проходження
-              комбінованого
-              тесту.
+            <p className="mt-3 text-gray-500">
+              Ваші відповіді збережено.
             </p>
 
-            <div className="mt-8 rounded-xl bg-slate-50 p-5">
-              <p className="text-sm text-gray-500">
-                Опрацьовано
-                відповідей
-              </p>
+            <p className="mt-5 text-sm text-gray-400">
+              Опрацьовано відповідей
+            </p>
 
-              <p className="mt-1 text-2xl font-bold text-gray-800">
-                {answeredQuestions} /{" "}
-                {totalQuestions}
-              </p>
-            </div>
+            <p className="mt-1 text-xl font-semibold text-gray-800">
+              {answeredQuestions} /{" "}
+              {totalQuestions}
+            </p>
 
             <button
               type="button"
@@ -2389,20 +2028,18 @@ export default function ComplexTestPage() {
                   "/complex-tests"
                 )
               }
-              className="mt-8 rounded-xl bg-[#7A1F2B] px-8 py-4 text-lg font-semibold text-white shadow-md transition hover:opacity-90"
+              className="mt-7 rounded-lg bg-[#7A1F2B] px-7 py-3 font-semibold text-white transition hover:opacity-90"
             >
-              Повернутися до
-              тестів
+              Повернутися до тестів
             </button>
           </div>
         </div>
 
-        <footer className="border-t border-gray-200 bg-white py-8">
-          <div className="mx-auto max-w-7xl px-8 text-center">
-            <p className="font-medium text-gray-700">
+        <footer className="border-t border-gray-200 bg-white py-6">
+          <div className="mx-auto max-w-7xl px-6 text-center">
+            <p className="text-sm text-gray-500">
               © Хорунжий Андрій
-              Володимирович,
-              2026
+              Володимирович, 2026
             </p>
           </div>
         </footer>
@@ -2410,34 +2047,24 @@ export default function ComplexTestPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * ЗАБЛОКОВАНО
-   * ============================================================
-   */
-
   if (blocked) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6">
-        <div className="w-full max-w-2xl rounded-2xl border border-red-200 bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
-            <LockKeyhole className="h-10 w-10 text-red-600" />
+      <main className="min-h-screen bg-slate-100 flex items-center justify-center px-6">
+        <div className="w-full max-w-xl rounded-xl border border-red-200 bg-white p-10 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+            <LockKeyhole className="h-8 w-8 text-red-600" />
           </div>
 
-          <h1 className="mt-6 text-3xl font-bold text-red-700">
-            Тестування
-            заблоковано
+          <h1 className="mt-5 text-2xl font-semibold text-red-700">
+            Тестування заблоковано
           </h1>
 
-          <p className="mt-4 text-lg text-gray-600">
-            Доступ до
-            проходження тесту
-            тимчасово
-            заблоковано.
+          <p className="mt-3 text-gray-500">
+            Доступ до проходження тесту тимчасово заблоковано.
           </p>
 
           {session?.blockReason && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
+            <div className="mt-5 rounded-lg bg-red-50 p-4 text-sm text-red-700">
               {session.blockReason}
             </div>
           )}
@@ -2446,222 +2073,78 @@ export default function ComplexTestPage() {
     );
   }
 
-  /*
-   * ============================================================
-   * НЕМАЄ ПРЕДМЕТА
-   * ============================================================
-   */
-
   if (!currentTest) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 px-6">
-        <div className="text-center">
-          <p className="text-lg text-gray-600">
-            У тесті немає
-            доступних питань.
-          </p>
-        </div>
+      <main className="min-h-screen bg-slate-100 flex items-center justify-center px-6">
+        <p className="text-base text-gray-500">
+          У тесті немає доступних питань.
+        </p>
       </main>
     );
   }
 
-  /*
-   * ============================================================
-   * ОСНОВНИЙ ІНТЕРФЕЙС
-   * ============================================================
-   */
-
   return (
     <main
-      className="
-        min-h-screen
-        bg-slate-100
-        select-none
-      "
+      className="min-h-screen bg-slate-100 select-none"
+      style={{
+        userSelect: "none",
+        WebkitUserSelect: "none",
+      }}
+      onContextMenu={(event) =>
+        event.preventDefault()
+      }
+      onCopy={(event) =>
+        event.preventDefault()
+      }
+      onCut={(event) =>
+        event.preventDefault()
+      }
+      onPaste={(event) =>
+        event.preventDefault()
+      }
+      onDragStart={(event) =>
+        event.preventDefault()
+      }
     >
-      {/* ======================================================
-          ЗАХИСНИЙ FULLSCREEN OVERLAY
-          ====================================================== */}
-
-      {!securityReady &&
-        !finished &&
-        !blocked && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-100 px-6">
-            <div className="w-full max-w-2xl rounded-3xl border border-gray-200 bg-white p-8 text-center shadow-2xl md:p-12">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#7A1F2B]">
-                <LockKeyhole className="h-10 w-10 text-white" />
-              </div>
-
-              <h1 className="mt-7 text-2xl font-bold text-gray-800 md:text-3xl">
-                Захищене тестування
-              </h1>
-
-              <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-gray-600 md:text-lg">
-                Для проходження
-                тесту необхідно
-                перейти у
-                повноекранний режим.
-              </p>
-
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-left">
-                <p className="font-semibold text-amber-800">
-                  Під час тестування
-                  заборонено:
-                </p>
-
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm leading-6 text-amber-800">
-                  <li>
-                    копіювати або
-                    виділяти текст;
-                  </li>
-                  <li>
-                    використовувати
-                    контекстне меню;
-                  </li>
-                  <li>
-                    відкривати
-                    інструменти
-                    розробника;
-                  </li>
-                  <li>
-                    друкувати або
-                    зберігати
-                    сторінку;
-                  </li>
-                  <li>
-                    переходити на
-                    інші вкладки;
-                  </li>
-                  <li>
-                    виходити з
-                    повноекранного
-                    режиму.
-                  </li>
-                </ul>
-              </div>
-
-              {securityWarning && (
-                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {securityWarning}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={
-                  enterFullscreen
-                }
-                className="mt-7 w-full rounded-xl bg-[#7A1F2B] px-7 py-4 text-lg font-bold text-white shadow-lg transition hover:bg-[#641923]"
-              >
-                Перейти у
-                повноекранний режим
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* ======================================================
-          ПОВЕРНЕННЯ У FULLSCREEN
-          ====================================================== */}
-
-      {securityReady &&
-        !fullscreenActive &&
-        !finished &&
-        !blocked && (
-          <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 px-6">
-            <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-                <AlertTriangle className="h-8 w-8 text-red-600" />
-              </div>
-
-              <h2 className="mt-5 text-2xl font-bold text-gray-800">
-                Повноекранний режим
-                вимкнено
-              </h2>
-
-              <p className="mt-4 leading-7 text-gray-600">
-                Для продовження
-                тестування необхідно
-                повернутися у
-                повноекранний режим.
-              </p>
-
-              {securityWarningCount >
-                0 && (
-                <p className="mt-4 text-sm font-semibold text-red-600">
-                  Зафіксовано порушень
-                  фокусу:
-                  {" "}
-                  {securityWarningCount}
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={
-                  enterFullscreen
-                }
-                className="mt-7 w-full rounded-xl bg-[#7A1F2B] px-6 py-4 font-bold text-white transition hover:opacity-90"
-              >
-                Повернутися до
-                повноекранного режиму
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* ======================================================
-          HEADER
-          ====================================================== */}
-
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white shadow-sm">
-        <div className="px-4 py-3 md:px-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+        <div className="mx-auto max-w-[1600px] px-4 py-3 md:px-6">
+          <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7A1F2B]">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
                 {complexTest?.examType}
               </p>
 
-              <h1 className="truncate text-lg font-bold text-gray-800 md:text-xl">
+              <h1 className="truncate text-lg font-semibold text-gray-800 md:text-xl">
                 {complexTest?.title}
               </h1>
             </div>
 
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="flex shrink-0 items-center gap-2">
               <div
-                className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
                   timeLeft <= 300
-                    ? "border-red-300 bg-red-50 text-red-700"
-                    : "border-gray-200 bg-slate-50 text-gray-800"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-gray-200 bg-white text-gray-700"
                 }`}
               >
-                <Clock3 className="h-5 w-5" />
+                <Clock3 className="h-4 w-4" />
 
-                <div>
-                  <p className="text-xs text-gray-500">
-                    Залишилося
-                    часу
-                  </p>
-
-                  <p className="font-mono text-xl font-bold leading-none">
-                    {formatTime(
-                      timeLeft
-                    )}
-                  </p>
-                </div>
+                <span className="font-mono text-base font-semibold">
+                  {formatTime(
+                    timeLeft
+                  )}
+                </span>
               </div>
 
               <button
                 type="button"
-                disabled={
-                  finishing
-                }
+                disabled={finishing}
                 onClick={() =>
                   setFinishModal(
                     true
                   )
                 }
-                className="rounded-xl bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-[#7A1F2B] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {finishing
                   ? "Завершення..."
@@ -2672,715 +2155,476 @@ export default function ComplexTestPage() {
         </div>
       </header>
 
-      {/* ======================================================
-          ПОВНОШИРИННА НАВІГАЦІЯ ПРЕДМЕТІВ
-          ====================================================== */}
+      <div className="w-full border-b border-gray-200 bg-white">
+        <div className="w-full overflow-x-auto">
+          <div className="flex w-full min-w-max">
+            {tests.map(
+              (
+                test,
+                index
+              ) => {
+                const isActive =
+                  test.id ===
+                  currentTest.id;
 
-      <nav className="sticky top-[76px] z-40 w-full border-b border-gray-300 bg-white shadow-sm">
-        <div className="flex w-full overflow-x-auto">
-          {tests.map(
-            (
-              test,
-              index
-            ) => {
-              const isActive =
-                test.id ===
-                currentTest.id;
+                const answered =
+                  test.questions.filter(
+                    (
+                      question
+                    ) =>
+                      isAnswerProvided(
+                        question.savedAnswer
+                      )
+                  ).length;
 
-              const answered =
-                test.questions.filter(
-                  (
-                    question
-                  ) =>
-                    hasAnswer(
-                      question.savedAnswer
-                    )
-                ).length;
-
-              const allAnswered =
-                test.questions.length >
-                  0 &&
-                answered ===
-                  test.questions.length;
-
-              return (
-                <button
-                  key={
-                    test.id
-                  }
-                  type="button"
-                  onClick={() =>
-                    selectTest(
+                return (
+                  <button
+                    key={
                       test.id
-                    )
-                  }
-                  disabled={
-                    saving ||
-                    finishing
-                  }
-                  className={`
-                    relative
-                    min-w-[180px]
-                    flex-1
-                    border-r
-                    border-gray-200
-                    px-5
-                    py-4
-                    text-center
-                    transition
-                    md:min-w-0
-                    ${
-                      isActive
-                        ? "bg-[#7A1F2B] text-white"
-                        : "bg-white text-gray-700 hover:bg-slate-50"
                     }
-                    disabled:cursor-not-allowed
-                    disabled:opacity-70
-                  `}
-                >
-                  <div className="flex items-center justify-center gap-3">
-                    <span
-                      className={`
-                        flex
-                        h-8
-                        w-8
-                        shrink-0
-                        items-center
-                        justify-center
-                        rounded-full
-                        text-sm
-                        font-bold
-                        ${
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : allAnswered
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gray-100 text-gray-600"
-                        }
-                      `}
-                    >
-                      {allAnswered ? (
-                        <CheckCircle2 className="h-5 w-5" />
-                      ) : (
-                        index + 1
-                      )}
-                    </span>
-
-                    <div className="min-w-0 text-left">
-                      <p className="truncate font-bold">
+                    type="button"
+                    onClick={() =>
+                      selectTest(
+                        test.id
+                      )
+                    }
+                    disabled={
+                      Boolean(
+                        savingQuestionKey
+                      ) ||
+                      finishing
+                    }
+                    className={`flex min-w-[190px] flex-1 items-center justify-center border-r border-gray-200 px-5 py-3 text-center transition last:border-r-0 ${
+                      isActive
+                        ? "bg-gray-100 text-gray-800"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold">
                         {test.subject}
                       </p>
 
-                      <p
-                        className={`mt-0.5 text-xs ${
-                          isActive
-                            ? "text-white/75"
-                            : "text-gray-500"
-                        }`}
-                      >
+                      <p className="mt-0.5 text-xs text-gray-400">
                         {answered} /{" "}
                         {
                           test.questions
                             .length
-                        }{" "}
-                        виконано
+                        }
                       </p>
                     </div>
-                  </div>
-
-                  {isActive && (
-                    <span className="absolute inset-x-0 bottom-0 h-1 bg-white" />
-                  )}
-                </button>
-              );
-            }
-          )}
-        </div>
-      </nav>
-
-      {/* ======================================================
-          ОСНОВНА РОЗМІТКА:
-          КОНТЕНТ + ПРАВА НАВІГАЦІЯ
-          ====================================================== */}
-
-      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-1 gap-6 px-4 py-6 md:px-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:px-8">
-        {/* ====================================================
-            ЛІВА ЧАСТИНА
-            ==================================================== */}
-
-        <section className="min-w-0">
-          {/* ==================================================
-              ЗАГОЛОВОК ПРЕДМЕТА
-              ================================================== */}
-
-          <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
-            <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#7A1F2B]">
-                  Предмет
-                </p>
-
-                <h2 className="mt-2 text-3xl font-bold text-gray-800">
-                  {
-                    currentTest.subject
-                  }
-                </h2>
-
-                <p className="mt-2 text-gray-600">
-                  {
-                    currentTest.title
-                  }
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-slate-50 px-5 py-4 text-center">
-                <p className="text-xs text-gray-500">
-                  Виконано
-                </p>
-
-                <p className="mt-1 text-2xl font-bold text-[#7A1F2B]">
-                  {currentAnswered}{" "}
-                  /{" "}
-                  {
-                    currentTest
-                      .questions
-                      .length
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ==================================================
-              ПОМИЛКА
-              ================================================== */}
-
-          {error && (
-            <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-
-              <div className="flex-1 text-sm">
-                {error}
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setError("")
-                }
-                className="font-bold text-red-500 hover:text-red-700"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          {/* ==================================================
-              ПИТАННЯ
-              ================================================== */}
-
-          <div className="space-y-5">
-            {currentTest.questions.map(
-              (
-                question,
-                questionIndex
-              ) => {
-                const answer =
-                  question.savedAnswer;
-
-                const isMultiple =
-                  question.type ===
-                    "multiple" ||
-                  question.type ===
-                    "multiple_choice" ||
-                  question.type ===
-                    "MULTIPLE_CHOICE" ||
-                  question.type ===
-                    "MULTIPLE";
-
-                const answered =
-                  hasAnswer(
-                    answer
-                  );
-
-                return (
-                  <section
-                    key={
-                      question.id
-                    }
-                    id={`question-${question.id}`}
-                    className="
-                      scroll-mt-40
-                      rounded-2xl
-                      border
-                      border-gray-200
-                      bg-white
-                      shadow-sm
-                    "
-                  >
-                    <div className="p-6 md:p-8">
-                      {/* ================================
-                          НОМЕР ЗАВДАННЯ
-                          ================================ */}
-
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-4">
-                          <div
-                            className={`
-                              flex
-                              h-11
-                              w-11
-                              shrink-0
-                              items-center
-                              justify-center
-                              rounded-full
-                              text-sm
-                              font-bold
-                              ${
-                                answered
-                                  ? "bg-[#7A1F2B] text-white"
-                                  : "bg-gray-100 text-gray-600"
-                              }
-                            `}
-                          >
-                            {
-                              questionIndex +
-                              1
-                            }
-                          </div>
-
-                          <div>
-                            <p className="text-sm font-semibold text-gray-500">
-                              Завдання{" "}
-                              {
-                                questionIndex +
-                                1
-                              }
-                            </p>
-
-                            <p className="mt-1 text-xs text-gray-400">
-                              {
-                                question.points
-                              }{" "}
-                              {question.points ===
-                              1
-                                ? "бал"
-                                : question.points >=
-                                      2 &&
-                                    question.points <=
-                                      4
-                                  ? "бали"
-                                  : "балів"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {answered && (
-                          <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" />
-                        )}
-                      </div>
-
-                      {/* ================================
-                          ТЕКСТ ЗАВДАННЯ
-                          ================================ */}
-
-                      <div className="mt-7">
-                        <QuestionText
-                          text={
-                            question.text
-                          }
-                        />
-                      </div>
-
-                      {/* ================================
-                          ВІДПОВІДІ
-                          ================================ */}
-
-                      <div className="mt-7 space-y-3">
-                        {question.answerOptions.map(
-                          (
-                            option,
-                            optionIndex
-                          ) => {
-                            const selected =
-                              isOptionSelected(
-                                answer,
-                                option.id
-                              );
-
-                            return (
-                              <button
-                                key={
-                                  option.id
-                                }
-                                type="button"
-                                disabled={
-                                  saving ||
-                                  finishing ||
-                                  finished ||
-                                  blocked
-                                }
-                                onClick={() => {
-                                  if (
-                                    isMultiple
-                                  ) {
-                                    selectMultipleAnswer(
-                                      currentTest.id,
-                                      question.id,
-                                      answer,
-                                      option.id
-                                    );
-                                  } else {
-                                    selectSingleAnswer(
-                                      currentTest.id,
-                                      question.id,
-                                      option.id
-                                    );
-                                  }
-                                }}
-                                className={`
-                                  group
-                                  flex
-                                  w-full
-                                  items-start
-                                  gap-4
-                                  rounded-xl
-                                  border
-                                  p-4
-                                  text-left
-                                  transition
-                                  ${
-                                    selected
-                                      ? "border-[#7A1F2B] bg-[#7A1F2B]/5 shadow-sm"
-                                      : "border-gray-200 bg-white hover:border-[#7A1F2B]/40 hover:bg-slate-50"
-                                  }
-                                  disabled:cursor-not-allowed
-                                  disabled:opacity-70
-                                `}
-                              >
-                                <span
-                                  className={`
-                                    flex
-                                    h-9
-                                    w-9
-                                    shrink-0
-                                    items-center
-                                    justify-center
-                                    text-sm
-                                    font-bold
-                                    ${
-                                      isMultiple
-                                        ? "rounded-lg"
-                                        : "rounded-full"
-                                    }
-                                    ${
-                                      selected
-                                        ? "bg-[#7A1F2B] text-white"
-                                        : "bg-gray-100 text-gray-600 group-hover:bg-[#7A1F2B]/10 group-hover:text-[#7A1F2B]"
-                                    }
-                                  `}
-                                >
-                                  {String.fromCharCode(
-                                    65 +
-                                      optionIndex
-                                  )}
-                                </span>
-
-                                <span
-                                  className={`
-                                    pt-1
-                                    text-base
-                                    leading-7
-                                    ${
-                                      selected
-                                        ? "font-semibold text-gray-800"
-                                        : "text-gray-700"
-                                    }
-                                  `}
-                                >
-                                  <QuestionText
-                                    text={
-                                      option.text
-                                    }
-                                  />
-                                </span>
-                              </button>
-                            );
-                          }
-                        )}
-                      </div>
-
-                      {/* ================================
-                          СТАТУС ЗБЕРЕЖЕННЯ
-                          ================================ */}
-
-                      <div className="mt-5 flex justify-end">
-                        <span className="text-xs text-gray-400">
-                          {saving
-                            ? "Збереження..."
-                            : answered
-                              ? "Відповідь збережено"
-                              : "Відповідь не обрана"}
-                        </span>
-                      </div>
-                    </div>
-                  </section>
+                  </button>
                 );
               }
             )}
           </div>
+        </div>
+      </div>
 
-          {/* ==================================================
-              ПРОГРЕС
-              ================================================== */}
+      <div className="mx-auto max-w-[1600px] px-4 py-6 md:px-6 md:py-8">
+        {error && (
+          <div className="mb-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
 
-          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-gray-500">
-                  Загальний прогрес
-                </p>
-
-                <p className="mt-1 text-2xl font-bold text-gray-800">
-                  {answeredQuestions}{" "}
-                  /{" "}
-                  {totalQuestions}
-                </p>
-              </div>
-
-              <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100 sm:max-w-md">
-                <div
-                  className="h-full rounded-full bg-[#7A1F2B] transition-all"
-                  style={{
-                    width:
-                      totalQuestions >
-                      0
-                        ? `${Math.round(
-                            (answeredQuestions /
-                              totalQuestions) *
-                              100
-                          )}%`
-                        : "0%",
-                  }}
-                />
-              </div>
+            <div className="flex-1">
+              {error}
             </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setError("")
+              }
+              className="font-semibold text-red-500 hover:text-red-700"
+            >
+              ×
+            </button>
           </div>
-        </section>
+        )}
 
-        {/* ====================================================
-            ПРАВА НАВІГАЦІЙНА ПАНЕЛЬ
-            ==================================================== */}
-
-        <aside className="hidden lg:block">
-          <div className="sticky top-[140px] rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="border-b border-gray-200 pb-4">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#7A1F2B]">
-                Навігація
-              </p>
-
-              <h3 className="mt-1 text-lg font-bold text-gray-800">
-                {
-                  currentTest.subject
-                }
-              </h3>
-
-              <p className="mt-1 text-sm text-gray-500">
-                {currentAnswered} з{" "}
-                {
-                  currentTest
-                    .questions
-                    .length
-                }{" "}
-                завдань виконано
-              </p>
-            </div>
-
-            {/* ============================================
-                НОМЕРИ ЗАВДАНЬ
-                ============================================ */}
-
-            <div className="mt-5 grid grid-cols-5 gap-2">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="order-2 min-w-0 lg:order-1">
+            <div className="space-y-4">
               {currentTest.questions.map(
                 (
                   question,
-                  index
+                  questionIndex
                 ) => {
-                  const answered =
-                    hasAnswer(
-                      question.savedAnswer
+                  const answer =
+                    question.savedAnswer;
+
+                  const savedAnswer =
+                    getSavedAnswer(
+                      session?.savedAnswers,
+                      currentTest.id,
+                      question.id
                     );
 
+                  const hasAnswer =
+                    isAnswerProvided(
+                      answer
+                    );
+
+                  const isSaved =
+                    answersEqual(
+                      answer,
+                      savedAnswer
+                    );
+
+                  const isMultiple =
+                    question.type ===
+                      "multiple" ||
+                    question.type ===
+                      "multiple_choice" ||
+                    question.type ===
+                      "MULTIPLE_CHOICE" ||
+                    question.type ===
+                      "MULTIPLE";
+
+                  const questionKey =
+                    `${currentTest.id}-${question.id}`;
+
+                  const isSaving =
+                    savingQuestionKey ===
+                    questionKey;
+
                   return (
-                    <button
+                    <section
                       key={
                         question.id
                       }
-                      type="button"
-                      onClick={() =>
-                        scrollToQuestion(
-                          question.id
-                        )
-                      }
-                      className={`
-                        flex
-                        h-11
-                        w-full
-                        items-center
-                        justify-center
-                        rounded-lg
-                        border
-                        text-sm
-                        font-bold
-                        transition
-                        ${
-                          answered
-                            ? "border-[#7A1F2B] bg-[#7A1F2B] text-white hover:bg-[#641923]"
-                            : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#7A1F2B]/40 hover:bg-[#7A1F2B]/5 hover:text-[#7A1F2B]"
-                        }
-                      `}
+                      id={getQuestionElementId(
+                        currentTest.id,
+                        question.id
+                      )}
+                      className="scroll-mt-28 rounded-xl border border-gray-200 bg-white"
                     >
-                      {index + 1}
-                    </button>
+                      <div className="p-5 md:p-7">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
+                              {
+                                questionIndex +
+                                1
+                              }
+                            </div>
+
+                            <div className="pt-0.5">
+                              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                                Завдання
+                              </p>
+
+                              <p className="mt-0.5 text-xs text-gray-400">
+                                {
+                                  question.points
+                                }{" "}
+                                {question.points ===
+                                1
+                                  ? "бал"
+                                  : question.points >=
+                                      2 &&
+                                    question.points <=
+                                      4
+                                    ? "бали"
+                                    : "балів"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isSaved && (
+                            <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                          )}
+                        </div>
+
+                        <RichText
+                          html={
+                            question.text
+                          }
+                          className="mt-6 text-base leading-7 text-gray-800 md:text-lg"
+                        />
+
+                        <div className="mt-6 space-y-2">
+                          {question.answerOptions.map(
+                            (
+                              option,
+                              optionIndex
+                            ) => {
+                              const selected =
+                                isOptionSelected(
+                                  answer,
+                                  option.id
+                                );
+
+                              const ukrainianLetters =
+                                [
+                                  "А",
+                                  "Б",
+                                  "В",
+                                  "Г",
+                                  "Ґ",
+                                  "Д",
+                                  "Е",
+                                  "Є",
+                                  "Ж",
+                                  "З",
+                                  "И",
+                                  "І",
+                                  "Ї",
+                                  "Й",
+                                  "К",
+                                  "Л",
+                                  "М",
+                                  "Н",
+                                  "О",
+                                  "П",
+                                ];
+
+                              const optionLetter =
+                                ukrainianLetters[
+                                  optionIndex
+                                ] ??
+                                String.fromCharCode(
+                                  1040 +
+                                    optionIndex
+                                );
+
+                              return (
+                                <button
+                                  key={
+                                    option.id
+                                  }
+                                  type="button"
+                                  disabled={
+                                    finishing ||
+                                    finished ||
+                                    blocked
+                                  }
+                                  onClick={() => {
+                                    if (
+                                      isMultiple
+                                    ) {
+                                      selectMultipleAnswer(
+                                        currentTest.id,
+                                        question.id,
+                                        answer,
+                                        option.id
+                                      );
+                                    } else {
+                                      selectSingleAnswer(
+                                        currentTest.id,
+                                        question.id,
+                                        option.id
+                                      );
+                                    }
+                                  }}
+                                  className={`flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition ${
+                                    selected
+                                      ? "border-gray-400 bg-gray-100"
+                                      : "border-gray-200 bg-white hover:bg-gray-50"
+                                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                                >
+                                  <span
+                                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold ${
+                                      selected
+                                        ? "bg-gray-700 text-white"
+                                        : "bg-gray-100 text-gray-500"
+                                    }`}
+                                  >
+                                    {
+                                      optionLetter
+                                    }
+                                  </span>
+
+                                  <RichText
+                                    html={
+                                      option.text
+                                    }
+                                    className={`pt-0.5 text-sm leading-6 md:text-base ${
+                                      selected
+                                        ? "font-medium text-gray-800"
+                                        : "text-gray-700"
+                                    }`}
+                                  />
+                                </button>
+                              );
+                            }
+                          )}
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-between gap-4 border-t border-gray-100 pt-4">
+                          <div className="text-xs text-gray-400">
+                            {!hasAnswer
+                              ? "Відповідь не обрана"
+                              : isSaved
+                                ? "Відповідь збережено"
+                                : "Відповідь ще не збережено"}
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={
+                              !hasAnswer ||
+                              isSaved ||
+                              isSaving ||
+                              Boolean(
+                                savingQuestionKey
+                              ) &&
+                                !isSaving ||
+                              finishing ||
+                              finished ||
+                              blocked
+                            }
+                            onClick={() =>
+                              void saveAnswer(
+                                currentTest.id,
+                                question.id,
+                                answer
+                              )
+                            }
+                            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                              isSaved
+                                ? "border border-gray-200 bg-gray-50 text-gray-400"
+                                : "bg-[#7A1F2B] text-white hover:opacity-90"
+                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                          >
+                            {isSaving
+                              ? "Збереження..."
+                              : isSaved
+                                ? "Відповідь збережено"
+                                : "Зберегти відповідь"}
+                          </button>
+                        </div>
+                      </div>
+                    </section>
                   );
                 }
               )}
             </div>
-
-            {/* ============================================
-                ЛЕГЕНДА
-                ============================================ */}
-
-            <div className="mt-6 space-y-2 border-t border-gray-200 pt-5">
-              <div className="flex items-center gap-3">
-                <span className="h-4 w-4 rounded bg-[#7A1F2B]" />
-
-                <span className="text-xs text-gray-600">
-                  Відповідь збережено
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="h-4 w-4 rounded border border-gray-300 bg-gray-50" />
-
-                <span className="text-xs text-gray-600">
-                  Відповідь не обрана
-                </span>
-              </div>
-            </div>
-
-            {/* ============================================
-                ЗАГАЛЬНИЙ ПРОГРЕС
-                ============================================ */}
-
-            <div className="mt-5 rounded-xl bg-slate-50 p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">
-                  Усього
-                </span>
-
-                <span className="font-bold text-gray-800">
-                  {answeredQuestions} /{" "}
-                  {totalQuestions}
-                </span>
-              </div>
-
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full rounded-full bg-[#7A1F2B] transition-all"
-                  style={{
-                    width:
-                      totalQuestions >
-                      0
-                        ? `${Math.round(
-                            (answeredQuestions /
-                              totalQuestions) *
-                              100
-                          )}%`
-                        : "0%",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* ============================================
-                ЗАХИСТ
-                ============================================ */}
-
-            <div className="mt-5 rounded-xl border border-gray-200 bg-white p-4">
-              <div className="flex items-center gap-2">
-                <LockKeyhole className="h-4 w-4 text-[#7A1F2B]" />
-
-                <p className="text-xs font-bold text-gray-700">
-                  Захищене тестування
-                </p>
-              </div>
-
-              <p className="mt-2 text-xs leading-5 text-gray-500">
-                Повноекранний режим
-                активний.
-                Копіювання та
-                контекстне меню
-                заблоковані.
-              </p>
-            </div>
           </div>
-        </aside>
+
+          <aside className="order-1 lg:order-2 lg:sticky lg:top-24">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="grid grid-cols-5 gap-2">
+                {currentTest.questions.map(
+                  (
+                    question,
+                    questionIndex
+                  ) => {
+                    const answered =
+                      isAnswerProvided(
+                        question.savedAnswer
+                      );
+
+                    const active =
+                      activeQuestionId ===
+                      question.id;
+
+                    return (
+                      <button
+                        key={
+                          question.id
+                        }
+                        type="button"
+                        onClick={() =>
+                          scrollToQuestion(
+                            currentTest.id,
+                            question.id
+                          )
+                        }
+                        className={`relative flex h-9 w-full items-center justify-center rounded-md border text-sm font-medium transition ${
+                          active
+                            ? "border-gray-500 bg-gray-200 text-gray-800"
+                            : answered
+                              ? "border-gray-300 bg-gray-100 text-gray-700"
+                              : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        {
+                          questionIndex +
+                          1
+                        }
+
+                        {answered && (
+                          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-green-500" />
+                        )}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
 
-      {/* ======================================================
-          FOOTER
-          ====================================================== */}
-
-      <footer className="border-t border-gray-200 bg-white py-8">
-        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 px-8 text-center">
-          <p className="font-medium text-gray-700">
+      <footer className="border-t border-gray-200 bg-white py-6">
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-2 px-6 text-center">
+          <p className="text-sm font-medium text-gray-500">
             © Хорунжий Андрій
-            Володимирович,
-            2026
+            Володимирович, 2026
           </p>
 
-          <span className="text-sm text-gray-500">
-            Захищене тестування
-          </span>
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <Brain className="h-4 w-4 text-[#7A1F2B]" />
+
+            <span>
+              Створено за підтримки технологій штучного інтелекту
+            </span>
+          </div>
         </div>
       </footer>
 
-      {/* ======================================================
-          МОДАЛЬНЕ ВІКНО ЗАВЕРШЕННЯ
-          ====================================================== */}
+      {!securityReady &&
+        sessionLoaded &&
+        !finished &&
+        !blocked && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/70 px-5">
+            <div className="w-full max-w-md rounded-xl bg-white p-7 text-center shadow-2xl">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
+                <ShieldCheck className="h-7 w-7 text-gray-700" />
+              </div>
+
+              <h2 className="mt-5 text-xl font-semibold text-gray-800">
+                Захищений режим тестування
+              </h2>
+
+              <p className="mt-3 text-sm leading-6 text-gray-500">
+                Для продовження роботи потрібно увійти в повноекранний режим. Під час тестування заборонено копіювання, контекстне меню та частину системних комбінацій клавіш.
+              </p>
+
+              {securityWarning && (
+                <div className="mt-4 rounded-lg bg-gray-100 px-4 py-3 text-sm text-gray-600">
+                  {securityWarning}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  void requestFullscreen()
+                }
+                className="mt-6 inline-flex items-center justify-center gap-2 rounded-lg bg-[#7A1F2B] px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                <Maximize2 className="h-4 w-4" />
+
+                Увійти в повноекранний режим
+              </button>
+            </div>
+          </div>
+        )}
 
       {finishModal && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-6">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-7 shadow-2xl">
-            <h2 className="text-2xl font-bold text-gray-800">
-              Завершити
-              тестування?
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-5">
+          <div className="w-full max-w-md rounded-xl bg-white p-7 shadow-2xl">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Завершити тестування?
             </h2>
 
-            <p className="mt-4 leading-relaxed text-gray-600">
-              Після завершення
-              тесту змінити
-              або додати
-              відповіді буде
-              неможливо.
+            <p className="mt-3 text-sm leading-6 text-gray-500">
+              Після завершення тесту змінити або додати відповіді буде неможливо.
             </p>
 
-            <div className="mt-4 rounded-xl bg-slate-50 p-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">
-                  Опрацьовано
-                </span>
-
-                <span className="font-bold text-gray-800">
-                  {answeredQuestions}{" "}
-                  /{" "}
-                  {totalQuestions}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() =>
@@ -3391,10 +2635,9 @@ export default function ComplexTestPage() {
                 disabled={
                   finishing
                 }
-                className="rounded-xl border border-gray-300 bg-white px-6 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+                className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
               >
-                Продовжити
-                тест
+                Продовжити тест
               </button>
 
               <button
@@ -3405,7 +2648,7 @@ export default function ComplexTestPage() {
                 disabled={
                   finishing
                 }
-                className="rounded-xl bg-[#7A1F2B] px-6 py-3 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-[#7A1F2B] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {finishing
                   ? "Завершення..."
@@ -3415,84 +2658,6 @@ export default function ComplexTestPage() {
           </div>
         </div>
       )}
-
-      {/* ======================================================
-          ПОПЕРЕДЖЕННЯ БЕЗПЕКИ
-          ====================================================== */}
-
-      {securityWarning &&
-        securityReady &&
-        fullscreenActive &&
-        !finished &&
-        !blocked && (
-          <div className="fixed bottom-6 left-1/2 z-[80] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2">
-            <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-2xl">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-
-              <div className="flex-1">
-                <p className="font-semibold text-amber-800">
-                  Попередження
-                </p>
-
-                <p className="mt-1 text-sm leading-6 text-amber-700">
-                  {
-                    securityWarning
-                  }
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setSecurityWarning(
-                    ""
-                  )
-                }
-                className="font-bold text-amber-600 hover:text-amber-800"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
-      {/* ======================================================
-          СТАН ПРИ ПРИХОВУВАННІ ВКЛАДКИ
-          ====================================================== */}
-
-      {tabHidden &&
-        !finished &&
-        !blocked && (
-          <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-6">
-            <div className="w-full max-w-xl rounded-2xl bg-white p-8 text-center shadow-2xl">
-              <AlertTriangle className="mx-auto h-12 w-12 text-red-600" />
-
-              <h2 className="mt-5 text-2xl font-bold text-gray-800">
-                Поверніться до тестування
-              </h2>
-
-              <p className="mt-4 leading-7 text-gray-600">
-                Було зафіксовано
-                вихід зі сторінки
-                тестування.
-              </p>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setTabHidden(
-                    false
-                  );
-
-                  void enterFullscreen();
-                }}
-                className="mt-7 rounded-xl bg-[#7A1F2B] px-7 py-3 font-bold text-white transition hover:opacity-90"
-              >
-                Повернутися до тесту
-              </button>
-            </div>
-          </div>
-        )}
     </main>
   );
 }

@@ -249,21 +249,7 @@ export async function GET(
 
     /*
      * ========================================================
-     * ПІДГОТОВКА COMPLЕX TEST
-     *
-     * ВАЖЛИВО:
-     *
-     * complexTest буде повернений
-     * НА ВЕРХНЬОМУ РІВНІ response.
-     *
-     * Тобто клієнт отримає:
-     *
-     * {
-     *   success: true,
-     *   session: {...},
-     *   complexTest: {...}
-     * }
-     *
+     * ПІДГОТОВКА COMPLEX TEST
      * ========================================================
      */
 
@@ -364,10 +350,6 @@ export async function GET(
     /*
      * ========================================================
      * ПІДГОТОВКА SESSION
-     *
-     * Тут complexTest НЕ буде.
-     *
-     * Він повертається окремо.
      * ========================================================
      */
 
@@ -442,15 +424,6 @@ export async function GET(
     /*
      * ========================================================
      * ВІДПОВІДЬ
-     *
-     * СТРУКТУРА:
-     *
-     * {
-     *   success,
-     *   session,
-     *   complexTest
-     * }
-     *
      * ========================================================
      */
 
@@ -499,7 +472,8 @@ export async function GET(
  * 2. збереження currentTestId;
  * 3. збереження currentQuestion;
  * 4. збереження savedAnswers;
- * 5. завершення сесії.
+ * 5. звичайного завершення;
+ * 6. завершення через порушення правил.
  *
  * УЧАСНИК НЕ МОЖЕ НАПРЯМУ ЗМІНЮВАТИ:
  *
@@ -510,15 +484,16 @@ export async function GET(
  * - blockedAt;
  * - startedAt.
  *
- * ЄДИНИЙ виняток:
+ * ЄДИНИЙ штатний виняток:
  *
  * finished = true
  *
- * Під час завершення сервер сам встановлює:
+ * Під час звичайного завершення сервер сам встановлює:
  *
  * finished = true
  * finishedAt = now
  * timeLeft = 0
+ *
  * ============================================================
  */
 
@@ -604,6 +579,7 @@ export async function POST(
       currentQuestion,
       savedAnswers,
       finished,
+      finishReason,
     } = body as {
       sessionId?: unknown;
       heartbeat?: unknown;
@@ -614,6 +590,8 @@ export async function POST(
       savedAnswers?: unknown;
 
       finished?: unknown;
+
+      finishReason?: unknown;
     };
 
     /*
@@ -642,6 +620,33 @@ export async function POST(
         }
       );
     }
+
+    /*
+     * ========================================================
+     * FINISH REASON
+     * ========================================================
+     *
+     * Дозволені значення:
+     *
+     * undefined
+     * "manual"
+     * "timeout"
+     * "security"
+     *
+     * Для сумісності зі старими запитами
+     * відсутність finishReason означає
+     * звичайне завершення.
+     * ========================================================
+     */
+
+    const normalizedFinishReason =
+      finishReason === "security"
+        ? "security"
+        : finishReason === "timeout"
+        ? "timeout"
+        : finishReason === "manual"
+        ? "manual"
+        : null;
 
     /*
      * ========================================================
@@ -777,6 +782,13 @@ export async function POST(
     /*
      * ========================================================
      * ЗАБЛОКОВАНА СЕСІЯ
+     *
+     * ВАЖЛИВО:
+     *
+     * Перевірка стоїть ПІСЛЯ finished.
+     *
+     * Тому вже завершену через security сесію
+     * можна нормально отримати.
      * ========================================================
      */
 
@@ -879,9 +891,204 @@ export async function POST(
 
     /*
      * ========================================================
+     * SECURITY FINISH
+     *
+     * Це спеціальний серверний сценарій.
+     *
+     * Якщо друге порушення зафіксовано
+     * FullscreenGuard або VisibilityGuard,
+     * клієнт передає:
+     *
+     * finished: true
+     * finishReason: "security"
+     *
+     * Сервер сам встановлює:
+     *
+     * finished = true
+     * finishedAt = now
+     * timeLeft = 0
+     * blocked = true
+     * blockReason = "Порушення правил тестування"
+     * blockedAt = now
+     *
+     * Відповіді користувача при цьому
+     * зберігаються такими, якими вони були
+     * на момент порушення.
+     *
+     * ========================================================
+     */
+
+    if (
+      finished === true &&
+      normalizedFinishReason ===
+        "security"
+    ) {
+      const now =
+        new Date();
+
+      const securitySavedAnswers =
+        savedAnswers !==
+        undefined
+          ? savedAnswers === null
+            ? Prisma.JsonNull
+            : (savedAnswers as Prisma.InputJsonValue)
+          : undefined;
+
+      const updated =
+        await prisma.complexTestSession.update({
+          where: {
+            id: session.id,
+          },
+
+          data: {
+            ...(securitySavedAnswers !==
+            undefined
+              ? {
+                  savedAnswers:
+                    securitySavedAnswers,
+                }
+              : {}),
+
+            ...(typeof currentTestId ===
+                "number" &&
+              Number.isInteger(
+                currentTestId
+              ) &&
+              currentTestId > 0
+              ? {
+                  currentTestId:
+                    currentTestId,
+                }
+              : {}),
+
+            ...(typeof currentQuestion ===
+                "number" &&
+              Number.isInteger(
+                currentQuestion
+              ) &&
+              currentQuestion >= 0
+              ? {
+                  currentQuestion:
+                    currentQuestion,
+                }
+              : {}),
+
+            finished: true,
+
+            finishedAt:
+              session.finishedAt ??
+              now,
+
+            timeLeft: 0,
+
+            blocked: true,
+
+            blockReason:
+              "Порушення правил тестування",
+
+            blockedAt:
+              session.blockedAt ??
+              now,
+
+            lastActivityAt:
+              now,
+          },
+
+          select: {
+            id: true,
+            complexTestId: true,
+
+            currentTestId: true,
+            currentQuestion: true,
+
+            savedAnswers: true,
+
+            timeLeft: true,
+            extraTime: true,
+
+            finished: true,
+            finishedAt: true,
+
+            blocked: true,
+            blockReason: true,
+            blockedAt: true,
+
+            startedAt: true,
+            lastActivityAt: true,
+          },
+        });
+
+      return NextResponse.json(
+        {
+          success: true,
+
+          securityViolation: true,
+
+          message:
+            "Тестування автоматично завершено через повторне порушення правил.",
+
+          session: {
+            id:
+              updated.id,
+
+            complexTestId:
+              updated.complexTestId,
+
+            currentTestId:
+              updated.currentTestId,
+
+            currentQuestion:
+              updated.currentQuestion,
+
+            savedAnswers:
+              updated.savedAnswers,
+
+            timeLeft: 0,
+
+            extraTime:
+              Math.max(
+                0,
+                Math.floor(
+                  updated.extraTime
+                )
+              ),
+
+            finished:
+              true,
+
+            finishedAt:
+              updated.finishedAt,
+
+            blocked:
+              true,
+
+            blockReason:
+              "Порушення правил тестування",
+
+            blockedAt:
+              updated.blockedAt,
+
+            startedAt:
+              updated.startedAt,
+
+            lastActivityAt:
+              updated.lastActivityAt,
+          },
+        },
+        {
+          headers: {
+            "Cache-Control":
+              "no-store, no-cache, must-revalidate",
+          },
+        }
+      );
+    }
+
+    /*
+     * ========================================================
      * UPDATE DATA
      *
-     * Дозволені тільки:
+     * Дозволені:
      *
      * - currentTestId
      * - currentQuestion
@@ -981,6 +1188,11 @@ export async function POST(
     /*
      * ========================================================
      * FINISHED
+     *
+     * ЗВИЧАЙНЕ завершення.
+     *
+     * Тут нічого не змінюємо порівняно
+     * з попередньою логікою.
      * ========================================================
      */
 
@@ -998,9 +1210,6 @@ export async function POST(
       /*
        * Сервер сам встановлює
        * timeLeft = 0.
-       *
-       * Клієнт не може передати
-       * власне значення timeLeft.
        */
 
       updateData.timeLeft =

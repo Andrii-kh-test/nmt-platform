@@ -9,6 +9,11 @@ import {
   type ComplexTestData,
 } from "@/app/context/ComplexTestSessionContext";
 
+import FullscreenGuard from "@/app/components/test/FullscreenGuard";
+import SecurityGuard from "@/app/components/test/SecurityGuard";
+import VisibilityGuard from "@/app/components/test/VisibilityGuard";
+import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
+
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
 import ComplexAutoSaveSession from "./ComplexAutoSaveSession";
 
@@ -37,9 +42,9 @@ interface SessionResponse {
     blockedAt: string | null;
 
     startedAt: string | null;
-
-    complexTest: ComplexTestData;
   };
+
+  complexTest?: ComplexTestData;
 }
 
 export default function ComplexTestPage() {
@@ -85,6 +90,97 @@ export default function ComplexTestPage() {
     firstName: string;
     middleName?: string;
   } | null>(null);
+
+  /*
+   * =========================================================
+   * ЗАВЕРШЕННЯ ЧЕРЕЗ ПОРУШЕННЯ ПРАВИЛ
+   *
+   * Викликається спільною системою безпеки:
+   *
+   * FullscreenGuard
+   * VisibilityGuard
+   *
+   * Після другого порушення.
+   *
+   * =========================================================
+   */
+
+  async function finishSecurityTest() {
+    if (finishing || finished) {
+      return;
+    }
+
+    setFinishing(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `/api/complex-tests/${id}/session`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify({
+            sessionId,
+
+            currentTestId:
+              currentTestId ??
+              complexTest?.tests[0]?.test.id ??
+              null,
+
+            currentQuestion,
+
+            savedAnswers,
+
+            finished: true,
+
+            finishReason: "security",
+          }),
+        }
+      );
+
+      const data: SessionResponse =
+        await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message ||
+            "Не вдалося автоматично завершити тестування."
+        );
+      }
+
+      /*
+       * Сервер уже:
+       *
+       * finished = true
+       * timeLeft = 0
+       * blocked = true
+       * blockReason =
+       * "Порушення правил тестування"
+       */
+
+      setFinished(true);
+
+      router.replace(
+        `/complex-tests/${id}/result/${sessionId}`
+      );
+    } catch (err) {
+      console.error(
+        "SECURITY FINISH COMPLEX TEST:",
+        err
+      );
+
+      setFinishing(false);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Не вдалося автоматично завершити тестування."
+      );
+    }
+  }
 
   /*
    * =========================================================
@@ -135,6 +231,12 @@ export default function ComplexTestPage() {
           );
         }
 
+        if (!data.complexTest) {
+          throw new Error(
+            "Сервер не повернув структуру комбінованого тесту."
+          );
+        }
+
         if (cancelled) {
           return;
         }
@@ -150,7 +252,9 @@ export default function ComplexTestPage() {
           // sessionStorage може бути недоступним
         }
 
-        loadComplexTest(session.complexTest);
+        loadComplexTest(
+          data.complexTest
+        );
 
         restoreSession(
           session.currentTestId,
@@ -237,7 +341,7 @@ export default function ComplexTestPage() {
         });
       }
     } catch {
-      // Дані учасника не є критичними для завантаження тесту.
+      // Дані учасника не є критичними
     }
   }, [id]);
 
@@ -389,12 +493,6 @@ export default function ComplexTestPage() {
       return;
     }
 
-    /*
-     * Спочатку миттєво змінюємо питання
-     * локально, щоб інтерфейс реагував
-     * без затримки мережі.
-     */
-
     setCurrentQuestion(questionIndex);
 
     setSavingQuestion(true);
@@ -445,7 +543,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * ЗАВЕРШЕННЯ ТЕСТУВАННЯ
+   * ЗВИЧАЙНЕ ЗАВЕРШЕННЯ ТЕСТУВАННЯ
    * =========================================================
    */
 
@@ -500,7 +598,8 @@ export default function ComplexTestPage() {
         }
       );
 
-      const data = await response.json();
+      const data: SessionResponse =
+        await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -508,11 +607,6 @@ export default function ComplexTestPage() {
             "Не вдалося завершити тестування."
         );
       }
-
-      /*
-       * Зупиняємо локальний стан сесії.
-       * Сервер уже встановив finished=true.
-       */
 
       setFinished(true);
 
@@ -658,6 +752,26 @@ export default function ComplexTestPage() {
 
   return (
     <main className="min-h-screen bg-gray-100">
+      {/* =====================================================
+          СИСТЕМА БЕЗПЕКИ
+          ===================================================== */}
+
+      <FullscreenGuard
+        onViolationFinish={
+          finishSecurityTest
+        }
+      />
+
+      <SecurityGuard />
+
+      <VisibilityGuard
+        onViolationFinish={
+          finishSecurityTest
+        }
+      />
+
+      <TestSecurityGuard />
+
       {/* =====================================================
           MONITOR СЕСІЇ
           ===================================================== */}
