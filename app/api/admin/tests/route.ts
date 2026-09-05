@@ -5,11 +5,30 @@ import { prisma } from "@/app/lib/prisma";
 /**
  * GET /api/admin/tests
  *
- * Список усіх тестів.
+ * Список тестів.
+ *
+ * Без параметра archived:
+ * тільки неархівовані тести.
+ *
+ * ?archived=true:
+ * тільки архівовані тести.
  */
-export async function GET() {
+export async function GET(
+  request: NextRequest
+) {
   try {
+    const archived =
+      request.nextUrl.searchParams.get("archived") === "true";
+
     const tests = await prisma.test.findMany({
+      where: archived
+        ? {
+            isArchived: true,
+          }
+        : {
+            isArchived: false,
+          },
+
       orderBy: {
         createdAt: "desc",
       },

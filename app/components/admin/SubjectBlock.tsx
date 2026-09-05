@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Archive, Trash2 } from "lucide-react";
+import {
+  Archive,
+  Trash2,
+} from "lucide-react";
 
 type Test = {
   id: number;
@@ -24,25 +27,28 @@ export default function SubjectBlock({
   tests,
 }: Props) {
   const [opened, setOpened] = useState(true);
-  const [loading, setLoading] = useState(false);
 
-  async function handleArchive() {
-    if (loading) {
+  const [loadingTestId, setLoadingTestId] =
+    useState<number | null>(null);
+
+  async function handleArchiveTest(
+    test: Test
+  ) {
+    if (loadingTestId !== null) {
       return;
     }
 
     try {
-      setLoading(true);
+      setLoadingTestId(test.id);
 
       const response = await fetch(
-        "/api/admin/subjects",
+        `/api/admin/tests/${test.id}`,
         {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            id: subjectId,
             isArchived: true,
           }),
         }
@@ -53,34 +59,36 @@ export default function SubjectBlock({
       if (!response.ok || !result.success) {
         throw new Error(
           result.message ||
-            "Не вдалося архівувати розділ."
+            "Не вдалося архівувати тест."
         );
       }
 
       window.location.reload();
     } catch (error) {
       console.error(
-        "ARCHIVE SUBJECT ERROR:",
+        "ARCHIVE TEST ERROR:",
         error
       );
 
       alert(
         error instanceof Error
           ? error.message
-          : "Не вдалося архівувати розділ."
+          : "Не вдалося архівувати тест."
       );
 
-      setLoading(false);
+      setLoadingTestId(null);
     }
   }
 
-  async function handleDelete() {
-    if (loading) {
+  async function handleDeleteTest(
+    test: Test
+  ) {
+    if (loadingTestId !== null) {
       return;
     }
 
     const confirmed = window.confirm(
-      `Ви впевнені, що хочете остаточно видалити розділ «${subject}»?\n\nЦю дію неможливо скасувати.`
+      `Ви впевнені, що хочете остаточно видалити тест «${test.title}»?\n\nЦю дію неможливо скасувати.`
     );
 
     if (!confirmed) {
@@ -88,18 +96,12 @@ export default function SubjectBlock({
     }
 
     try {
-      setLoading(true);
+      setLoadingTestId(test.id);
 
       const response = await fetch(
-        "/api/admin/subjects",
+        `/api/admin/tests/${test.id}`,
         {
           method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id: subjectId,
-          }),
         }
       );
 
@@ -108,29 +110,33 @@ export default function SubjectBlock({
       if (!response.ok || !result.success) {
         throw new Error(
           result.message ||
-            "Не вдалося видалити розділ."
+            "Не вдалося видалити тест."
         );
       }
 
       window.location.reload();
     } catch (error) {
       console.error(
-        "DELETE SUBJECT ERROR:",
+        "DELETE TEST ERROR:",
         error
       );
 
       alert(
         error instanceof Error
           ? error.message
-          : "Не вдалося видалити розділ."
+          : "Не вдалося видалити тест."
       );
 
-      setLoading(false);
+      setLoadingTestId(null);
     }
   }
 
   return (
     <div className="bg-white rounded-xl shadow border border-gray-200">
+
+      {/* ================================
+          ЗАГОЛОВОК РОЗДІЛУ
+          ================================ */}
 
       <div className="flex items-center justify-between">
 
@@ -174,12 +180,58 @@ export default function SubjectBlock({
           </span>
         </button>
 
+        {/* Кнопки розділу */}
+
         <div className="flex items-center gap-2 px-5">
 
           <button
             type="button"
-            disabled={loading}
-            onClick={handleArchive}
+            onClick={(event) => {
+              event.stopPropagation();
+
+              fetch(
+                "/api/admin/subjects",
+                {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+                  },
+                  body: JSON.stringify({
+                    id: subjectId,
+                    isArchived: true,
+                  }),
+                }
+              )
+                .then(async (response) => {
+                  const result =
+                    await response.json();
+
+                  if (
+                    !response.ok ||
+                    !result.success
+                  ) {
+                    throw new Error(
+                      result.message ||
+                        "Не вдалося архівувати розділ."
+                    );
+                  }
+
+                  window.location.reload();
+                })
+                .catch((error) => {
+                  console.error(
+                    "ARCHIVE SUBJECT ERROR:",
+                    error
+                  );
+
+                  alert(
+                    error instanceof Error
+                      ? error.message
+                      : "Не вдалося архівувати розділ."
+                  );
+                });
+            }}
             className="
               inline-flex
               items-center
@@ -191,8 +243,6 @@ export default function SubjectBlock({
               border-amber-500
               text-amber-700
               hover:bg-amber-50
-              disabled:opacity-50
-              disabled:cursor-not-allowed
               transition
               font-medium
             "
@@ -204,8 +254,60 @@ export default function SubjectBlock({
 
           <button
             type="button"
-            disabled={loading}
-            onClick={handleDelete}
+            onClick={(event) => {
+              event.stopPropagation();
+
+              const confirmed =
+                window.confirm(
+                  `Ви впевнені, що хочете остаточно видалити розділ «${subject}»?\n\nЦю дію неможливо скасувати.`
+                );
+
+              if (!confirmed) {
+                return;
+              }
+
+              fetch(
+                "/api/admin/subjects",
+                {
+                  method: "DELETE",
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+                  },
+                  body: JSON.stringify({
+                    id: subjectId,
+                  }),
+                }
+              )
+                .then(async (response) => {
+                  const result =
+                    await response.json();
+
+                  if (
+                    !response.ok ||
+                    !result.success
+                  ) {
+                    throw new Error(
+                      result.message ||
+                        "Не вдалося видалити розділ."
+                    );
+                  }
+
+                  window.location.reload();
+                })
+                .catch((error) => {
+                  console.error(
+                    "DELETE SUBJECT ERROR:",
+                    error
+                  );
+
+                  alert(
+                    error instanceof Error
+                      ? error.message
+                      : "Не вдалося видалити розділ."
+                  );
+                });
+            }}
             className="
               inline-flex
               items-center
@@ -217,8 +319,6 @@ export default function SubjectBlock({
               border-red-500
               text-red-600
               hover:bg-red-50
-              disabled:opacity-50
-              disabled:cursor-not-allowed
               transition
               font-medium
             "
@@ -232,15 +332,18 @@ export default function SubjectBlock({
 
       </div>
 
+      {/* ================================
+          ТЕСТИ
+          ================================ */}
+
       {opened && (
 
         <div className="border-t">
 
           {tests.map((test) => (
 
-            <Link
+            <div
               key={test.id}
-              href={`/admin/tests/${test.id}`}
               className="
                 flex
                 justify-between
@@ -253,37 +356,118 @@ export default function SubjectBlock({
               "
             >
 
-              <div>
+              {/* Інформація про тест */}
 
-                <div className="font-semibold text-lg">
-                  {test.title}
+              <Link
+                href={`/admin/tests/${test.id}`}
+                className="flex-1 min-w-0"
+              >
+                <div>
+
+                  <div className="font-semibold text-lg">
+                    {test.title}
+                  </div>
+
+                  <div className="text-sm text-gray-500">
+                    {test.questions.length} питань
+                  </div>
+
                 </div>
+              </Link>
 
-                <div className="text-sm text-gray-500">
-                  {test.questions.length} питань
-                </div>
+              {/* Керування тестом */}
 
-              </div>
-
-              <div className="flex gap-3 items-center">
+              <div className="flex gap-3 items-center ml-5">
 
                 {test.isPublished ? (
 
-                  <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
+                  <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm whitespace-nowrap">
                     Опубліковано
                   </span>
 
                 ) : (
 
-                  <span className="px-3 py-1 rounded-full bg-gray-200 text-gray-600 text-sm">
+                  <span className="px-3 py-1 rounded-full bg-gray-200 text-gray-600 text-sm whitespace-nowrap">
                     Чернетка
                   </span>
 
                 )}
 
+                <button
+                  type="button"
+                  disabled={
+                    loadingTestId !== null
+                  }
+                  onClick={() =>
+                    handleArchiveTest(test)
+                  }
+                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    px-3
+                    py-2
+                    rounded-lg
+                    border
+                    border-amber-500
+                    text-amber-700
+                    hover:bg-amber-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
+                    transition
+                    text-sm
+                    font-medium
+                    whitespace-nowrap
+                  "
+                  title="Архівувати тест"
+                >
+                  <Archive className="w-4 h-4" />
+
+                  {loadingTestId ===
+                  test.id
+                    ? "..."
+                    : "Архівувати"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={
+                    loadingTestId !== null
+                  }
+                  onClick={() =>
+                    handleDeleteTest(test)
+                  }
+                  className="
+                    inline-flex
+                    items-center
+                    gap-2
+                    px-3
+                    py-2
+                    rounded-lg
+                    border
+                    border-red-500
+                    text-red-600
+                    hover:bg-red-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
+                    transition
+                    text-sm
+                    font-medium
+                    whitespace-nowrap
+                  "
+                  title="Видалити тест"
+                >
+                  <Trash2 className="w-4 h-4" />
+
+                  {loadingTestId ===
+                  test.id
+                    ? "..."
+                    : "Видалити"}
+                </button>
+
               </div>
 
-            </Link>
+            </div>
 
           ))}
 

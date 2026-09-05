@@ -2,19 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
-/**
- * GET /api/admin/subjects
- *
- * Повертає всі активні та неархівовані розділи
- * в алфавітному порядку.
- */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const archived =
+      request.nextUrl.searchParams.get("archived") === "true";
+
     const subjects = await prisma.subject.findMany({
-      where: {
-        isActive: true,
-        isArchived: false,
-      },
+      where: archived
+        ? {
+            isArchived: true,
+          }
+        : {
+            isActive: true,
+            isArchived: false,
+          },
 
       orderBy: {
         name: "asc",
@@ -27,15 +28,14 @@ export async function GET() {
     });
   } catch (error) {
     console.error(
-      "GET /api/admin/subjects error:",
+      "GET SUBJECTS ERROR:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Не вдалося отримати список розділів.",
+        message: "Не вдалося отримати розділи.",
       },
       {
         status: 500,
@@ -44,11 +44,6 @@ export async function GET() {
   }
 }
 
-/**
- * POST /api/admin/subjects
- *
- * Створює новий розділ.
- */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -67,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Вкажіть назву розділу.",
+          message: "Назва розділу не може бути порожньою.",
         },
         {
           status: 400,
@@ -86,7 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message: "Такий розділ уже існує.",
+          message: "Розділ із такою назвою вже існує.",
         },
         {
           status: 409,
@@ -94,27 +89,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const subject = await prisma.subject.create({
-      data: {
-        name,
-        description,
-        isActive: true,
-        isArchived: false,
-      },
-    });
+    const subject =
+      await prisma.subject.create({
+        data: {
+          name,
+          description,
+          isActive: true,
+          isArchived: false,
+        },
+      });
 
-    return NextResponse.json(
-      {
-        success: true,
-        subject,
-      },
-      {
-        status: 201,
-      }
-    );
+    return NextResponse.json({
+      success: true,
+      subject,
+    });
   } catch (error) {
     console.error(
-      "POST /api/admin/subjects error:",
+      "CREATE SUBJECT ERROR:",
       error
     );
 
@@ -130,32 +121,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * PATCH /api/admin/subjects
- *
- * Архівує або відновлює розділ.
- *
- * Body:
- * {
- *   id: number,
- *   isArchived: boolean
- * }
- */
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const id =
-      typeof body.id === "number"
-        ? body.id
-        : Number(body.id);
+    const id = Number(body.id);
 
-    const isArchived =
-      typeof body.isArchived === "boolean"
-        ? body.isArchived
-        : null;
-
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!Number.isInteger(id)) {
       return NextResponse.json(
         {
           success: false,
@@ -167,12 +139,11 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (isArchived === null) {
+    if (typeof body.isArchived !== "boolean") {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Не вказано стан архівування розділу.",
+          message: "Не вказано статус архіву.",
         },
         {
           status: 400,
@@ -180,24 +151,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const existingSubject =
-      await prisma.subject.findUnique({
-        where: {
-          id,
-        },
-      });
-
-    if (!existingSubject) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Розділ не знайдено.",
-        },
-        {
-          status: 404,
-        }
-      );
-    }
+    const isArchived = body.isArchived;
 
     const subject =
       await prisma.subject.update({
@@ -216,15 +170,14 @@ export async function PATCH(request: NextRequest) {
     });
   } catch (error) {
     console.error(
-      "PATCH /api/admin/subjects error:",
+      "UPDATE SUBJECT ERROR:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Не вдалося змінити статус розділу.",
+        message: "Не вдалося змінити статус розділу.",
       },
       {
         status: 500,
@@ -233,26 +186,13 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-/**
- * DELETE /api/admin/subjects
- *
- * Остаточно видаляє розділ.
- *
- * Перед видаленням перевіряємо,
- * чи не містить розділ тестів.
- */
-export async function DELETE(
-  request: NextRequest
-) {
+export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const id =
-      typeof body.id === "number"
-        ? body.id
-        : Number(body.id);
+    const id = Number(body.id);
 
-    if (!Number.isInteger(id) || id <= 0) {
+    if (!Number.isInteger(id)) {
       return NextResponse.json(
         {
           success: false,
@@ -295,7 +235,7 @@ export async function DELETE(
         {
           success: false,
           message:
-            "Неможливо видалити розділ, у якому є тести. Спочатку перемістіть або видаліть ці тести.",
+            "Неможливо остаточно видалити розділ, у якому є тести. Спочатку видаліть або перемістіть усі тести.",
         },
         {
           status: 409,
@@ -311,19 +251,17 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: "Розділ остаточно видалено.",
     });
   } catch (error) {
     console.error(
-      "DELETE /api/admin/subjects error:",
+      "DELETE SUBJECT ERROR:",
       error
     );
 
     return NextResponse.json(
       {
         success: false,
-        message:
-          "Не вдалося видалити розділ.",
+        message: "Не вдалося видалити розділ.",
       },
       {
         status: 500,
