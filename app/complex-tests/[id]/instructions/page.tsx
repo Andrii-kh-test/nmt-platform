@@ -38,11 +38,11 @@ export default function ComplexTestInstructionsPage() {
   const [loading, setLoading] =
     useState(true);
 
-  const [starting, setStarting] =
-    useState(false);
-
   const [error, setError] =
     useState("");
+
+  const [starting, setStarting] =
+    useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -55,7 +55,9 @@ export default function ComplexTestInstructionsPage() {
       );
 
     if (!storedParticipant) {
-      router.replace(`/complex-tests/${id}/start`);
+      router.replace(
+        `/complex-tests/${id}/start`
+      );
       return;
     }
 
@@ -69,7 +71,10 @@ export default function ComplexTestInstructionsPage() {
         `complex-test-participant-${id}`
       );
 
-      router.replace(`/complex-tests/${id}/start`);
+      router.replace(
+        `/complex-tests/${id}/start`
+      );
+
       return;
     }
 
@@ -111,7 +116,14 @@ export default function ComplexTestInstructionsPage() {
     loadComplexTest();
   }, [id, router]);
 
-  async function handleConfirm() {
+  function handleInstructionConfirmation(
+    checked: boolean
+  ) {
+    setConfirmed(checked);
+    setError("");
+  }
+
+  function handleStartIdentityConfirmation() {
     if (!participant) {
       setError(
         "Не знайдено дані учасника тестування."
@@ -127,92 +139,11 @@ export default function ComplexTestInstructionsPage() {
     }
 
     setError("");
-
-    /*
-     * Переходимо в повноекранний режим безпосередньо
-     * з обробника натискання кнопки.
-     *
-     * Це важливо, оскільки браузер дозволяє
-     * requestFullscreen() саме в межах дії користувача.
-     */
-    if (!document.fullscreenElement) {
-      try {
-        await document.documentElement.requestFullscreen();
-      } catch (fullscreenError) {
-        console.error(
-          "Не вдалося перейти у повноекранний режим:",
-          fullscreenError
-        );
-
-        setError(
-          "Не вдалося перейти у повноекранний режим. Спробуйте ще раз."
-        );
-
-        return;
-      }
-    }
-
     setStarting(true);
 
-    try {
-      const response = await fetch(
-        "/api/complex-tests/start",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            complexTestId: id,
-            lastName: participant.lastName,
-            firstName: participant.firstName,
-            middleName: participant.middleName,
-            accessCode: participant.accessCode,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.message ||
-            "Не вдалося розпочати тестування."
-        );
-      }
-
-      sessionStorage.setItem(
-        `complex-test-session-${id}`,
-        JSON.stringify({
-          sessionId: data.session.id,
-          complexTestId: id,
-          currentTestId:
-            data.session.currentTestId,
-          currentQuestion:
-            data.session.currentQuestion,
-          timeLeft:
-            data.session.timeLeft,
-        })
-      );
-
-      router.push(
-        `/complex-tests/${id}/test`
-      );
-    } catch (err) {
-      console.error(
-        "Помилка запуску комбінованого тесту:",
-        err
-      );
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Не вдалося розпочати тестування."
-      );
-
-      setStarting(false);
-    }
+    router.push(
+      `/complex-tests/${id}/identity`
+    );
   }
 
   if (loading) {
@@ -370,14 +301,16 @@ export default function ComplexTestInstructionsPage() {
               </div>
             </section>
 
-            {/* Підтвердження та запуск */}
+            {/* Підтвердження та перехід */}
             <div className="mt-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
               <label className="flex items-center gap-3 cursor-pointer text-gray-700">
                 <input
                   type="checkbox"
                   checked={confirmed}
                   onChange={(e) =>
-                    setConfirmed(e.target.checked)
+                    handleInstructionConfirmation(
+                      e.target.checked
+                    )
                   }
                   className="
                     h-5
@@ -393,9 +326,12 @@ export default function ComplexTestInstructionsPage() {
 
               <button
                 type="button"
-                onClick={handleConfirm}
+                onClick={
+                  handleStartIdentityConfirmation
+                }
                 disabled={
-                  !confirmed || starting
+                  !confirmed ||
+                  starting
                 }
                 className="
                   px-7
@@ -412,7 +348,7 @@ export default function ComplexTestInstructionsPage() {
                 "
               >
                 {starting
-                  ? "Розпочинаємо..."
+                  ? "Підготовка..."
                   : "Розпочати роботу над тестом"}
               </button>
             </div>
