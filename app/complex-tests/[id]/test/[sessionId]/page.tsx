@@ -84,9 +84,9 @@ interface SessionResponse {
     blockedAt: string | null;
 
     startedAt: string | null;
-
-    complexTest: ComplexTestData;
   };
+
+  complexTest?: ComplexTestData;
 }
 
 export default function ComplexTestPage() {
@@ -152,12 +152,6 @@ function ComplexTestPageContent({
     middleName?: string;
   } | null>(null);
 
-  /*
-   * =========================================================
-   * Завантаження сесії
-   * =========================================================
-   */
-
   useEffect(() => {
     if (
       !Number.isInteger(id) ||
@@ -201,6 +195,12 @@ function ComplexTestPageContent({
           );
         }
 
+        if (!data.complexTest) {
+          throw new Error(
+            "Сервер не повернув дані комплексного тесту."
+          );
+        }
+
         if (cancelled) {
           return;
         }
@@ -216,7 +216,7 @@ function ComplexTestPageContent({
           // sessionStorage може бути недоступним
         }
 
-        loadComplexTest(session.complexTest);
+        loadComplexTest(data.complexTest);
 
         restoreSession(
           session.currentTestId,
@@ -270,12 +270,6 @@ function ComplexTestPageContent({
     router,
   ]);
 
-  /*
-   * =========================================================
-   * Дані учасника
-   * =========================================================
-   */
-
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(
@@ -307,12 +301,6 @@ function ComplexTestPageContent({
     }
   }, [id]);
 
-  /*
-   * =========================================================
-   * Поточний предмет
-   * =========================================================
-   */
-
   const currentTest = useMemo(() => {
     if (!complexTest) {
       return null;
@@ -328,15 +316,6 @@ function ComplexTestPageContent({
       ) ?? null
     );
   }, [complexTest, currentTestId]);
-
-  /*
-   * =========================================================
-   * КІЛЬКІСТЬ ПИТАНЬ БЕЗ ВІДПОВІДІ
-   *
-   * Використовується для підтвердження завершення
-   * тестування.
-   * =========================================================
-   */
 
   const unansweredCount = useMemo(() => {
     if (!complexTest) {
@@ -361,23 +340,6 @@ function ComplexTestPageContent({
 
     return count;
   }, [complexTest, savedAnswers]);
-
-  /*
-   * =========================================================
-   * ПЕРЕМИКАННЯ МІЖ ПРЕДМЕТАМИ
-   *
-   * ВАЖЛИВО:
-   *
-   * НЕ використовуємо window.location.reload().
-   *
-   * Інакше браузер виходить із fullscreen.
-   *
-   * Після успішного POST:
-   * - змінюємо currentTestId локально;
-   * - повертаємося на перше питання предмета;
-   * - fullscreen залишається активним.
-   * =========================================================
-   */
 
   async function switchTest(testId: number) {
     if (
@@ -419,19 +381,6 @@ function ComplexTestPageContent({
         );
       }
 
-      /*
-       * =====================================================
-       * ВАЖЛИВО:
-       * =====================================================
-       *
-       * Тут навмисно НЕМАЄ:
-       *
-       * window.location.reload();
-       *
-       * Замість цього оновлюємо стан контексту.
-       * Це дозволяє залишатися у fullscreen.
-       */
-
       setCurrentTestId(testId);
       setCurrentQuestion(0);
       setSwitchingTestId(null);
@@ -450,12 +399,6 @@ function ComplexTestPageContent({
       );
     }
   }
-
-  /*
-   * =========================================================
-   * ПЕРЕМИКАННЯ МІЖ ПИТАННЯМИ
-   * =========================================================
-   */
 
   async function switchQuestion(
     questionIndex: number
@@ -483,12 +426,6 @@ function ComplexTestPageContent({
     ) {
       return;
     }
-
-    /*
-     * Спочатку миттєво змінюємо питання
-     * локально, щоб інтерфейс реагував
-     * без затримки мережі.
-     */
 
     setCurrentQuestion(questionIndex);
 
@@ -537,12 +474,6 @@ function ComplexTestPageContent({
       setSavingQuestion(false);
     }
   }
-
-  /*
-   * =========================================================
-   * ЗАВЕРШЕННЯ ТЕСТУВАННЯ
-   * =========================================================
-   */
 
   async function finishTest() {
     if (
@@ -604,11 +535,6 @@ function ComplexTestPageContent({
         );
       }
 
-      /*
-       * Сервер уже встановив:
-       * finished = true
-       */
-
       setFinished(true);
 
       router.replace(
@@ -629,12 +555,6 @@ function ComplexTestPageContent({
       );
     }
   }
-
-  /*
-   * =========================================================
-   * Формат таймера
-   * =========================================================
-   */
 
   const formattedTime = useMemo(() => {
     const safeSeconds = Math.max(
@@ -659,12 +579,6 @@ function ComplexTestPageContent({
     ].join(":");
   }, [timeLeft]);
 
-  /*
-   * =========================================================
-   * Loading
-   * =========================================================
-   */
-
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
@@ -680,12 +594,6 @@ function ComplexTestPageContent({
       </main>
     );
   }
-
-  /*
-   * =========================================================
-   * Помилка
-   * =========================================================
-   */
 
   if (error) {
     return (
@@ -713,12 +621,6 @@ function ComplexTestPageContent({
     );
   }
 
-  /*
-   * =========================================================
-   * Немає даних
-   * =========================================================
-   */
-
   if (!complexTest || !currentTest) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
@@ -731,12 +633,6 @@ function ComplexTestPageContent({
     );
   }
 
-  /*
-   * =========================================================
-   * Питання поточного предмета
-   * =========================================================
-   */
-
   const questions =
     currentTest.test.questions;
 
@@ -745,18 +641,8 @@ function ComplexTestPageContent({
     questions[0] ??
     null;
 
-  /*
-   * =========================================================
-   * ОСНОВНА СТОРІНКА
-   * =========================================================
-   */
-
   return (
     <main className="min-h-screen bg-gray-100">
-      {/* =====================================================
-          MONITOR СЕСІЇ
-          ===================================================== */}
-
       <ComplexTestSessionMonitor
         complexTestId={id}
         sessionId={sessionId}
@@ -764,18 +650,10 @@ function ComplexTestPageContent({
         heartbeatInterval={10000}
       />
 
-      {/* =====================================================
-          АВТОЗБЕРЕЖЕННЯ СЕСІЇ
-          ===================================================== */}
-
       <ComplexAutoSaveSession
         complexTestId={id}
         sessionId={sessionId}
       />
-
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3">
@@ -798,8 +676,6 @@ function ComplexTestPageContent({
               )}
             </div>
 
-            {/* Таймер */}
-
             <div
               className={[
                 "shrink-0 rounded-lg px-4 py-2 font-mono text-xl font-bold",
@@ -813,10 +689,6 @@ function ComplexTestPageContent({
           </div>
         </div>
       </header>
-
-      {/* =====================================================
-          BLOCKED
-          ===================================================== */}
 
       {blocked && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
@@ -839,23 +711,11 @@ function ComplexTestPageContent({
         </div>
       )}
 
-      {/* =====================================================
-          CONTENT
-          ===================================================== */}
-
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
 
-          {/* =================================================
-              QUESTIONS
-              ================================================= */}
-
           <section>
             <div className="bg-white rounded-xl shadow-sm p-6">
-
-              {/* =================================================
-                  CURRENT QUESTION
-                  ================================================= */}
 
               {currentQuestionData ? (
                 <div className="mt-6">
@@ -868,10 +728,6 @@ function ComplexTestPageContent({
                       html={currentQuestionData.text}
                     />
                   </div>
-
-                  {/* =================================================
-                      ANSWER OPTIONS
-                      ================================================= */}
 
                   <div className="mt-5 space-y-3">
                     {currentQuestionData.answerOptions.map(
@@ -967,15 +823,7 @@ function ComplexTestPageContent({
             </div>
           </section>
 
-          {/* =================================================
-              SIDEBAR / НАВІГАЦІЙНА ПАНЕЛЬ
-              ================================================= */}
-
           <aside className="space-y-4">
-
-            {/* =================================================
-                TIMER
-                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <div className="text-sm text-gray-500">
@@ -999,10 +847,6 @@ function ComplexTestPageContent({
                   : "Таймер зупинено"}
               </div>
             </div>
-
-            {/* =================================================
-                SUBJECTS
-                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -1061,10 +905,6 @@ function ComplexTestPageContent({
                 )}
               </div>
             </div>
-
-            {/* =================================================
-                QUESTION NUMBERS / НАВІГАЦІЯ
-                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -1146,10 +986,6 @@ function ComplexTestPageContent({
                 </div>
               </div>
             </div>
-
-            {/* =================================================
-                FINISH
-                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <button
