@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Archive } from "lucide-react";
+import { Plus, Archive, Layers3 } from "lucide-react";
+import Link from "next/link";
+
 import SubjectBlock from "@/app/components/admin/SubjectBlock";
 import SearchBar from "@/app/components/admin/SearchBar";
-import ComplexTestsBlock from "@/app/components/admin/ComplexTestsBlock";
 
 type Test = {
   id: number;
@@ -177,10 +178,44 @@ export default function TestsPageClient({
             ПОШУК
         ================================================= */}
 
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-        />
+        <div className="mt-8">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+          />
+        </div>
+
+        {/* =================================================
+            КОМБІНОВАНІ ТЕСТИ
+        ================================================= */}
+
+        <div className="mt-3">
+          <Link
+            href="/admin/tests/complex"
+            className="
+              w-full
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              px-6
+              py-3
+              rounded-lg
+              border
+              border-[#7A1F2B]
+              bg-white
+              text-[#7A1F2B]
+              font-semibold
+              shadow-sm
+              hover:bg-[#7A1F2B]
+              hover:text-white
+              transition
+            "
+          >
+            <Layers3 className="w-5 h-5" />
+            Комбіновані тести
+          </Link>
+        </div>
 
         {/* =================================================
             ЗВИЧАЙНІ ТЕСТИ
@@ -228,12 +263,6 @@ export default function TestsPageClient({
           )}
 
         </div>
-
-        {/* =================================================
-            КОМБІНОВАНІ ТЕСТИ
-        ================================================= */}
-
-        <ComplexTestsBlock />
 
       </div>
     </main>

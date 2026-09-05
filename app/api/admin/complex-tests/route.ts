@@ -93,6 +93,8 @@ export async function GET(
  *   title: string,
  *   description?: string,
  *   duration: number,
+ *   examType: string,
+ *   section: string,
  *   codeRequired?: boolean,
  *   accessCode?: string,
  *   isPublished?: boolean,
@@ -119,6 +121,16 @@ export async function POST(
         : null;
 
     const duration = Number(body.duration);
+
+    const examType =
+      typeof body.examType === "string"
+        ? body.examType.trim()
+        : "";
+
+    const section =
+      typeof body.section === "string"
+        ? body.section.trim()
+        : "";
 
     const codeRequired =
       typeof body.codeRequired === "boolean"
@@ -150,6 +162,38 @@ export async function POST(
           success: false,
           message:
             "Вкажіть назву комбінованого тесту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+     * Перевірка типу іспиту.
+     */
+    if (!examType) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Вкажіть тип іспиту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+     * Перевірка розділу.
+     */
+    if (!section) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Вкажіть розділ комбінованого тесту.",
         },
         {
           status: 400,
@@ -329,6 +373,13 @@ export async function POST(
           title,
           description,
           duration,
+
+          /*
+           * Тип іспиту та розділ.
+           */
+          examType,
+          section,
+
           codeRequired,
           accessCode: finalAccessCode,
           isPublished,

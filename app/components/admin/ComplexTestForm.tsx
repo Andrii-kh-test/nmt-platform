@@ -41,6 +41,9 @@ export default function ComplexTestForm({
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState("60");
 
+  const [examType, setExamType] = useState("НМТ");
+  const [section, setSection] = useState("");
+
   const [codeRequired, setCodeRequired] = useState(true);
   const [accessCode, setAccessCode] = useState("");
 
@@ -111,9 +114,19 @@ export default function ComplexTestForm({
       setTitle(complexTest.title ?? "");
       setDescription(complexTest.description ?? "");
       setDuration(String(complexTest.duration ?? 60));
+
+      setExamType(
+        complexTest.examType ?? "НМТ"
+      );
+
+      setSection(
+        complexTest.section ?? ""
+      );
+
       setCodeRequired(
         complexTest.codeRequired ?? true
       );
+
       setAccessCode(
         complexTest.accessCode ?? ""
       );
@@ -173,6 +186,16 @@ export default function ComplexTestForm({
       return;
     }
 
+    if (!examType.trim()) {
+      alert("Оберіть тип іспиту.");
+      return;
+    }
+
+    if (!section.trim()) {
+      alert("Введіть розділ комбінованого тесту.");
+      return;
+    }
+
     const parsedDuration = Number(duration);
 
     if (
@@ -210,6 +233,8 @@ export default function ComplexTestForm({
         description:
           description.trim() || null,
         duration: parsedDuration,
+        examType: examType.trim(),
+        section: section.trim(),
         codeRequired,
         accessCode: codeRequired
           ? accessCode.trim()
@@ -331,6 +356,79 @@ export default function ComplexTestForm({
               <h2 className="text-xl font-bold text-gray-800 mb-6">
                 Налаштування
               </h2>
+
+              {/* Тип іспиту */}
+              <div className="mb-5">
+
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Тип іспиту
+                </label>
+
+                <select
+                  value={examType}
+                  onChange={(event) =>
+                    setExamType(event.target.value)
+                  }
+                  className="
+                    w-full
+                    border
+                    border-gray-300
+                    rounded-lg
+                    px-4
+                    py-3
+                    outline-none
+                    bg-white
+                    focus:border-[#7A1F2B]
+                    focus:ring-1
+                    focus:ring-[#7A1F2B]
+                  "
+                >
+                  <option value="НМТ">НМТ</option>
+                  <option value="ЄВІ">ЄВІ</option>
+                  <option value="ЄФВВ">ЄФВВ</option>
+                </select>
+
+                <p className="text-xs text-gray-400 mt-2">
+                  Визначає, у якому розділі іспитів учасник
+                  побачить цей комбінований тест.
+                </p>
+
+              </div>
+
+              {/* Розділ */}
+              <div className="mb-5">
+
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Розділ комбінованих тестів
+                </label>
+
+                <input
+                  type="text"
+                  value={section}
+                  onChange={(event) =>
+                    setSection(event.target.value)
+                  }
+                  placeholder="Наприклад: Українська мова + історія України"
+                  className="
+                    w-full
+                    border
+                    border-gray-300
+                    rounded-lg
+                    px-4
+                    py-3
+                    outline-none
+                    focus:border-[#7A1F2B]
+                    focus:ring-1
+                    focus:ring-[#7A1F2B]
+                  "
+                />
+
+                <p className="text-xs text-gray-400 mt-2">
+                  Саме за цим розділом комбінований тест
+                  буде згрупований на сторінці учасника.
+                </p>
+
+              </div>
 
               {/* Назва */}
               <div className="mb-5">

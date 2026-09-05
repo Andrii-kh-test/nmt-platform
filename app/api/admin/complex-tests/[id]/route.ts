@@ -165,6 +165,8 @@ export async function PATCH(
       title?: string;
       description?: string | null;
       duration?: number;
+      examType?: string;
+      section?: string;
       codeRequired?: boolean;
       accessCode?: string | null;
       isPublished?: boolean;
@@ -246,6 +248,54 @@ export async function PATCH(
       }
 
       data.duration = duration;
+    }
+
+    /*
+     * Тип іспиту.
+     */
+    if (body.examType !== undefined) {
+      if (
+        typeof body.examType !== "string" ||
+        !body.examType.trim()
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Тип іспиту не може бути порожнім.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      data.examType =
+        body.examType.trim();
+    }
+
+    /*
+     * Розділ.
+     */
+    if (body.section !== undefined) {
+      if (
+        typeof body.section !== "string" ||
+        !body.section.trim()
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Розділ комбінованого тесту не може бути порожнім.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      data.section =
+        body.section.trim();
     }
 
     /*
