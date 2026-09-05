@@ -14,7 +14,7 @@ import FullscreenGuard from "@/app/components/test/FullscreenGuard";
 import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import SessionMonitor from "@/app/components/test/SessionMonitor";
-
+import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
 import { mapPrismaTest } from "@/app/utils/mapPrismaTest";
 
 type Props = {
@@ -207,7 +207,7 @@ export default async function TestPage({
       <SecurityGuard />
 
       <VisibilityGuard />
-
+<TestSecurityGuard />
     </main>
   );
 }
