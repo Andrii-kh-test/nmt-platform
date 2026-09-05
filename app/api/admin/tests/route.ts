@@ -15,6 +15,8 @@ export async function GET() {
       },
 
       include: {
+        subjectRef: true,
+
         questions: {
           orderBy: {
             order: "asc",
@@ -69,19 +71,6 @@ export async function GET() {
  * POST /api/admin/tests
  *
  * Створення нового тесту.
- *
- * Очікуваний body:
- *
- * {
- *   title: string;
- *   subject: string;
- *   duration: number;
- *   maxPoints?: number;
- *   schoolYear?: string;
- *   isPublished?: boolean;
- *   codeRequired?: boolean;
- *   accessCode?: string | null;
- * }
  */
 export async function POST(
   request: NextRequest
@@ -100,6 +89,18 @@ export async function POST(
         : "";
 
     const duration = Number(body.duration);
+
+    /*
+     * subjectId є необов'язковим,
+     * щоб зберегти сумісність
+     * зі старими тестами.
+     */
+    const subjectId =
+      body.subjectId === undefined ||
+      body.subjectId === null ||
+      body.subjectId === ""
+        ? null
+        : Number(body.subjectId);
 
     if (!title) {
       return NextResponse.json(
@@ -141,14 +142,49 @@ export async function POST(
       );
     }
 
+    if (
+      subjectId !== null &&
+      (!Number.isInteger(subjectId) ||
+        subjectId <= 0)
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Некоректний предмет.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    /*
+     * Якщо передано subjectId,
+     * перевіряємо, що такий предмет існує.
+     */
+    if (subjectId !== null) {
+      const existingSubject =
+        await prisma.subject.findUnique({
+          where: {
+            id: subjectId,
+          },
+        });
+
+      if (!existingSubject) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Вказаний предмет не знайдено.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+    }
+
     /*
      * maxPoints необов'язковий.
-     *
-     * Якщо його не передали,
-     * спочатку створюємо тест із 0.
-     *
-     * Надалі він може бути оновлений
-     * після додавання питань.
      */
     const maxPoints =
       body.maxPoints === undefined
@@ -212,6 +248,7 @@ export async function POST(
       orderBy: {
         displayOrder: "desc",
       },
+
       select: {
         displayOrder: true,
       },
@@ -223,7 +260,18 @@ export async function POST(
     const test = await prisma.test.create({
       data: {
         title,
+
+        /*
+         * Зберігаємо старе текстове поле
+         * для сумісності.
+         */
         subject,
+
+        /*
+         * Новий зв'язок із Subject.
+         */
+        subjectId,
+
         schoolYear,
         duration,
         maxPoints,
@@ -234,6 +282,8 @@ export async function POST(
       },
 
       include: {
+        subjectRef: true,
+
         questions: {
           orderBy: {
             order: "asc",

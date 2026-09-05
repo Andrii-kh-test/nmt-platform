@@ -14,9 +14,12 @@ type RouteContext = {
  * Повертає тест разом із:
  *
  * Test
- *  └── questions
- *       └── question
- *            └── answerOptions
+ *  ├── subjectRef
+ *  ├── questions
+ *  │    └── question
+ *  │         └── answerOptions
+ *  ├── sessions
+ *  └── results
  */
 export async function GET(
   _request: NextRequest,
@@ -45,6 +48,11 @@ export async function GET(
       },
 
       include: {
+        /*
+         * Новий зв'язок із Subject.
+         */
+        subjectRef: true,
+
         questions: {
           orderBy: {
             order: "asc",
@@ -166,12 +174,19 @@ export async function PATCH(
     const data: {
       title?: string;
       subject?: string;
+      subjectId?: number | null;
       duration?: number;
       maxPoints?: number;
       isPublished?: boolean;
       codeRequired?: boolean;
       accessCode?: string | null;
     } = {};
+
+    /*
+     * ================================
+     * НАЗВА
+     * ================================
+     */
 
     if (typeof body.title === "string") {
       const title = body.title.trim();
@@ -180,7 +195,8 @@ export async function PATCH(
         return NextResponse.json(
           {
             success: false,
-            message: "Назва тесту не може бути порожньою.",
+            message:
+              "Назва тесту не може бути порожньою.",
           },
           {
             status: 400,
@@ -191,12 +207,99 @@ export async function PATCH(
       data.title = title;
     }
 
+    /*
+     * ================================
+     * ПРЕДМЕТ — старе текстове поле
+     * ================================
+     */
+
     if (typeof body.subject === "string") {
-      data.subject = body.subject.trim();
+      const subject = body.subject.trim();
+
+      if (!subject) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Вкажіть предмет.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      data.subject = subject;
     }
 
+    /*
+     * ================================
+     * ПРЕДМЕТ — новий subjectId
+     * ================================
+     */
+
+    if (body.subjectId !== undefined) {
+      if (
+        body.subjectId === null ||
+        body.subjectId === ""
+      ) {
+        data.subjectId = null;
+      } else {
+        const subjectId = Number(
+          body.subjectId
+        );
+
+        if (
+          !Number.isInteger(subjectId) ||
+          subjectId <= 0
+        ) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: "Некоректний предмет.",
+            },
+            {
+              status: 400,
+            }
+          );
+        }
+
+        /*
+         * Перевіряємо, що предмет існує.
+         */
+        const existingSubject =
+          await prisma.subject.findUnique({
+            where: {
+              id: subjectId,
+            },
+          });
+
+        if (!existingSubject) {
+          return NextResponse.json(
+            {
+              success: false,
+              message:
+                "Вказаний предмет не знайдено.",
+            },
+            {
+              status: 400,
+            }
+          );
+        }
+
+        data.subjectId = subjectId;
+      }
+    }
+
+    /*
+     * ================================
+     * ТРИВАЛІСТЬ
+     * ================================
+     */
+
     if (body.duration !== undefined) {
-      const duration = Number(body.duration);
+      const duration = Number(
+        body.duration
+      );
 
       if (
         !Number.isInteger(duration) ||
@@ -217,8 +320,16 @@ export async function PATCH(
       data.duration = duration;
     }
 
+    /*
+     * ================================
+     * МАКСИМАЛЬНА КІЛЬКІСТЬ БАЛІВ
+     * ================================
+     */
+
     if (body.maxPoints !== undefined) {
-      const maxPoints = Number(body.maxPoints);
+      const maxPoints = Number(
+        body.maxPoints
+      );
 
       if (
         !Number.isInteger(maxPoints) ||
@@ -231,7 +342,7 @@ export async function PATCH(
               "Максимальна кількість балів повинна бути невід’ємним цілим числом.",
           },
           {
-            status: 400,
+            status: 400
           }
         );
       }
@@ -239,21 +350,53 @@ export async function PATCH(
       data.maxPoints = maxPoints;
     }
 
-    if (typeof body.isPublished === "boolean") {
-      data.isPublished = body.isPublished;
+    /*
+     * ================================
+     * ПУБЛІКАЦІЯ
+     * ================================
+     */
+
+    if (
+      typeof body.isPublished === "boolean"
+    ) {
+      data.isPublished =
+        body.isPublished;
     }
 
-    if (typeof body.codeRequired === "boolean") {
-      data.codeRequired = body.codeRequired;
+    /*
+     * ================================
+     * КОД ДОСТУПУ
+     * ================================
+     */
+
+    if (
+      typeof body.codeRequired === "boolean"
+    ) {
+      data.codeRequired =
+        body.codeRequired;
     }
+
+    /*
+     * ================================
+     * ЗНАЧЕННЯ КОДУ
+     * ================================
+     */
 
     if (body.accessCode !== undefined) {
       data.accessCode =
         body.accessCode === null ||
         body.accessCode === ""
           ? null
-          : String(body.accessCode).trim();
+          : String(
+              body.accessCode
+            ).trim();
     }
+
+    /*
+     * ================================
+     * ОНОВЛЕННЯ
+     * ================================
+     */
 
     const updatedTest =
       await prisma.test.update({
@@ -264,6 +407,8 @@ export async function PATCH(
         data,
 
         include: {
+          subjectRef: true,
+
           questions: {
             orderBy: {
               order: "asc",

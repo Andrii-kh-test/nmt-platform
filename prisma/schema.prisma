@@ -11,6 +11,8 @@ model Test {
   id           Int            @id @default(autoincrement())
   title        String
   subject      String
+  subjectId    Int?
+  subjectRef   Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   description  String?
   schoolYear   String
   duration     Int
@@ -25,6 +27,15 @@ model Test {
   questions    TestQuestion[]
   results      TestResult[]
   sessions     TestSession[]
+}
+
+model Subject {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+
+  tests       Test[]
 }
 
 model Question {
@@ -83,7 +94,7 @@ model TestSession {
   blocked         Boolean      @default(false)
   extraTime       Int          @default(0)
   finishedAt      DateTime?
-  startedAt DateTime?
+  startedAt       DateTime?    @default(now())
   blockedAt       DateTime?
   lastActivityAt  DateTime     @default(now())
   result          TestResult?

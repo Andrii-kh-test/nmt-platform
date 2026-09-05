@@ -9,7 +9,7 @@ export interface Test {
   examType: "НМТ" | "ЄВІ" | "ЄФВВ";
 
   subject: string;
-
+subjectId?: number;
   description: string;
 
   duration: number;
