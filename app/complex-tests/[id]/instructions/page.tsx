@@ -10,16 +10,7 @@ type ComplexTestInfo = {
   description: string | null;
   duration: number;
   examType: string;
-  section: string | null;
   codeRequired: boolean;
-  tests: {
-    id: number;
-    order: number;
-    title: string;
-    subject: string;
-    duration: number;
-    questionCount: number;
-  }[];
 };
 
 type ParticipantData = {
@@ -127,12 +118,18 @@ export default function ComplexTestInstructionsPage() {
 
     try {
       /*
-       * ВАЖЛИВО:
-       * запуск комбінованого тесту відбувається через
-       * /api/complex-tests/start
+       * Запуск комбінованого тесту.
        *
-       * complexTestId передаємо в body.
+       * ВАЖЛИВО:
+       * маршрут знаходиться тут:
+       *
+       * app/api/complex-tests/start/route.ts
+       *
+       * тому URL:
+       *
+       * /api/complex-tests/start
        */
+
       const response = await fetch(
         `/api/complex-tests/start`,
         {
@@ -159,9 +156,9 @@ export default function ComplexTestInstructionsPage() {
       }
 
       /*
-       * Зберігаємо інформацію про сесію,
-       * щоб сторінка тестування могла її отримати.
+       * Зберігаємо дані сесії.
        */
+
       sessionStorage.setItem(
         `complex-test-session-${id}`,
         JSON.stringify({
@@ -172,6 +169,10 @@ export default function ComplexTestInstructionsPage() {
           timeLeft: data.timeLeft,
         })
       );
+
+      /*
+       * Переходимо до сторінки тестування.
+       */
 
       router.push(
         `/complex-tests/${id}/test`
@@ -240,7 +241,8 @@ export default function ComplexTestInstructionsPage() {
   return (
     <main className="min-h-screen bg-gray-100 px-4 py-8 md:px-6">
       <div className="mx-auto max-w-4xl">
-        {/* Верхня навігація */}
+
+        {/* Повернення */}
         <button
           type="button"
           onClick={handleBack}
@@ -252,18 +254,13 @@ export default function ComplexTestInstructionsPage() {
 
         {/* Основний блок */}
         <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+
           {/* Заголовок */}
           <div className="border-b border-gray-200 px-6 py-7 md:px-10">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-[#7A1F2B]/10 px-3 py-1 text-sm font-semibold text-[#7A1F2B]">
                 {test.examType}
               </span>
-
-              {test.section && (
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-600">
-                  {test.section}
-                </span>
-              )}
             </div>
 
             <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
@@ -274,58 +271,52 @@ export default function ComplexTestInstructionsPage() {
           {/* Інструкція */}
           <div className="px-6 py-8 md:px-10">
             <div className="space-y-6 text-gray-700">
+
+              {/* Звернення */}
               <p className="text-center text-lg font-bold italic text-gray-900">
                 Шановний учасник / учасниця тренувального
                 тестування!
               </p>
 
-              <p className="leading-relaxed">
-                Перед початком виконання тестових завдань
-                уважно ознайомтеся з правилами проходження
-                тестування.
-              </p>
+              {/* Опис */}
+              {test.description && (
+                <div className="leading-relaxed whitespace-pre-line">
+                  {test.description}
+                </div>
+              )}
 
+              {/* Основна інформація */}
               <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                 <h2 className="mb-4 text-lg font-bold text-gray-900">
-                  Структура тесту
+                  Інформація про тестування
                 </h2>
 
                 <div className="space-y-3">
-                  {test.tests.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-2 rounded-lg bg-white p-4 ring-1 ring-gray-200 md:flex-row md:items-center md:justify-between"
-                    >
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {item.subject}
-                        </p>
 
-                        <p className="text-sm text-gray-600">
-                          {item.title}
-                        </p>
-                      </div>
+                  <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-3">
+                    <span className="text-gray-600">
+                      Час виконання
+                    </span>
 
-                      <div className="flex shrink-0 flex-wrap gap-2 text-sm text-gray-600">
-                        <span className="rounded-lg bg-gray-100 px-3 py-1.5">
-                          {item.questionCount}{" "}
-                          {item.questionCount === 1
-                            ? "завдання"
-                            : item.questionCount < 5
-                              ? "завдання"
-                              : "завдань"}
-                        </span>
+                    <span className="font-semibold text-gray-900">
+                      {test.duration} хв
+                    </span>
+                  </div>
 
-                        <span className="rounded-lg bg-gray-100 px-3 py-1.5">
-                          {item.duration} хв
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-gray-600">
+                      Тип тестування
+                    </span>
+
+                    <span className="font-semibold text-gray-900">
+                      {test.examType}
+                    </span>
+                  </div>
+
                 </div>
               </div>
 
-              {/* Основні правила */}
+              {/* Правила */}
               <div>
                 <h2 className="mb-4 text-lg font-bold text-gray-900">
                   Правила проходження
@@ -333,12 +324,13 @@ export default function ComplexTestInstructionsPage() {
 
                 <ul className="list-disc space-y-3 pl-6 leading-relaxed">
                   <li>
-                    Усі частини комбінованого тесту
-                    виконуються в межах одного тестування.
+                    Уважно читайте кожне тестове завдання
+                    перед вибором відповіді.
                   </li>
 
                   <li>
-                    Загальний час виконання тесту становить{" "}
+                    Загальний час виконання тестування
+                    становить{" "}
                     <strong>
                       {test.duration} хвилин
                     </strong>
@@ -346,28 +338,25 @@ export default function ComplexTestInstructionsPage() {
                   </li>
 
                   <li>
-                    Уважно читайте кожне тестове завдання
-                    перед вибором відповіді.
+                    Не закривайте сторінку тестування без
+                    необхідності.
                   </li>
 
                   <li>
                     Після завершення тестування результати
                     будуть зафіксовані системою.
                   </li>
-
-                  <li>
-                    Не закривайте сторінку та не залишайте
-                    тестування без необхідності.
-                  </li>
                 </ul>
               </div>
 
+              {/* Побажання */}
               <p className="pt-2 text-center text-lg font-bold italic text-black">
                 Зичимо успіхів!
               </p>
 
               {/* Підтвердження */}
               <div className="border-t border-gray-200 pt-6">
+
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-slate-50 px-5 py-4 transition hover:border-gray-300">
                   <input
                     type="checkbox"
@@ -388,12 +377,14 @@ export default function ComplexTestInstructionsPage() {
                   </span>
                 </label>
 
+                {/* Помилка */}
                 {error && (
                   <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error}
                   </div>
                 )}
 
+                {/* Кнопка */}
                 <button
                   type="button"
                   onClick={handleConfirm}
@@ -412,7 +403,9 @@ export default function ComplexTestInstructionsPage() {
                     </>
                   )}
                 </button>
+
               </div>
+
             </div>
           </div>
         </div>
