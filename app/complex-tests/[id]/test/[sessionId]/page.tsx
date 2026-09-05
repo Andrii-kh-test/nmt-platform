@@ -14,10 +14,6 @@ import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
 import ComplexAutoSaveSession from "./ComplexAutoSaveSession";
 
 function sanitizeHtml(html: string): string {
-  if (typeof html !== "string") {
-    return "";
-  }
-
   let result = html;
 
   result = result.replace(
@@ -39,6 +35,9 @@ function sanitizeHtml(html: string): string {
     /(href|src)\s*=\s*(["'])\s*(javascript:|vbscript:|data:)[^"']*\2/gi,
     ""
   );
+
+  result = result.replace(/<>/g, "");
+  result = result.replace(/<\/>/g, "");
 
   return result;
 }
@@ -64,34 +63,29 @@ interface SessionResponse {
   success: boolean;
   message?: string;
 
-  /**
-   * Повні дані комплексного тесту
-   * повертаються API на верхньому рівні.
-   */
-  complexTest?: ComplexTestData;
-
   session?: {
     id: number;
     complexTestId: number;
     participantId: number | null;
+
     currentTestId: number | null;
     currentQuestion: number;
+
     savedAnswers: ComplexAnswerMap;
+
     timeLeft: number;
     extraTime: number;
+
     finished: boolean;
     finishedAt: string | null;
+
     blocked: boolean;
     blockReason: string | null;
     blockedAt: string | null;
+
     startedAt: string | null;
 
-    /**
-     * Залишаємо це поле в типі,
-     * оскільки воно може бути присутнім
-     * у відповіді API.
-     */
-    complexTest?: ComplexTestData;
+    complexTest: ComplexTestData;
   };
 }
 
@@ -131,6 +125,7 @@ function ComplexTestPageContent({
     blocked,
     blockReason,
     finished,
+
     loadComplexTest,
     restoreSession,
     setCurrentTestId,
@@ -142,10 +137,13 @@ function ComplexTestPageContent({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [switchingTestId, setSwitchingTestId] = useState<number | null>(
-    null
-  );
-  const [savingQuestion, setSavingQuestion] = useState(false);
+
+  const [switchingTestId, setSwitchingTestId] =
+    useState<number | null>(null);
+
+  const [savingQuestion, setSavingQuestion] =
+    useState(false);
+
   const [finishing, setFinishing] = useState(false);
 
   const [participant, setParticipant] = useState<{
@@ -155,9 +153,9 @@ function ComplexTestPageContent({
   } | null>(null);
 
   /*
-   * ============================================================
+   * =========================================================
    * Завантаження сесії
-   * ============================================================
+   * =========================================================
    */
 
   useEffect(() => {
@@ -187,27 +185,19 @@ function ComplexTestPageContent({
           }
         );
 
-        const data: SessionResponse = await response.json();
+        const data: SessionResponse =
+          await response.json();
 
         if (!response.ok || !data.success) {
           throw new Error(
-            data.message || "Не вдалося завантажити сесію."
+            data.message ||
+              "Не вдалося завантажити сесію."
           );
         }
 
         if (!data.session) {
           throw new Error(
             "Сервер не повернув дані сесії."
-          );
-        }
-
-        /*
-         * ВАЖЛИВО:
-         * complexTest повертається API окремо від session.
-         */
-        if (!data.complexTest) {
-          throw new Error(
-            "Сервер не повернув дані комплексного тесту."
           );
         }
 
@@ -222,27 +212,12 @@ function ComplexTestPageContent({
             "complexTestSessionId",
             String(session.id)
           );
-        } catch {}
+        } catch {
+          // sessionStorage може бути недоступним
+        }
 
-        /*
-         * Передаємо повні дані комплексного тесту
-         * в контекст.
-         *
-         * НЕ використовуємо:
-         * session.complexTest
-         *
-         * Використовуємо:
-         * data.complexTest
-         */
-        loadComplexTest(data.complexTest);
+        loadComplexTest(session.complexTest);
 
-        /*
-         * Відновлюємо серверний стан сесії.
-         *
-         * timeLeft береться безпосередньо з БД.
-         * Контекст сам запускає єдиний глобальний
-         * countdown для всього комплексного тесту.
-         */
         restoreSession(
           session.currentTestId,
           session.currentQuestion,
@@ -254,10 +229,6 @@ function ComplexTestPageContent({
           session.blockReason
         );
 
-        /*
-         * Якщо сесія вже завершена —
-         * переходимо одразу до результатів.
-         */
         if (session.finished) {
           router.replace(
             `/complex-tests/${id}/result/${session.id}`
@@ -300,9 +271,9 @@ function ComplexTestPageContent({
   ]);
 
   /*
-   * ============================================================
-   * Відновлення даних учасника
-   * ============================================================
+   * =========================================================
+   * Дані учасника
+   * =========================================================
    */
 
   useEffect(() => {
@@ -331,13 +302,15 @@ function ComplexTestPageContent({
               : undefined,
         });
       }
-    } catch {}
+    } catch {
+      // Дані учасника не є критичними для завантаження тесту.
+    }
   }, [id]);
 
   /*
-   * ============================================================
+   * =========================================================
    * Поточний предмет
-   * ============================================================
+   * =========================================================
    */
 
   const currentTest = useMemo(() => {
@@ -354,15 +327,15 @@ function ComplexTestPageContent({
         (item) => item.test.id === currentTestId
       ) ?? null
     );
-  }, [
-    complexTest,
-    currentTestId,
-  ]);
+  }, [complexTest, currentTestId]);
 
   /*
-   * ============================================================
-   * Кількість питань без відповіді
-   * ============================================================
+   * =========================================================
+   * КІЛЬКІСТЬ ПИТАНЬ БЕЗ ВІДПОВІДІ
+   *
+   * Використовується для підтвердження завершення
+   * тестування.
+   * =========================================================
    */
 
   const unansweredCount = useMemo(() => {
@@ -387,15 +360,23 @@ function ComplexTestPageContent({
     }
 
     return count;
-  }, [
-    complexTest,
-    savedAnswers,
-  ]);
+  }, [complexTest, savedAnswers]);
 
   /*
-   * ============================================================
-   * Перемикання предмета
-   * ============================================================
+   * =========================================================
+   * ПЕРЕМИКАННЯ МІЖ ПРЕДМЕТАМИ
+   *
+   * ВАЖЛИВО:
+   *
+   * НЕ використовуємо window.location.reload().
+   *
+   * Інакше браузер виходить із fullscreen.
+   *
+   * Після успішного POST:
+   * - змінюємо currentTestId локально;
+   * - повертаємося на перше питання предмета;
+   * - fullscreen залишається активним.
+   * =========================================================
    */
 
   async function switchTest(testId: number) {
@@ -439,31 +420,41 @@ function ComplexTestPageContent({
       }
 
       /*
+       * =====================================================
        * ВАЖЛИВО:
-       * перемикання предмета НЕ змінює таймер.
+       * =====================================================
+       *
+       * Тут навмисно НЕМАЄ:
+       *
+       * window.location.reload();
+       *
+       * Замість цього оновлюємо стан контексту.
+       * Це дозволяє залишатися у fullscreen.
        */
+
       setCurrentTestId(testId);
       setCurrentQuestion(0);
+      setSwitchingTestId(null);
     } catch (err) {
       console.error(
         "SWITCH COMPLEX TEST:",
         err
       );
 
+      setSwitchingTestId(null);
+
       setError(
         err instanceof Error
           ? err.message
           : "Не вдалося переключити предмет."
       );
-    } finally {
-      setSwitchingTestId(null);
     }
   }
 
   /*
-   * ============================================================
-   * Перемикання питання
-   * ============================================================
+   * =========================================================
+   * ПЕРЕМИКАННЯ МІЖ ПИТАННЯМИ
+   * =========================================================
    */
 
   async function switchQuestion(
@@ -487,11 +478,20 @@ function ComplexTestPageContent({
       return;
     }
 
-    if (questionIndex === currentQuestion) {
+    if (
+      questionIndex === currentQuestion
+    ) {
       return;
     }
 
+    /*
+     * Спочатку миттєво змінюємо питання
+     * локально, щоб інтерфейс реагував
+     * без затримки мережі.
+     */
+
     setCurrentQuestion(questionIndex);
+
     setSavingQuestion(true);
 
     try {
@@ -505,8 +505,10 @@ function ComplexTestPageContent({
           cache: "no-store",
           body: JSON.stringify({
             sessionId,
-            currentTestId: currentTest.test.id,
-            currentQuestion: questionIndex,
+            currentTestId:
+              currentTest.test.id,
+            currentQuestion:
+              questionIndex,
             savedAnswers,
           }),
         }
@@ -537,9 +539,9 @@ function ComplexTestPageContent({
   }
 
   /*
-   * ============================================================
-   * Завершення тестування
-   * ============================================================
+   * =========================================================
+   * ЗАВЕРШЕННЯ ТЕСТУВАННЯ
+   * =========================================================
    */
 
   async function finishTest() {
@@ -560,12 +562,8 @@ function ComplexTestPageContent({
               : unansweredCount < 5
               ? "питання"
               : "питань"
-          } без відповіді.
-
-Ви впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.`
-        : `Усі питання мають відповіді.
-
-Ви впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.`;
+          } без відповіді.\n\nВи впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.`
+        : "Усі питання мають відповіді.\n\nВи впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.";
 
     const confirmed =
       window.confirm(confirmationMessage);
@@ -588,7 +586,8 @@ function ComplexTestPageContent({
           cache: "no-store",
           body: JSON.stringify({
             sessionId,
-            currentTestId: currentTest.test.id,
+            currentTestId:
+              currentTest.test.id,
             currentQuestion,
             savedAnswers,
             finished: true,
@@ -604,6 +603,11 @@ function ComplexTestPageContent({
             "Не вдалося завершити тестування."
         );
       }
+
+      /*
+       * Сервер уже встановив:
+       * finished = true
+       */
 
       setFinished(true);
 
@@ -627,9 +631,9 @@ function ComplexTestPageContent({
   }
 
   /*
-   * ============================================================
-   * Форматування глобального таймера
-   * ============================================================
+   * =========================================================
+   * Формат таймера
+   * =========================================================
    */
 
   const formattedTime = useMemo(() => {
@@ -656,9 +660,9 @@ function ComplexTestPageContent({
   }, [timeLeft]);
 
   /*
-   * ============================================================
+   * =========================================================
    * Loading
-   * ============================================================
+   * =========================================================
    */
 
   if (loading) {
@@ -678,9 +682,9 @@ function ComplexTestPageContent({
   }
 
   /*
-   * ============================================================
-   * Error
-   * ============================================================
+   * =========================================================
+   * Помилка
+   * =========================================================
    */
 
   if (error) {
@@ -698,9 +702,7 @@ function ComplexTestPageContent({
           <button
             type="button"
             onClick={() =>
-              router.push(
-                `/complex-tests/${id}`
-              )
+              router.push(`/complex-tests/${id}`)
             }
             className="mt-6 rounded-lg bg-[#7A1F2B] px-5 py-3 text-white font-medium hover:opacity-90"
           >
@@ -712,15 +714,12 @@ function ComplexTestPageContent({
   }
 
   /*
-   * ============================================================
-   * Перевірка даних
-   * ============================================================
+   * =========================================================
+   * Немає даних
+   * =========================================================
    */
 
-  if (
-    !complexTest ||
-    !currentTest
-  ) {
+  if (!complexTest || !currentTest) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
         <div className="bg-white rounded-xl shadow-sm p-8">
@@ -732,6 +731,12 @@ function ComplexTestPageContent({
     );
   }
 
+  /*
+   * =========================================================
+   * Питання поточного предмета
+   * =========================================================
+   */
+
   const questions =
     currentTest.test.questions;
 
@@ -741,13 +746,17 @@ function ComplexTestPageContent({
     null;
 
   /*
-   * ============================================================
-   * Основний інтерфейс
-   * ============================================================
+   * =========================================================
+   * ОСНОВНА СТОРІНКА
+   * =========================================================
    */
 
   return (
     <main className="min-h-screen bg-gray-100">
+      {/* =====================================================
+          MONITOR СЕСІЇ
+          ===================================================== */}
+
       <ComplexTestSessionMonitor
         complexTestId={id}
         sessionId={sessionId}
@@ -755,16 +764,18 @@ function ComplexTestPageContent({
         heartbeatInterval={10000}
       />
 
+      {/* =====================================================
+          АВТОЗБЕРЕЖЕННЯ СЕСІЇ
+          ===================================================== */}
+
       <ComplexAutoSaveSession
         complexTestId={id}
         sessionId={sessionId}
       />
 
-      {/*
-       * ========================================================
-       * Верхня панель
-       * ========================================================
-       */}
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3">
@@ -787,6 +798,8 @@ function ComplexTestPageContent({
               )}
             </div>
 
+            {/* Таймер */}
+
             <div
               className={[
                 "shrink-0 rounded-lg px-4 py-2 font-mono text-xl font-bold",
@@ -801,11 +814,9 @@ function ComplexTestPageContent({
         </div>
       </header>
 
-      {/*
-       * ========================================================
-       * Блокування адміністратором
-       * ========================================================
-       */}
+      {/* =====================================================
+          BLOCKED
+          ===================================================== */}
 
       {blocked && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
@@ -828,30 +839,39 @@ function ComplexTestPageContent({
         </div>
       )}
 
+      {/* =====================================================
+          CONTENT
+          ===================================================== */}
+
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-          {/*
-           * ======================================================
-           * Питання
-           * ======================================================
-           */}
+
+          {/* =================================================
+              QUESTIONS
+              ================================================= */}
 
           <section>
             <div className="bg-white rounded-xl shadow-sm p-6">
+
+              {/* =================================================
+                  CURRENT QUESTION
+                  ================================================= */}
+
               {currentQuestionData ? (
                 <div className="mt-6">
                   <div className="text-xs font-medium text-gray-500 mb-2">
-                    Питання{" "}
-                    {currentQuestion + 1}
+                    Питання {currentQuestion + 1}
                   </div>
 
                   <div className="text-lg font-semibold text-gray-900">
                     <RichText
-                      html={
-                        currentQuestionData.text
-                      }
+                      html={currentQuestionData.text}
                     />
                   </div>
+
+                  {/* =================================================
+                      ANSWER OPTIONS
+                      ================================================= */}
 
                   <div className="mt-5 space-y-3">
                     {currentQuestionData.answerOptions.map(
@@ -861,9 +881,7 @@ function ComplexTestPageContent({
                             selectedAnswers[
                               currentQuestionData.id
                             ] ?? []
-                          ).includes(
-                            option.id
-                          );
+                          ).includes(option.id);
 
                         return (
                           <label
@@ -888,8 +906,7 @@ function ComplexTestPageContent({
                                 blocked ||
                                 finished ||
                                 finishing ||
-                                switchingTestId !==
-                                  null
+                                switchingTestId !== null
                               }
                               onChange={() => {
                                 const current =
@@ -905,9 +922,7 @@ function ComplexTestPageContent({
                                 ) {
                                   next = selected
                                     ? current.filter(
-                                        (
-                                          answerId
-                                        ) =>
+                                        (answerId) =>
                                           answerId !==
                                           option.id
                                       )
@@ -916,9 +931,7 @@ function ComplexTestPageContent({
                                         option.id,
                                       ];
                                 } else {
-                                  next = [
-                                    option.id,
-                                  ];
+                                  next = [option.id];
                                 }
 
                                 selectAnswer(
@@ -937,9 +950,7 @@ function ComplexTestPageContent({
 
                             <span className="text-gray-800">
                               <RichText
-                                html={
-                                  option.text
-                                }
+                                html={option.text}
                               />
                             </span>
                           </label>
@@ -956,16 +967,15 @@ function ComplexTestPageContent({
             </div>
           </section>
 
-          {/*
-           * ======================================================
-           * Бічна панель
-           * ======================================================
-           */}
+          {/* =================================================
+              SIDEBAR / НАВІГАЦІЙНА ПАНЕЛЬ
+              ================================================= */}
 
           <aside className="space-y-4">
-            {/*
-             * Таймер
-             */}
+
+            {/* =================================================
+                TIMER
+                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <div className="text-sm text-gray-500">
@@ -990,9 +1000,9 @@ function ComplexTestPageContent({
               </div>
             </div>
 
-            {/*
-             * Предмети
-             */}
+            {/* =================================================
+                SUBJECTS
+                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -1018,8 +1028,7 @@ function ComplexTestPageContent({
                           blocked ||
                           finished ||
                           finishing ||
-                          switchingTestId !==
-                            null ||
+                          switchingTestId !== null ||
                           active
                         }
                         onClick={() =>
@@ -1053,9 +1062,9 @@ function ComplexTestPageContent({
               </div>
             </div>
 
-            {/*
-             * Навігація питаннями
-             */}
+            {/* =================================================
+                QUESTION NUMBERS / НАВІГАЦІЯ
+                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -1073,9 +1082,8 @@ function ComplexTestPageContent({
                     const saved =
                       savedAnswers[
                         currentTest.test.id
-                      ]?.[
-                        question.id
-                      ] ?? [];
+                      ]?.[question.id] ??
+                      [];
 
                     const hasAnswer =
                       answers.length > 0 ||
@@ -1094,13 +1102,10 @@ function ComplexTestPageContent({
                           finished ||
                           finishing ||
                           savingQuestion ||
-                          switchingTestId !==
-                            null
+                          switchingTestId !== null
                         }
                         onClick={() =>
-                          switchQuestion(
-                            index
-                          )
+                          switchQuestion(index)
                         }
                         className={[
                           "h-9 rounded-md text-sm font-medium border transition",
@@ -1142,9 +1147,9 @@ function ComplexTestPageContent({
               </div>
             </div>
 
-            {/*
-             * Завершення
-             */}
+            {/* =================================================
+                FINISH
+                ================================================= */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <button
@@ -1153,8 +1158,7 @@ function ComplexTestPageContent({
                   blocked ||
                   finished ||
                   finishing ||
-                  switchingTestId !==
-                    null ||
+                  switchingTestId !== null ||
                   savingQuestion
                 }
                 onClick={finishTest}
