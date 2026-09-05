@@ -8,26 +8,28 @@ datasource db {
 }
 
 model Test {
-  id           Int            @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   title        String
   subject      String
   subjectId    Int?
-  subjectRef   Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  subjectRef   Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   description  String?
   schoolYear   String
   duration     Int
   maxPoints    Int
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
   accessCode   String?
-  codeRequired Boolean        @default(true)
-  isPublished  Boolean        @default(false)
-  examType     String         @default("НМТ")
-  displayOrder Int            @unique
-  isArchived   Boolean        @default(false)
+  codeRequired Boolean           @default(true)
+  isPublished  Boolean           @default(false)
+  examType     String            @default("НМТ")
+  displayOrder Int               @unique
+  isArchived   Boolean           @default(false)
+
   questions    TestQuestion[]
   results      TestResult[]
   sessions     TestSession[]
+  complexTests ComplexTestItem[]
 }
 
 model Subject {
@@ -38,6 +40,35 @@ model Subject {
   isArchived  Boolean  @default(false)
 
   tests       Test[]
+}
+
+model ComplexTest {
+  id           Int               @id @default(autoincrement())
+  title        String
+  description  String?
+  duration     Int
+  accessCode   String?
+  codeRequired Boolean           @default(true)
+  isPublished  Boolean           @default(false)
+  isArchived   Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  tests        ComplexTestItem[]
+}
+
+model ComplexTestItem {
+  id            Int         @id @default(autoincrement())
+  complexTestId Int
+  testId        Int
+  order         Int
+
+  complexTest   ComplexTest @relation(fields: [complexTestId], references: [id], onDelete: Cascade)
+  test          Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([complexTestId, testId])
+  @@index([complexTestId, order])
+  @@index([testId])
 }
 
 model Question {

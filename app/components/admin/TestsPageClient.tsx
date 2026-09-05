@@ -8,7 +8,7 @@ import {
 
 import SubjectBlock from "@/app/components/admin/SubjectBlock";
 import SearchBar from "@/app/components/admin/SearchBar";
-
+import ComplexTestsBlock from "@/app/components/admin/ComplexTestsBlock";
 type Test = {
   id: number;
   title: string;
@@ -220,7 +220,8 @@ export default function TestsPageClient({
           </div>
 
         )}
-
+        {/* Комбіновані тести */}
+        <ComplexTestsBlock />
       </div>
     </main>
   );
