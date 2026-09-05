@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Brain, Clock3, FileText, Loader2 } from "lucide-react";
 
@@ -52,10 +53,10 @@ export default function ComplexTestsPage() {
         setError("");
 
         const response = await fetch(
-  `/api/complex-tests?examType=${encodeURIComponent(
-    selectedExamType ?? ""
-  )}`
-);
+          `/api/complex-tests?examType=${encodeURIComponent(
+            selectedExamType ?? ""
+          )}`
+        );
 
         if (!response.ok) {
           throw new Error(
@@ -274,6 +275,14 @@ export default function ComplexTestsPage() {
                         {complexTest.duration} хв
                       </span>
                     </div>
+
+                    {/* Кнопка вибору тесту */}
+                    <Link
+                      href={`/complex-tests/${complexTest.id}`}
+                      className="mt-6 flex w-full items-center justify-center rounded-xl bg-[#7A1F2B] px-6 py-3.5 text-lg font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#651923] hover:shadow-md"
+                    >
+                      Обрати тест
+                    </Link>
                   </div>
                 );
               })}
