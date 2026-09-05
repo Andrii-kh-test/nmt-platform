@@ -166,6 +166,69 @@ function normalizeSeconds(
 }
 
 /* =========================================================
+   ЗАГАЛЬНА ТРИВАЛІСТЬ КОМБІНОВАНОГО ТЕСТУ
+   =========================================================
+   
+   ВАЖЛИВО:
+   
+   Час комбінованого тесту визначається
+   як сума duration усіх складових Test.
+   
+   duration кожного Test зберігається у хвилинах.
+   
+   Наприклад:
+   
+   Test 1 = 60 хв
+   Test 2 = 60 хв
+   Test 3 = 60 хв
+   
+   Загальний час = 180 хв = 10800 секунд.
+   
+   complexTest.duration тут НЕ використовується
+   для таймера.
+   ========================================================= */
+
+function getTotalDurationSeconds(
+  data: ComplexTestData
+): number {
+  if (
+    !data.tests ||
+    data.tests.length === 0
+  ) {
+    return 0;
+  }
+
+  const totalMinutes =
+    data.tests.reduce(
+      (total, item) => {
+        const duration =
+          Number(
+            item.test?.duration
+          );
+
+        if (
+          !Number.isFinite(
+            duration
+          ) ||
+          duration < 0
+        ) {
+          return total;
+        }
+
+        return (
+          total +
+          Math.floor(duration)
+        );
+      },
+      0
+    );
+
+  return normalizeSeconds(
+    totalMinutes * 60
+  );
+}
+
+/* =========================================================
    PROVIDER
    ========================================================= */
 
@@ -243,6 +306,19 @@ export function ComplexTestSessionProvider({
 
   /* =======================================================
      LOAD COMPLEX TEST
+     =======================================================
+     
+     ВАЖЛИВО:
+     
+     Початковий час тут також визначається
+     сумою duration усіх складових тестів.
+     
+     Це потрібно для того, щоб контекст не показував,
+     наприклад, 01:00:00 перед відновленням серверної
+     сесії з правильними 03:00:00.
+     
+     Після отримання сесії restoreSession() встановить
+     авторитетне значення timeLeft із БД.
      ======================================================= */
 
   const loadComplexTest = useCallback(
@@ -260,10 +336,17 @@ export function ComplexTestSessionProvider({
       setSelectedAnswers({});
       setSavedAnswers({});
 
+      /*
+       * Глобальний час усього комбінованого тесту.
+       *
+       * НЕ:
+       * data.duration
+       *
+       * А:
+       * сума duration усіх data.tests[].test
+       */
       setTimeLeftState(
-        normalizeSeconds(
-          data.duration * 60
-        )
+        getTotalDurationSeconds(data)
       );
 
       setTimerRunning(false);
@@ -317,6 +400,16 @@ export function ComplexTestSessionProvider({
 
   /* =======================================================
      CURRENT TEST
+     
+     ВАЖЛИВО:
+     
+     Перемикання предмета НЕ:
+     
+     - змінює timeLeft;
+     - запускає новий таймер;
+     - скидає deadline;
+     - використовує duration нового Test.
+     
      ======================================================= */
 
   const setCurrentTestId = useCallback(
@@ -416,8 +509,17 @@ export function ComplexTestSessionProvider({
      START TIMER
      
      ВАЖЛИВО:
-     Сервер уже передає актуальний timeLeft.
-     Не рахуємо час через startedAt.
+     
+     Це ОДИН глобальний таймер комбінованого тесту.
+     
+     Він працює з поточного timeLeft.
+     
+     Він НЕ:
+     
+     - бере duration поточного предмета;
+     - залежить від currentTestId;
+     - перезапускається при зміні предмета.
+     
      ======================================================= */
 
   const startTimer = useCallback(() => {
@@ -504,16 +606,20 @@ export function ComplexTestSessionProvider({
   /* =======================================================
      RESTORE SESSION
      
-     Сервер повертає вже актуальний timeLeft.
+     Сервер повертає вже актуальний глобальний timeLeft.
      
      НЕ:
-       startedAt + duration
+     
+     startedAt + duration
      
      НЕ:
-       lastActivityAt → розрахунок часу
      
-     Так само, як в еталонному
-     TestSessionContext.
+     lastActivityAt → розрахунок часу
+     
+     НЕ:
+     
+     currentTestId → розрахунок часу
+     
      ======================================================= */
 
   const restoreSession =
@@ -547,6 +653,10 @@ export function ComplexTestSessionProvider({
         deadlineRef.current =
           null;
 
+        /*
+         * timeLeft із сервера є
+         * авторитетним значенням.
+         */
         const seconds =
           normalizeSeconds(
             restoredTimeLeft
@@ -568,8 +678,7 @@ export function ComplexTestSessionProvider({
         );
 
         setSavedAnswers(
-          restoredSavedAnswers ??
-            {}
+          restoredSavedAnswers ?? {}
         );
 
         setTimeLeftState(
@@ -589,12 +698,16 @@ export function ComplexTestSessionProvider({
         );
 
         setBlockReasonState(
-          restoredBlockReason ??
-            null
+          restoredBlockReason ?? null
         );
 
         setTimerRunning(false);
 
+        /*
+         * Якщо сесія не розпочата,
+         * завершена, заблокована або часу немає —
+         * countdown не запускаємо.
+         */
         if (
           !startedAt ||
           restoredFinished ||
@@ -604,6 +717,10 @@ export function ComplexTestSessionProvider({
           return;
         }
 
+        /*
+         * Один глобальний deadline
+         * для всієї комбінованої сесії.
+         */
         deadlineRef.current =
           Date.now() +
           seconds * 1000;
@@ -749,13 +866,9 @@ export function ComplexTestSessionProvider({
 
       setSessionIdState(null);
 
-      setCurrentTestIdState(
-        null
-      );
+      setCurrentTestIdState(null);
 
-      setCurrentQuestionState(
-        0
-      );
+      setCurrentQuestionState(0);
 
       setSelectedAnswers({});
       setSavedAnswers({});

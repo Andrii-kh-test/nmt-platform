@@ -156,22 +156,13 @@ export async function POST(request: NextRequest) {
     // Початкові відповіді
     //
     // Структура:
+    //
     // {
     //   "testId": {
     //     "questionId": answer
     //   }
     // }
     //
-    // Наприклад:
-    // {
-    //   "12": {
-    //     "101": "A",
-    //     "102": ["B", "D"]
-    //   },
-    //   "15": {
-    //     "201": "C"
-    //   }
-    // }
     // ---------------------------------------------------------
 
     const savedAnswers: Record<
@@ -190,15 +181,41 @@ export async function POST(request: NextRequest) {
     }
 
     // ---------------------------------------------------------
-    // Час комбінованого тесту
+    // ЗАГАЛЬНИЙ ЧАС КОМБІНОВАНОГО ТЕСТУ
     //
-    // duration зберігається у хвилинах.
-    // timeLeft — у секундах.
+    // duration кожного складового Test зберігається у хвилинах.
+    // timeLeft у ComplexTestSession зберігається у секундах.
+    //
+    // Наприклад:
+    //
+    // Тест 1 = 60 хв
+    // Тест 2 = 60 хв
+    // Тест 3 = 60 хв
+    //
+    // Разом = 180 хв = 10800 секунд
+    //
+    // ВАЖЛИВО:
+    // complexTest.duration тут НЕ використовується.
+    // Час береться безпосередньо з налаштувань
+    // кожного складового тесту.
     // ---------------------------------------------------------
+
+    const totalDurationMinutes = complexTest.tests.reduce(
+      (total, item) => {
+        const duration = Number(item.test.duration);
+
+        if (!Number.isFinite(duration) || duration < 0) {
+          return total;
+        }
+
+        return total + Math.floor(duration);
+      },
+      0
+    );
 
     const timeLeft = Math.max(
       0,
-      Math.floor(complexTest.duration * 60)
+      totalDurationMinutes * 60
     );
 
     // ---------------------------------------------------------
@@ -211,6 +228,8 @@ export async function POST(request: NextRequest) {
     // Створюємо окрему сесію комбінованого тесту
     // ---------------------------------------------------------
 
+    const startedAt = new Date();
+
     const session = await prisma.complexTestSession.create({
       data: {
         complexTestId: complexTest.id,
@@ -220,16 +239,26 @@ export async function POST(request: NextRequest) {
         currentQuestion: 0,
 
         savedAnswers: savedAnswers as Prisma.InputJsonValue,
+
+        // ЄДИНИЙ глобальний таймер усього комбінованого тесту
         timeLeft,
 
         finished: false,
 
-        startedAt: new Date(),
-        lastActivityAt: new Date(),
+        // Комбінований тест починається одразу після
+        // створення сесії.
+        startedAt,
+
+        lastActivityAt: startedAt,
 
         blocked: false,
         blockReason: null,
+
+        // Додатковий час адміністратора
+        // також має застосовуватися до цього
+        // глобального таймера.
         extraTime: 0,
+
         blockedAt: null,
         finishedAt: null,
       },
@@ -252,12 +281,23 @@ export async function POST(request: NextRequest) {
         id: complexTest.id,
         title: complexTest.title,
         description: complexTest.description,
+
+        // Тут залишаємо значення ComplexTest для інформаційних
+        // цілей, але таймер використовує НЕ його.
         duration: complexTest.duration,
+
         examType: complexTest.examType,
         section: complexTest.section,
       },
 
+      // Фактичний глобальний час сесії
       timeLeft: session.timeLeft,
+
+      // Додатково повертаємо загальну тривалість,
+      // розраховану із складових тестів.
+      totalDurationMinutes,
+
+      totalDurationSeconds: timeLeft,
 
       currentTestId: session.currentTestId,
 
