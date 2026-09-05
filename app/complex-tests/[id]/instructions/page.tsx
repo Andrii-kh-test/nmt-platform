@@ -17,6 +17,7 @@ type ParticipantData = {
   lastName: string;
   firstName: string;
   middleName: string;
+  accessCode: string;
 };
 
 export default function ComplexTestInstructionsPage() {
@@ -117,19 +118,6 @@ export default function ComplexTestInstructionsPage() {
     setError("");
 
     try {
-      /*
-       * Запуск комбінованого тесту.
-       *
-       * ВАЖЛИВО:
-       * маршрут знаходиться тут:
-       *
-       * app/api/complex-tests/start/route.ts
-       *
-       * тому URL:
-       *
-       * /api/complex-tests/start
-       */
-
       const response = await fetch(
         `/api/complex-tests/start`,
         {
@@ -142,6 +130,7 @@ export default function ComplexTestInstructionsPage() {
             lastName: participant.lastName,
             firstName: participant.firstName,
             middleName: participant.middleName,
+            accessCode: participant.accessCode,
           }),
         }
       );
@@ -155,10 +144,6 @@ export default function ComplexTestInstructionsPage() {
         );
       }
 
-      /*
-       * Зберігаємо дані сесії.
-       */
-
       sessionStorage.setItem(
         `complex-test-session-${id}`,
         JSON.stringify({
@@ -169,10 +154,6 @@ export default function ComplexTestInstructionsPage() {
           timeLeft: data.timeLeft,
         })
       );
-
-      /*
-       * Переходимо до сторінки тестування.
-       */
 
       router.push(
         `/complex-tests/${id}/test`
@@ -278,75 +259,143 @@ export default function ComplexTestInstructionsPage() {
                 тестування!
               </p>
 
-              {/* Опис */}
-              {test.description && (
-                <div className="leading-relaxed whitespace-pre-line">
-                  {test.description}
-                </div>
-              )}
+              {/* Основний текст інструкції */}
+              <div className="space-y-5 text-base leading-relaxed text-gray-700">
 
-              {/* Основна інформація */}
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                <h2 className="mb-4 text-lg font-bold text-gray-900">
-                  Інформація про тестування
-                </h2>
+                <p>
+                  Обов’язково ознайомтеся з правилами
+                  проходження тестування та правилами роботи
+                  із сервісом і натисніть на кнопку
+                  «Ознайомлений / Ознайомлена з правилами
+                  проходження тестування». Наголошуємо, що в
+                  разі порушення цих правил вас буде позбавлено
+                  права продовжувати роботу, а ваші результати
+                  буде анульовано.
+                </p>
 
-                <div className="space-y-3">
+                <p>
+                  Зауважуємо: у ТЕЦ може бути здійснено
+                  контроль за дотриманням процедури проходження
+                  НМТ за допомогою металодетектора. Також у ТЕЦ
+                  здійснюється відеоспостереження.
+                </p>
 
-                  <div className="flex items-center justify-between gap-4 border-b border-gray-200 pb-3">
-                    <span className="text-gray-600">
-                      Час виконання
-                    </span>
+                <p>
+                  Якщо ви забули вимкнути мобільні телефони чи
+                  залишити їх або зарядні пристрої, смартгодинники,
+                  навушники в спеціально відведеному місці —
+                  пропонуємо зробити це зараз. У разі виникнення
+                  технічних збоїв у роботі сервісу або погіршення
+                  самопочуття потрібно негайно повідомити про це
+                  інструктора.
+                </p>
 
-                    <span className="font-semibold text-gray-900">
-                      {test.duration} хв
-                    </span>
-                  </div>
+                <p>
+                  Якщо ви вважатимете, що щодо вас допущено
+                  порушення процедури проведення НМТ, що може
+                  вплинути на ваш результат, — до виходу з
+                  тимчасового екзаменаційного центру (ТЕЦ)
+                  подайте відповідальному за ТЕЦ апеляційну
+                  заяву щодо порушення процедури.
+                </p>
 
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-gray-600">
-                      Тип тестування
-                    </span>
+                <p>
+                  У випадку оголошення повітряної тривоги до
+                  початку допуску до ТЕЦ пройдіть в укриття за
+                  вказівниками та перебувайте там до повідомлення
+                  про її завершення. Якщо ж повітряну тривогу
+                  оголосять під час тестування — вас буде
+                  повідомлено про це, а роботу над тестом
+                  заблоковано.
+                </p>
 
-                    <span className="font-semibold text-gray-900">
-                      {test.examType}
-                    </span>
-                  </div>
+                <p>
+                  Якщо ви не зможете завершити виконання роботи
+                  через виникнення нестандартних ситуацій у ТЕЦ
+                  або через різке погіршення стану здоров’я, вам
+                  буде надано змогу пройти НМТ під час додаткових
+                  сесій відповідно до встановленого порядку.
+                </p>
 
-                </div>
-              </div>
+                <p>
+                  Під час кожного етапу тестування передбачено
+                  виконання завдань із двох предметів, час між
+                  якими ви можете розподіляти самостійно. Таймер
+                  відліку часу, що показує час, який залишився до
+                  завершення відповідного етапу тестування,
+                  відображатиметься у правому верхньому куті
+                  екрана.
+                </p>
 
-              {/* Правила */}
-              <div>
-                <h2 className="mb-4 text-lg font-bold text-gray-900">
-                  Правила проходження
-                </h2>
+                <p>
+                  Розпочати роботу над тестом ви можете як з
+                  української мови, так і з математики.
+                  Повернутися до виконання завдань одного із цих
+                  предметів і надати та зберегти відповіді можна
+                  протягом усього часу, відведеного на виконання
+                  завдань першого етапу тестування. Переходячи
+                  від одного предмета до іншого, уважно читайте
+                  спливні повідомлення. Для зарахування відповіді
+                  на завдання натисніть на кнопку «Зберегти
+                  відповідь».
+                </p>
 
-                <ul className="list-disc space-y-3 pl-6 leading-relaxed">
-                  <li>
-                    Уважно читайте кожне тестове завдання
-                    перед вибором відповіді.
-                  </li>
+                <p>
+                  Для виправлення відповіді виберіть інший
+                  варіант та повторно натисніть на кнопку
+                  «Зберегти відповідь» – у такому разі буде
+                  зараховано останню збережену вами відповідь.
+                  На боковій панелі, розташованій справа,
+                  відображатиметься інформація про опрацьовані
+                  вами завдання.
+                </p>
 
-                  <li>
-                    Загальний час виконання тестування
-                    становить{" "}
-                    <strong>
-                      {test.duration} хвилин
-                    </strong>
-                    .
-                  </li>
+                <p>
+                  За потреби ви можете користуватися
+                  довідковими матеріалами з математики, фізики
+                  чи хімії, що містяться у вкладці
+                  «Довідкові матеріали».
+                </p>
 
-                  <li>
-                    Не закривайте сторінку тестування без
-                    необхідності.
-                  </li>
+                <p>
+                  На боковій панелі, розташованій праворуч,
+                  відображатиметься інформація про опрацювання
+                  вами завдань.
+                </p>
 
-                  <li>
-                    Після завершення тестування результати
-                    будуть зафіксовані системою.
-                  </li>
-                </ul>
+                <p>
+                  Стежте за вказівками, які з’являються на
+                  моніторі комп’ютера, а також читайте
+                  інформацію у спливних повідомленнях.
+                </p>
+
+                <p>
+                  Якщо ви дочасно закінчите роботу над
+                  завданнями — можете завершити тестування,
+                  натиснувши кнопку «Завершити роботу над
+                  тестом».
+                </p>
+
+                <p>
+                  Будьте уважні: перед завершенням роботи
+                  система повідомить, на які завдання ви не
+                  надали або не зберегли відповіді.
+                </p>
+
+                <p>
+                  Після завершення виконання завдань тестування
+                  на екрані відобразиться інформація про
+                  збережені вами відповіді та набрані тестові
+                  бали.
+                </p>
+
+                <p>
+                  Якщо вам потрібна допомога у вирішенні питань,
+                  які не стосуються змісту завдань тесту,
+                  піднесіть руку, і до вас підійде старший
+                  інструктор.
+                </p>
+
               </div>
 
               {/* Побажання */}
@@ -354,26 +403,23 @@ export default function ComplexTestInstructionsPage() {
                 Зичимо успіхів!
               </p>
 
-              {/* Підтвердження */}
+              {/* Підтвердження ознайомлення */}
               <div className="border-t border-gray-200 pt-6">
 
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 bg-slate-50 px-5 py-4 transition hover:border-gray-300">
+                <label className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={confirmed}
                     onChange={(event) =>
-                      setConfirmed(
-                        event.target.checked
-                      )
+                      setConfirmed(event.target.checked)
                     }
                     disabled={starting}
-                    className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[#7A1F2B]"
+                    className="h-5 w-5 shrink-0 cursor-pointer accent-[#7A1F2B]"
                   />
 
-                  <span className="text-gray-700 leading-relaxed">
-                    Я ознайомився / ознайомилася з
-                    правилами проходження тестування та
-                    погоджуюся дотримуватися їх.
+                  <span className="text-base font-medium text-gray-900">
+                    Ознайомлений / Ознайомлена з правилами
+                    проходження тестування
                   </span>
                 </label>
 
@@ -384,7 +430,7 @@ export default function ComplexTestInstructionsPage() {
                   </div>
                 )}
 
-                {/* Кнопка */}
+                {/* Кнопка запуску */}
                 <button
                   type="button"
                   onClick={handleConfirm}
@@ -399,7 +445,7 @@ export default function ComplexTestInstructionsPage() {
                   ) : (
                     <>
                       <CheckCircle2 className="h-5 w-5" />
-                      Ознайомлений(а) — розпочати тестування
+                      Розпочати роботу над тестом
                     </>
                   )}
                 </button>
