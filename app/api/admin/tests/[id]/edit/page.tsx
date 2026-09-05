@@ -19,31 +19,52 @@ export default async function EditTestPage({
 }: Props) {
   const { id } = await params;
 
-  const prismaTest = await prisma.test.findFirst();
+  const testId = Number(id);
 
-console.log(prismaTest);
+  if (!Number.isInteger(testId) || testId <= 0) {
+    notFound();
+  }
 
-return (
-  <main className="p-10">
-    <pre>{JSON.stringify(prismaTest, null, 2)}</pre>
-  </main>
-);
+  const prismaTest = await prisma.test.findUnique({
+    where: {
+      id: testId,
+    },
+    include: {
+      questions: {
+        orderBy: {
+          order: "asc",
+        },
+        include: {
+          question: {
+            include: {
+              answerOptions: {
+                orderBy: {
+                  order: "asc",
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!prismaTest) {
+    notFound();
+  }
 
   const test = mapPrismaTest(prismaTest);
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] p-8">
-
       <TestLoader test={test} />
 
-      <div className="max-w-7xl mx-auto">
-
-        <h1 className="text-4xl font-bold text-[#7A1F2B] mb-8">
+      <div className="mx-auto max-w-7xl">
+        <h1 className="mb-8 text-4xl font-bold text-[#7A1F2B]">
           Редагування тесту
         </h1>
 
         <div className="grid grid-cols-12 gap-8">
-
           <div className="col-span-4">
             <TestSettings />
           </div>
@@ -51,11 +72,8 @@ return (
           <div className="col-span-8">
             <QuestionList />
           </div>
-
         </div>
-
       </div>
-
     </main>
   );
 }

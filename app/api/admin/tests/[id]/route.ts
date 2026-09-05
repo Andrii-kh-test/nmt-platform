@@ -8,19 +8,36 @@ type RouteContext = {
   }>;
 };
 
-/**
- * GET /api/admin/tests/:id
- *
- * Повертає тест разом із:
- *
- * Test
- *  ├── subjectRef
- *  ├── questions
- *  │    └── question
- *  │         └── answerOptions
- *  ├── sessions
- *  └── results
- */
+/* =========================================================
+   СПІЛЬНИЙ INCLUDE ДЛЯ ТЕСТУ
+========================================================= */
+
+const testInclude = {
+  subjectRef: true,
+
+  questions: {
+    orderBy: {
+      order: "asc" as const,
+    },
+
+    include: {
+      question: {
+        include: {
+          answerOptions: {
+            orderBy: {
+              order: "asc" as const,
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+/* =========================================================
+   GET /api/admin/tests/:id
+========================================================= */
+
 export async function GET(
   _request: NextRequest,
   { params }: RouteContext
@@ -121,12 +138,10 @@ export async function GET(
   }
 }
 
-/**
- * PATCH /api/admin/tests/:id
- *
- * Оновлення основної інформації тесту,
- * а також архівування / відновлення.
- */
+/* =========================================================
+   PATCH /api/admin/tests/:id
+========================================================= */
+
 export async function PATCH(
   request: NextRequest,
   { params }: RouteContext
@@ -153,6 +168,18 @@ export async function PATCH(
         where: {
           id: testId,
         },
+
+        include: {
+          questions: {
+            include: {
+              question: {
+                include: {
+                  answerOptions: true,
+                },
+              },
+            },
+          },
+        },
       });
 
     if (!existingTest) {
@@ -169,23 +196,28 @@ export async function PATCH(
 
     const body = await request.json();
 
+    /* =====================================================
+       ПЕРЕВІРКА ОСНОВНИХ ПОЛІВ
+    ===================================================== */
+
     const data: {
       title?: string;
       subject?: string;
       subjectId?: number | null;
+      description?: string | null;
+      schoolYear?: string;
       duration?: number;
       maxPoints?: number;
+      displayOrder?: number;
       isPublished?: boolean;
       codeRequired?: boolean;
       accessCode?: string | null;
       isArchived?: boolean;
     } = {};
 
-    /*
-     * ================================
-     * НАЗВА
-     * ================================
-     */
+    /* =====================================================
+       НАЗВА
+    ===================================================== */
 
     if (typeof body.title === "string") {
       const title = body.title.trim();
@@ -206,11 +238,9 @@ export async function PATCH(
       data.title = title;
     }
 
-    /*
-     * ================================
-     * ПРЕДМЕТ — старе текстове поле
-     * ================================
-     */
+    /* =====================================================
+       SUBJECT
+    ===================================================== */
 
     if (typeof body.subject === "string") {
       const subject = body.subject.trim();
@@ -230,11 +260,9 @@ export async function PATCH(
       data.subject = subject;
     }
 
-    /*
-     * ================================
-     * ПРЕДМЕТ — новий subjectId
-     * ================================
-     */
+    /* =====================================================
+       SUBJECT ID
+    ===================================================== */
 
     if (body.subjectId !== undefined) {
       if (
@@ -286,11 +314,30 @@ export async function PATCH(
       }
     }
 
-    /*
-     * ================================
-     * ТРИВАЛІСТЬ
-     * ================================
-     */
+    /* =====================================================
+       ОПИС
+    ===================================================== */
+
+    if (body.description !== undefined) {
+      data.description =
+        body.description === null
+          ? null
+          : String(body.description);
+    }
+
+    /* =====================================================
+       НАВЧАЛЬНИЙ РІК
+    ===================================================== */
+
+    if (body.schoolYear !== undefined) {
+      data.schoolYear = String(
+        body.schoolYear
+      ).trim();
+    }
+
+    /* =====================================================
+       ТРИВАЛІСТЬ
+    ===================================================== */
 
     if (body.duration !== undefined) {
       const duration = Number(
@@ -316,11 +363,9 @@ export async function PATCH(
       data.duration = duration;
     }
 
-    /*
-     * ================================
-     * МАКСИМАЛЬНА КІЛЬКІСТЬ БАЛІВ
-     * ================================
-     */
+    /* =====================================================
+       МАКСИМАЛЬНІ БАЛИ
+    ===================================================== */
 
     if (body.maxPoints !== undefined) {
       const maxPoints = Number(
@@ -346,11 +391,65 @@ export async function PATCH(
       data.maxPoints = maxPoints;
     }
 
-    /*
-     * ================================
-     * ПУБЛІКАЦІЯ
-     * ================================
-     */
+    /* =====================================================
+       DISPLAY ORDER
+    ===================================================== */
+
+    if (body.displayOrder !== undefined) {
+      const displayOrder = Number(
+        body.displayOrder
+      );
+
+      if (
+        !Number.isInteger(displayOrder) ||
+        displayOrder < 1
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              "Порядок на головній сторінці повинен бути додатним цілим числом.",
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      const anotherTest =
+        await prisma.test.findFirst({
+          where: {
+            displayOrder,
+            NOT: {
+              id: testId,
+            },
+          },
+
+          select: {
+            id: true,
+            title: true,
+          },
+        });
+
+      if (anotherTest) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              `Номер ${displayOrder} вже використовується тестом «${anotherTest.title}».`,
+          },
+          {
+            status: 400,
+          }
+        );
+      }
+
+      data.displayOrder = displayOrder;
+    }
+
+    /* =====================================================
+       ПУБЛІКАЦІЯ
+    ===================================================== */
 
     if (
       typeof body.isPublished === "boolean"
@@ -359,11 +458,9 @@ export async function PATCH(
         body.isPublished;
     }
 
-    /*
-     * ================================
-     * КОД ДОСТУПУ
-     * ================================
-     */
+    /* =====================================================
+       КОД
+    ===================================================== */
 
     if (
       typeof body.codeRequired === "boolean"
@@ -372,11 +469,9 @@ export async function PATCH(
         body.codeRequired;
     }
 
-    /*
-     * ================================
-     * ЗНАЧЕННЯ КОДУ
-     * ================================
-     */
+    /* =====================================================
+       ACCESS CODE
+    ===================================================== */
 
     if (body.accessCode !== undefined) {
       data.accessCode =
@@ -388,11 +483,9 @@ export async function PATCH(
             ).trim();
     }
 
-    /*
-     * ================================
-     * АРХІВУВАННЯ / ВІДНОВЛЕННЯ
-     * ================================
-     */
+    /* =====================================================
+       АРХІВУВАННЯ
+    ===================================================== */
 
     if (
       typeof body.isArchived === "boolean"
@@ -400,54 +493,460 @@ export async function PATCH(
       data.isArchived =
         body.isArchived;
 
-      /*
-       * Архівований тест автоматично
-       * знімається з публікації.
-       *
-       * При відновленні стан публікації
-       * не змінюємо автоматично.
-       */
       if (body.isArchived === true) {
         data.isPublished = false;
       }
     }
 
-    /*
-     * ================================
-     * ОНОВЛЕННЯ
-     * ================================
-     */
+    /* =====================================================
+       ПИТАННЯ
+       
+       Тут відбувається головне виправлення.
+
+       PATCH тепер:
+       1. оновлює існуючі питання;
+       2. створює нові питання;
+       3. оновлює варіанти відповідей;
+       4. видаляє питання, які прибрали з редактора;
+       5. зберігає порядок.
+    ===================================================== */
+
+    const incomingQuestions =
+      Array.isArray(body.questions)
+        ? body.questions
+        : null;
 
     const updatedTest =
-      await prisma.test.update({
-        where: {
-          id: testId,
-        },
+      await prisma.$transaction(
+        async (tx) => {
+          /* ===============================================
+             ОНОВЛЕННЯ САМОГО ТЕСТУ
+          =============================================== */
 
-        data,
-
-        include: {
-          subjectRef: true,
-
-          questions: {
-            orderBy: {
-              order: "asc",
+          await tx.test.update({
+            where: {
+              id: testId,
             },
 
-            include: {
-              question: {
-                include: {
-                  answerOptions: {
-                    orderBy: {
-                      order: "asc",
-                    },
+            data,
+          });
+
+          /* ===============================================
+             ЯКЩО QUESTIONS НЕ ПЕРЕДАНІ —
+             ЗАЛИШАЄМО ЇХ БЕЗ ЗМІН
+          =============================================== */
+
+          if (incomingQuestions === null) {
+            return tx.test.findUniqueOrThrow({
+              where: {
+                id: testId,
+              },
+
+              include: testInclude,
+            });
+          }
+
+          /* ===============================================
+             ІСНУЮЧІ QUESTION ID
+          =============================================== */
+
+          const existingQuestionIds =
+            existingTest.questions.map(
+              (item) => item.questionId
+            );
+
+          const incomingQuestionIds =
+            incomingQuestions
+              .map((question: unknown) => {
+                if (
+                  !question ||
+                  typeof question !==
+                    "object"
+                ) {
+                  return null;
+                }
+
+                const q =
+                  question as {
+                    id?: unknown;
+                  };
+
+                const id = Number(q.id);
+
+                return Number.isInteger(id) &&
+                  id > 0
+                  ? id
+                  : null;
+              })
+              .filter((id: number): id is number => id !== null);
+
+          /* ===============================================
+             СТВОРЕННЯ / ОНОВЛЕННЯ ПИТАНЬ
+          =============================================== */
+
+          for (
+            let index = 0;
+            index < incomingQuestions.length;
+            index++
+          ) {
+            const rawQuestion =
+              incomingQuestions[index];
+
+            if (
+              !rawQuestion ||
+              typeof rawQuestion !==
+                "object"
+            ) {
+              continue;
+            }
+
+            const question =
+              rawQuestion as {
+                id?: unknown;
+                order?: unknown;
+                type?: unknown;
+                text?: unknown;
+                points?: unknown;
+                shuffleQuestion?: unknown;
+                options?: unknown;
+              };
+
+            const questionId =
+              Number(question.id);
+
+            const order =
+              Number(question.order);
+
+            const type =
+              typeof question.type ===
+              "string"
+                ? question.type
+                : "single";
+
+            const text =
+              typeof question.text ===
+              "string"
+                ? question.text
+                : "";
+
+            const points =
+              Number(question.points);
+
+            const shuffleQuestion =
+              typeof question.shuffleQuestion ===
+              "boolean"
+                ? question.shuffleQuestion
+                : true;
+
+            const normalizedOrder =
+              Number.isInteger(order) &&
+              order > 0
+                ? order
+                : index + 1;
+
+            const normalizedPoints =
+              Number.isInteger(points) &&
+              points > 0
+                ? points
+                : 1;
+
+            /* =============================================
+               ВАРІАНТИ ВІДПОВІДЕЙ
+            ============================================= */
+
+            const options =
+              Array.isArray(
+                question.options
+              )
+                ? question.options
+                : [];
+
+            const normalizedOptions =
+              options.map(
+                (
+                  rawOption: unknown,
+                  optionIndex: number
+                ) => {
+                  if (
+                    !rawOption ||
+                    typeof rawOption !==
+                      "object"
+                  ) {
+                    return {
+                      id: null,
+                      order:
+                        optionIndex + 1,
+                      text: "",
+                      isCorrect: false,
+                    };
+                  }
+
+                  const option =
+                    rawOption as {
+                      id?: unknown;
+                      order?: unknown;
+                      text?: unknown;
+                      isCorrect?: unknown;
+                    };
+
+                  const optionId =
+                    Number(option.id);
+
+                  const optionOrder =
+                    Number(option.order);
+
+                  return {
+                    id:
+                      Number.isInteger(
+                        optionId
+                      ) &&
+                      optionId > 0
+                        ? optionId
+                        : null,
+
+                    order:
+                      Number.isInteger(
+                        optionOrder
+                      ) &&
+                      optionOrder > 0
+                        ? optionOrder
+                        : optionIndex + 1,
+
+                    text:
+                      typeof option.text ===
+                      "string"
+                        ? option.text
+                        : "",
+
+                    isCorrect:
+                      Boolean(
+                        option.isCorrect
+                      ),
+                  };
+                }
+              );
+
+            /* =============================================
+               ІСНУЮЧЕ ПИТАННЯ
+            ============================================= */
+
+            const isExistingQuestion =
+              Number.isInteger(
+                questionId
+              ) &&
+              questionId > 0 &&
+              existingQuestionIds.includes(
+                questionId
+              );
+
+            if (isExistingQuestion) {
+              await tx.question.update({
+                where: {
+                  id: questionId,
+                },
+
+                data: {
+                  type,
+                  text,
+                  points:
+                    normalizedPoints,
+                  shuffleQuestion,
+                },
+              });
+
+              /* =========================================
+                 ВАРІАНТИ ВІДПОВІДЕЙ
+
+                 Для надійності видаляємо старі
+                 та створюємо актуальний набір.
+              ========================================= */
+
+              await tx.answerOption.deleteMany({
+                where: {
+                  questionId,
+                },
+              });
+
+              if (
+                normalizedOptions.length >
+                0
+              ) {
+                await tx.answerOption.createMany(
+                  {
+                    data:
+                      normalizedOptions.map(
+                        (
+                          option,
+                          optionIndex
+                        ) => ({
+                          order:
+                            option.order ||
+                            optionIndex +
+                              1,
+
+                          text:
+                            option.text,
+
+                          isCorrect:
+                            option.isCorrect,
+
+                          questionId,
+                        })
+                      ),
+                  }
+                );
+              }
+
+              /* =========================================
+                 ОНОВЛЕННЯ ПОРЯДКУ В TESTQUESTION
+              ========================================= */
+
+              await tx.testQuestion.update({
+                where: {
+                  testId_questionId: {
+                    testId,
+                    questionId,
                   },
                 },
+
+                data: {
+                  order:
+                    normalizedOrder,
+                },
+              });
+            } else {
+              /* =========================================
+                 НОВЕ ПИТАННЯ
+
+                 ID із браузера НЕ використовуємо.
+                 Prisma сама створює коректний ID.
+              ========================================= */
+
+              const createdQuestion =
+                await tx.question.create({
+                  data: {
+                    type,
+                    text,
+                    points:
+                      normalizedPoints,
+                    shuffleQuestion,
+                  },
+                });
+
+              /* =========================================
+                 ВАРІАНТИ НОВОГО ПИТАННЯ
+              ========================================= */
+
+              if (
+                normalizedOptions.length >
+                0
+              ) {
+                await tx.answerOption.createMany(
+                  {
+                    data:
+                      normalizedOptions.map(
+                        (
+                          option,
+                          optionIndex
+                        ) => ({
+                          order:
+                            option.order ||
+                            optionIndex +
+                              1,
+
+                          text:
+                            option.text,
+
+                          isCorrect:
+                            option.isCorrect,
+
+                          questionId:
+                            createdQuestion.id,
+                        })
+                      ),
+                  }
+                );
+              }
+
+              /* =========================================
+                 ПРИВ'ЯЗКА ПИТАННЯ ДО ТЕСТУ
+              ========================================= */
+
+              await tx.testQuestion.create({
+                data: {
+                  testId,
+                  questionId:
+                    createdQuestion.id,
+                  order:
+                    normalizedOrder,
+                },
+              });
+            }
+          }
+
+          /* ===============================================
+             ВИДАЛЕННЯ ПИТАНЬ, ЯКІ ПРИБРАЛИ В РЕДАКТОРІ
+
+             Важливо:
+             Question може теоретично бути використане
+             в іншому тесті, тому спочатку видаляємо
+             тільки зв'язок TestQuestion.
+
+             Сам Question видаляємо лише тоді,
+             коли він більше ніде не використовується.
+          =============================================== */
+
+          for (
+            const existingQuestionId of
+              existingQuestionIds
+          ) {
+            if (
+              incomingQuestionIds.includes(
+                existingQuestionId
+              )
+            ) {
+              continue;
+            }
+
+            await tx.testQuestion.deleteMany({
+              where: {
+                testId,
+                questionId:
+                  existingQuestionId,
               },
+            });
+
+            const remainingLinks =
+              await tx.testQuestion.count({
+                where: {
+                  questionId:
+                    existingQuestionId,
+                },
+              });
+
+            if (remainingLinks === 0) {
+              await tx.question.delete({
+                where: {
+                  id:
+                    existingQuestionId,
+                },
+              });
+            }
+          }
+
+          /* ===============================================
+             ПОВЕРТАЄМО ОНОВЛЕНИЙ ТЕСТ
+          =============================================== */
+
+          return tx.test.findUniqueOrThrow({
+            where: {
+              id: testId,
             },
-          },
-        },
-      });
+
+            include: testInclude,
+          });
+        }
+      );
 
     return NextResponse.json({
       success: true,
@@ -459,10 +958,25 @@ export async function PATCH(
       error
     );
 
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error
+    ) {
+      console.error(
+        "PRISMA ERROR CODE:",
+        (error as { code?: unknown })
+          .code
+      );
+    }
+
     return NextResponse.json(
       {
         success: false,
-        message: "Не вдалося оновити тест.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Не вдалося оновити тест.",
       },
       {
         status: 500,
@@ -471,14 +985,10 @@ export async function PATCH(
   }
 }
 
-/**
- * DELETE /api/admin/tests/:id
- *
- * Остаточне видалення тесту.
- *
- * Підтвердження виконується на стороні
- * клієнтського інтерфейсу перед запитом.
- */
+/* =========================================================
+   DELETE /api/admin/tests/:id
+========================================================= */
+
 export async function DELETE(
   _request: NextRequest,
   { params }: RouteContext
