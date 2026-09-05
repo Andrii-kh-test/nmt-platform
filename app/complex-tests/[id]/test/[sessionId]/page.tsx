@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import {
+  ComplexTestSessionProvider,
   useComplexTestSession,
   type ComplexAnswerMap,
   type ComplexTestData,
@@ -47,7 +48,17 @@ interface SessionResponse {
   complexTest?: ComplexTestData;
 }
 
-export default function ComplexTestPage() {
+/*
+ * ============================================================
+ * ВНУТРІШНІЙ КОМПОНЕНТ
+ *
+ * Тут уже можна використовувати useComplexTestSession(),
+ * тому що цей компонент буде знаходитися всередині
+ * ComplexTestSessionProvider.
+ * ============================================================
+ */
+
+function ComplexTestContent() {
   const params = useParams();
   const router = useRouter();
 
@@ -94,14 +105,6 @@ export default function ComplexTestPage() {
   /*
    * =========================================================
    * ЗАВЕРШЕННЯ ЧЕРЕЗ ПОРУШЕННЯ ПРАВИЛ
-   *
-   * Викликається спільною системою безпеки:
-   *
-   * FullscreenGuard
-   * VisibilityGuard
-   *
-   * Після другого порушення.
-   *
    * =========================================================
    */
 
@@ -151,16 +154,6 @@ export default function ComplexTestPage() {
         );
       }
 
-      /*
-       * Сервер уже:
-       *
-       * finished = true
-       * timeLeft = 0
-       * blocked = true
-       * blockReason =
-       * "Порушення правил тестування"
-       */
-
       setFinished(true);
 
       router.replace(
@@ -184,7 +177,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Завантаження сесії
+   * ЗАВАНТАЖЕННЯ СЕСІЇ
    * =========================================================
    */
 
@@ -252,9 +245,7 @@ export default function ComplexTestPage() {
           // sessionStorage може бути недоступним
         }
 
-        loadComplexTest(
-          data.complexTest
-        );
+        loadComplexTest(data.complexTest);
 
         restoreSession(
           session.currentTestId,
@@ -271,6 +262,7 @@ export default function ComplexTestPage() {
           router.replace(
             `/complex-tests/${id}/result/${session.id}`
           );
+
           return;
         }
       } catch (err) {
@@ -310,7 +302,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Дані учасника
+   * ДАНІ УЧАСНИКА
    * =========================================================
    */
 
@@ -347,7 +339,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Поточний предмет
+   * ПОТОЧНИЙ ПРЕДМЕТ
    * =========================================================
    */
 
@@ -543,7 +535,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * ЗВИЧАЙНЕ ЗАВЕРШЕННЯ ТЕСТУВАННЯ
+   * ЗВИЧАЙНЕ ЗАВЕРШЕННЯ
    * =========================================================
    */
 
@@ -631,7 +623,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Формат таймера
+   * ФОРМАТ ТАЙМЕРА
    * =========================================================
    */
 
@@ -660,7 +652,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Loading
+   * LOADING
    * =========================================================
    */
 
@@ -682,7 +674,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Помилка
+   * ПОМИЛКА
    * =========================================================
    */
 
@@ -701,7 +693,9 @@ export default function ComplexTestPage() {
           <button
             type="button"
             onClick={() =>
-              router.push(`/complex-tests/${id}`)
+              router.push(
+                `/complex-tests/${id}`
+              )
             }
             className="mt-6 rounded-lg bg-[#7A1F2B] px-5 py-3 text-white font-medium hover:opacity-90"
           >
@@ -714,7 +708,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Немає даних
+   * НЕМАЄ ДАНИХ
    * =========================================================
    */
 
@@ -732,7 +726,7 @@ export default function ComplexTestPage() {
 
   /*
    * =========================================================
-   * Питання поточного предмета
+   * ПИТАННЯ
    * =========================================================
    */
 
@@ -773,7 +767,7 @@ export default function ComplexTestPage() {
       <TestSecurityGuard />
 
       {/* =====================================================
-          MONITOR СЕСІЇ
+          MONITOR
           ===================================================== */}
 
       <ComplexTestSessionMonitor
@@ -784,7 +778,7 @@ export default function ComplexTestPage() {
       />
 
       {/* =====================================================
-          АВТОЗБЕРЕЖЕННЯ СЕСІЇ
+          AUTOSAVE
           ===================================================== */}
 
       <ComplexAutoSaveSession
@@ -816,8 +810,6 @@ export default function ComplexTestPage() {
                 </div>
               )}
             </div>
-
-            {/* Таймер */}
 
             <div
               className={[
@@ -897,10 +889,6 @@ export default function ComplexTestPage() {
                 </div>
               </div>
 
-              {/* =================================================
-                  CURRENT QUESTION
-                  ================================================= */}
-
               {currentQuestionData ? (
                 <div className="mt-6">
                   <div className="text-xs font-medium text-gray-500 mb-2">
@@ -910,10 +898,6 @@ export default function ComplexTestPage() {
                   <h3 className="text-lg font-semibold text-gray-900">
                     {currentQuestionData.text}
                   </h3>
-
-                  {/* =================================================
-                      ANSWER OPTIONS
-                      ================================================= */}
 
                   <div className="mt-5 space-y-3">
                     {currentQuestionData.answerOptions.map(
@@ -1223,5 +1207,22 @@ export default function ComplexTestPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+/*
+ * ============================================================
+ * ЗОВНІШНІЙ КОМПОНЕНТ
+ *
+ * Provider знаходиться вище за ComplexTestContent,
+ * тому useComplexTestSession() тепер гарантовано працює.
+ * ============================================================
+ */
+
+export default function ComplexTestPage() {
+  return (
+    <ComplexTestSessionProvider>
+      <ComplexTestContent />
+    </ComplexTestSessionProvider>
   );
 }
