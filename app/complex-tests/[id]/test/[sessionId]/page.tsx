@@ -16,7 +16,6 @@ import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
 
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
-import ComplexAutoSaveSession from "./ComplexAutoSaveSession";
 
 interface SessionResponse {
   success: boolean;
@@ -51,10 +50,6 @@ interface SessionResponse {
 /*
  * ============================================================
  * ВНУТРІШНІЙ КОМПОНЕНТ
- *
- * Тут уже можна використовувати useComplexTestSession(),
- * тому що цей компонент буде знаходитися всередині
- * ComplexTestSessionProvider.
  * ============================================================
  */
 
@@ -79,7 +74,6 @@ function ComplexTestContent() {
 
     loadComplexTest,
     restoreSession,
-    setCurrentQuestion,
     selectAnswer,
     saveAnswer,
     setFinished,
@@ -91,8 +85,11 @@ function ComplexTestContent() {
   const [switchingTestId, setSwitchingTestId] =
     useState<number | null>(null);
 
-  const [savingQuestion, setSavingQuestion] =
-    useState(false);
+  const [savingQuestionId, setSavingQuestionId] =
+    useState<number | null>(null);
+
+  const [savedSuccessfully, setSavedSuccessfully] =
+    useState<Record<number, boolean>>({});
 
   const [finishing, setFinishing] = useState(false);
 
@@ -407,6 +404,7 @@ function ComplexTestContent() {
     }
 
     setSwitchingTestId(testId);
+    setError(null);
 
     try {
       const response = await fetch(
@@ -454,42 +452,47 @@ function ComplexTestContent() {
 
   /*
    * =========================================================
-   * ПЕРЕМИКАННЯ МІЖ ПИТАННЯМИ
+   * ЗБЕРЕЖЕННЯ ВІДПОВІДІ
+   *
+   * ВАЖЛИВО:
+   *
+   * Вибір відповіді НЕ зберігається.
+   * Сервер отримує відповідь лише після натискання
+   * кнопки "Зберегти відповідь".
    * =========================================================
    */
 
-  async function switchQuestion(
-    questionIndex: number
+  async function handleSaveAnswer(
+    testId: number,
+    questionId: number
   ) {
     if (
       blocked ||
       finished ||
       finishing ||
-      savingQuestion ||
-      !currentTest
+      savingQuestionId !== null
     ) {
       return;
     }
 
-    if (
-      questionIndex < 0 ||
-      questionIndex >=
-        currentTest.test.questions.length
-    ) {
-      return;
-    }
+    const answers = [
+      ...(selectedAnswers[questionId] ??
+        savedAnswers[testId]?.[questionId] ??
+        []),
+    ];
 
-    if (
-      questionIndex === currentQuestion
-    ) {
-      return;
-    }
-
-    setCurrentQuestion(questionIndex);
-
-    setSavingQuestion(true);
+    setSavingQuestionId(questionId);
+    setError(null);
 
     try {
+      const nextSavedAnswers: ComplexAnswerMap = {
+        ...savedAnswers,
+        [testId]: {
+          ...(savedAnswers[testId] ?? {}),
+          [questionId]: answers,
+        },
+      };
+
       const response = await fetch(
         `/api/complex-tests/${id}/session`,
         {
@@ -501,10 +504,10 @@ function ComplexTestContent() {
           body: JSON.stringify({
             sessionId,
             currentTestId:
-              currentTest.test.id,
-            currentQuestion:
-              questionIndex,
-            savedAnswers,
+              currentTest?.test.id ??
+              testId,
+            currentQuestion,
+            savedAnswers: nextSavedAnswers,
           }),
         }
       );
@@ -514,23 +517,82 @@ function ComplexTestContent() {
       if (!response.ok || !data.success) {
         throw new Error(
           data.message ||
-            "Не вдалося зберегти позицію питання."
+            "Не вдалося зберегти відповідь."
         );
       }
+
+      /*
+       * Оновлюємо локальний стан тільки після
+       * успішного запису на сервер.
+       */
+      saveAnswer(
+        testId,
+        questionId,
+        answers
+      );
+
+      setSavedSuccessfully(
+        (previous) => ({
+          ...previous,
+          [questionId]: true,
+        })
+      );
     } catch (err) {
       console.error(
-        "SAVE CURRENT QUESTION:",
+        "SAVE COMPLEX ANSWER:",
         err
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : "Не вдалося зберегти позицію питання."
+          : "Не вдалося зберегти відповідь."
       );
     } finally {
-      setSavingQuestion(false);
+      setSavingQuestionId(null);
     }
+  }
+
+  /*
+   * =========================================================
+   * ВИБІР ВІДПОВІДІ
+   *
+   * ТУТ НІЯКОГО saveAnswer().
+   *
+   * Тільки локальна зміна selectedAnswers.
+   * =========================================================
+   */
+
+  function handleSelectAnswer(
+    questionId: number,
+    answers: number[]
+  ) {
+    if (
+      blocked ||
+      finished ||
+      finishing
+    ) {
+      return;
+    }
+
+    selectAnswer(
+      questionId,
+      answers
+    );
+
+    /*
+     * Якщо користувач змінив уже збережену
+     * відповідь — вона більше не вважається
+     * актуальною збереженою відповіддю,
+     * доки користувач не натисне
+     * "Зберегти відповідь".
+     */
+    setSavedSuccessfully(
+      (previous) => ({
+        ...previous,
+        [questionId]: false,
+      })
+    );
   }
 
   /*
@@ -726,17 +788,12 @@ function ComplexTestContent() {
 
   /*
    * =========================================================
-   * ПИТАННЯ
+   * ОСНОВНІ ДАНІ
    * =========================================================
    */
 
   const questions =
     currentTest.test.questions;
-
-  const currentQuestionData =
-    questions[currentQuestion] ??
-    questions[0] ??
-    null;
 
   /*
    * =========================================================
@@ -778,48 +835,126 @@ function ComplexTestContent() {
       />
 
       {/* =====================================================
-          AUTOSAVE
-          ===================================================== */}
-
-      <ComplexAutoSaveSession
-        complexTestId={id}
-        sessionId={sessionId}
-      />
-
-      {/* =====================================================
           HEADER
           ===================================================== */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-xs text-gray-500">
-                {complexTest.examType}
+        <div className="w-full px-4 lg:px-8 py-3">
+          <div className="flex flex-col gap-3">
+            {/* Назва + учасник + таймер */}
+
+            <div className="flex items-center justify-between gap-6">
+              <div className="min-w-0">
+                <div className="text-xs text-gray-500">
+                  {complexTest.examType}
+                </div>
+
+                <h1 className="text-xl font-bold text-gray-900 truncate">
+                  {complexTest.title}
+                </h1>
+
+                {participant && (
+                  <div className="text-sm text-gray-600 truncate">
+                    {participant.lastName}{" "}
+                    {participant.firstName}{" "}
+                    {participant.middleName ?? ""}
+                  </div>
+                )}
               </div>
 
-              <h1 className="text-lg font-bold text-gray-900 truncate">
-                {complexTest.title}
-              </h1>
-
-              {participant && (
-                <div className="text-sm text-gray-600 truncate">
-                  {participant.lastName}{" "}
-                  {participant.firstName}{" "}
-                  {participant.middleName ?? ""}
+              <div className="shrink-0 flex items-center gap-3">
+                <div
+                  className={[
+                    "rounded-lg px-5 py-2 font-mono text-2xl font-bold min-w-[150px] text-center",
+                    timeLeft <= 300
+                      ? "bg-red-100 text-red-700"
+                      : "bg-[#7A1F2B] text-white",
+                  ].join(" ")}
+                >
+                  {formattedTime}
                 </div>
-              )}
+
+                <button
+                  type="button"
+                  disabled={
+                    blocked ||
+                    finished ||
+                    finishing ||
+                    switchingTestId !== null
+                  }
+                  onClick={finishTest}
+                  className="
+                    rounded-lg
+                    bg-[#7A1F2B]
+                    hover:bg-[#651824]
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
+                    px-5
+                    py-3
+                    text-sm
+                    font-semibold
+                    text-white
+                    transition
+                    whitespace-nowrap
+                  "
+                >
+                  {finishing
+                    ? "Завершення…"
+                    : "Завершити роботу над тестом"}
+                </button>
+              </div>
             </div>
 
-            <div
-              className={[
-                "shrink-0 rounded-lg px-4 py-2 font-mono text-xl font-bold",
-                timeLeft <= 300
-                  ? "bg-red-100 text-red-700"
-                  : "bg-[#7A1F2B] text-white",
-              ].join(" ")}
-            >
-              {formattedTime}
+            {/* =================================================
+                ПЕРЕМИКАЧ ПРЕДМЕТІВ
+                ================================================= */}
+
+            <div className="w-full border-t border-gray-200 pt-2">
+              <div className="flex w-full overflow-x-auto">
+                {complexTest.tests.map(
+                  (item) => {
+                    const active =
+                      item.test.id ===
+                      currentTest.test.id;
+
+                    const switching =
+                      switchingTestId ===
+                      item.test.id;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={
+                          blocked ||
+                          finished ||
+                          finishing ||
+                          switchingTestId !== null ||
+                          active
+                        }
+                        onClick={() =>
+                          switchTest(
+                            item.test.id
+                          )
+                        }
+                        className={[
+                          "flex-1 min-w-[180px] px-6 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap",
+                          active
+                            ? "bg-gray-100 border-gray-300 text-gray-900"
+                            : "bg-white border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+                          switching
+                            ? "opacity-60 cursor-wait"
+                            : "",
+                        ].join(" ")}
+                      >
+                        {switching
+                          ? "Перемикання…"
+                          : item.test.title}
+                      </button>
+                    );
+                  }
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -854,356 +989,461 @@ function ComplexTestContent() {
           CONTENT
           ===================================================== */}
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-          {/* =================================================
-              QUESTIONS
-              ================================================= */}
+      <div className="w-full px-4 lg:px-8 py-6">
+        {/* ===================================================
+            ПАНЕЛЬ КНОПОК ПІД НАЗВОЮ ТЕСТУ
+            =================================================== */}
 
-          <section>
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-                <div>
-                  <div className="text-sm text-gray-500">
-                    Предмет
-                  </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-5">
+          <div className="flex flex-wrap items-center gap-2 p-3">
+            <button
+              type="button"
+              className="
+                rounded-lg
+                bg-[#7A1F2B]
+                px-5
+                py-2.5
+                text-sm
+                font-semibold
+                text-white
+                shadow-sm
+              "
+            >
+              Іспит
+            </button>
 
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {currentTest.test.title}
-                  </h2>
+            <button
+              type="button"
+              className="
+                rounded-lg
+                border
+                border-gray-200
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-medium
+                text-gray-700
+                hover:bg-gray-50
+                transition
+              "
+            >
+              Математика: довідкові матеріали
+            </button>
 
-                  <p className="text-sm text-gray-500 mt-1">
-                    {currentTest.test.subject}
-                  </p>
-                </div>
+            <button
+              type="button"
+              className="
+                rounded-lg
+                border
+                border-gray-200
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-medium
+                text-gray-700
+                hover:bg-gray-50
+                transition
+              "
+            >
+              Фізика: довідкові матеріали
+            </button>
 
+            <button
+              type="button"
+              className="
+                rounded-lg
+                border
+                border-gray-200
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-medium
+                text-gray-700
+                hover:bg-gray-50
+                transition
+              "
+            >
+              Хімія: довідкові матеріали
+            </button>
+
+            <button
+              type="button"
+              className="
+                rounded-lg
+                border
+                border-gray-200
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-medium
+                text-gray-700
+                hover:bg-gray-50
+                transition
+              "
+            >
+              Інструкція
+            </button>
+          </div>
+        </div>
+
+        {/* ===================================================
+            ІНФОРМАЦІЯ ПРО ПРЕДМЕТ
+            =================================================== */}
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-5">
+          <div className="px-6 py-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
                 <div className="text-sm text-gray-500">
-                  Питання:{" "}
-                  <span className="font-semibold text-gray-800">
-                    {currentQuestion + 1}
-                  </span>{" "}
-                  із{" "}
-                  <span className="font-semibold text-gray-800">
-                    {questions.length}
-                  </span>
+                  Предмет
                 </div>
+
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {currentTest.test.title}
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  {currentTest.test.subject}
+                </p>
               </div>
 
-              {currentQuestionData ? (
-                <div className="mt-6">
-                  <div className="text-xs font-medium text-gray-500 mb-2">
-                    Питання {currentQuestion + 1}
+              <div className="text-sm text-gray-500">
+                Кількість питань:{" "}
+                <span className="font-semibold text-gray-800">
+                  {questions.length}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ===================================================
+            ПОПЕРЕДЖЕННЯ ПРО НЕВІДПОВІДЕНІ ПИТАННЯ
+            =================================================== */}
+
+        {unansweredCount > 0 && (
+          <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 px-5 py-4">
+            <div className="text-sm font-semibold text-orange-800">
+              Увага
+            </div>
+
+            <div className="mt-1 text-sm text-orange-700">
+              Залишилося без збереженої відповіді:{" "}
+              <span className="font-bold">
+                {unansweredCount}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================
+            УСІ ПИТАННЯ
+            =================================================== */}
+
+        <section className="space-y-5">
+          {questions.map(
+            (question, index) => {
+              /*
+               * Якщо є поточний локальний вибір —
+               * показуємо його.
+               *
+               * Якщо локального вибору немає —
+               * показуємо збережену відповідь.
+               */
+
+              const localAnswers =
+                selectedAnswers[
+                  question.id
+                ];
+
+              const saved =
+                savedAnswers[
+                  currentTest.test.id
+                ]?.[question.id] ?? [];
+
+              const displayedAnswers =
+                localAnswers !== undefined
+                  ? localAnswers
+                  : saved;
+
+              const isSaved =
+                savedSuccessfully[
+                  question.id
+                ] === true;
+
+              const hasSavedAnswer =
+                saved.length > 0;
+
+              const saving =
+                savingQuestionId ===
+                question.id;
+
+              return (
+                <article
+                  key={question.id}
+                  id={`question-${question.id}`}
+                  className="
+                    bg-white
+                    rounded-xl
+                    shadow-sm
+                    border
+                    border-gray-200
+                    overflow-hidden
+                  "
+                >
+                  {/* Заголовок питання */}
+
+                  <div className="px-6 py-5 border-b border-gray-200">
+                    <div className="flex items-start justify-between gap-5">
+                      <div className="flex items-start gap-4 min-w-0">
+                        <div
+                          className="
+                            shrink-0
+                            w-10
+                            h-10
+                            rounded-full
+                            bg-gray-100
+                            text-gray-800
+                            flex
+                            items-center
+                            justify-center
+                            font-bold
+                          "
+                        >
+                          {index + 1}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-gray-500 mb-2">
+                            Питання {index + 1}
+                          </div>
+
+                          <h3 className="text-lg font-semibold text-gray-900 leading-7">
+                            {question.text}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 text-xs text-gray-500">
+                        {question.points}{" "}
+                        {question.points === 1
+                          ? "бал"
+                          : question.points < 5
+                          ? "бали"
+                          : "балів"}
+                      </div>
+                    </div>
                   </div>
 
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {currentQuestionData.text}
-                  </h3>
+                  {/* Варіанти відповіді */}
 
-                  <div className="mt-5 space-y-3">
-                    {currentQuestionData.answerOptions.map(
-                      (option) => {
-                        const selected =
-                          (
-                            selectedAnswers[
-                              currentQuestionData.id
-                            ] ?? []
-                          ).includes(option.id);
+                  <div className="px-6 py-5">
+                    <div className="space-y-3">
+                      {question.answerOptions.map(
+                        (option) => {
+                          const selected =
+                            displayedAnswers.includes(
+                              option.id
+                            );
 
-                        return (
-                          <label
-                            key={option.id}
-                            className={[
-                              "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition",
-                              selected
-                                ? "border-[#7A1F2B] bg-red-50"
-                                : "border-gray-200 bg-white hover:bg-gray-50",
-                            ].join(" ")}
-                          >
-                            <input
-                              type={
-                                currentQuestionData.type ===
-                                "multiple"
-                                  ? "checkbox"
-                                  : "radio"
-                              }
-                              name={`question-${currentQuestionData.id}`}
-                              checked={selected}
-                              disabled={
+                          return (
+                            <label
+                              key={option.id}
+                              className={[
+                                "flex items-start gap-3 rounded-lg border p-4 transition",
                                 blocked ||
                                 finished ||
-                                finishing ||
-                                switchingTestId !== null
-                              }
-                              onChange={() => {
-                                const current =
-                                  selectedAnswers[
-                                    currentQuestionData.id
-                                  ] ?? [];
-
-                                let next: number[];
-
-                                if (
-                                  currentQuestionData.type ===
+                                finishing
+                                  ? "cursor-not-allowed opacity-70"
+                                  : "cursor-pointer",
+                                selected
+                                  ? "border-[#7A1F2B] bg-red-50"
+                                  : "border-gray-200 bg-white hover:bg-gray-50",
+                              ].join(" ")}
+                            >
+                              <input
+                                type={
+                                  question.type ===
                                   "multiple"
-                                ) {
-                                  next = selected
-                                    ? current.filter(
-                                        (answerId) =>
-                                          answerId !==
-                                          option.id
-                                      )
-                                    : [
-                                        ...current,
-                                        option.id,
-                                      ];
-                                } else {
-                                  next = [option.id];
+                                    ? "checkbox"
+                                    : "radio"
                                 }
+                                name={`question-${question.id}`}
+                                checked={selected}
+                                disabled={
+                                  blocked ||
+                                  finished ||
+                                  finishing
+                                }
+                                onChange={() => {
+                                  const current =
+                                    selectedAnswers[
+                                      question.id
+                                    ] ??
+                                    savedAnswers[
+                                      currentTest
+                                        .test.id
+                                    ]?.[
+                                      question.id
+                                    ] ??
+                                    [];
 
-                                selectAnswer(
-                                  currentQuestionData.id,
-                                  next
-                                );
+                                  let next: number[];
 
-                                saveAnswer(
-                                  currentTest.test.id,
-                                  currentQuestionData.id,
-                                  next
-                                );
-                              }}
-                              className="mt-1"
-                            />
+                                  if (
+                                    question.type ===
+                                    "multiple"
+                                  ) {
+                                    next = selected
+                                      ? current.filter(
+                                          (
+                                            answerId
+                                          ) =>
+                                            answerId !==
+                                            option.id
+                                        )
+                                      : [
+                                          ...current,
+                                          option.id,
+                                        ];
+                                  } else {
+                                    next = [
+                                      option.id,
+                                    ];
+                                  }
 
-                            <span className="text-gray-800">
-                              {option.text}
-                            </span>
-                          </label>
-                        );
-                      }
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-6 text-gray-500">
-                  Питання відсутні.
-                </div>
-              )}
-            </div>
-          </section>
+                                  handleSelectAnswer(
+                                    question.id,
+                                    next
+                                  );
+                                }}
+                                className="mt-1 h-4 w-4 accent-[#7A1F2B]"
+                              />
 
-          {/* =================================================
-              SIDEBAR
-              ================================================= */}
+                              <span className="text-gray-800 leading-6">
+                                {option.text}
+                              </span>
+                            </label>
+                          );
+                        }
+                      )}
+                    </div>
 
-          <aside className="space-y-4">
-            {/* Timer */}
+                    {/* =================================================
+                        КНОПКА ЗБЕРЕГТИ ВІДПОВІДЬ
+                        ================================================= */}
 
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <div className="text-sm text-gray-500">
-                Залишилося часу
-              </div>
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
+                      <div className="text-sm">
+                        {isSaved ? (
+                          <span className="font-medium text-green-700">
+                            Відповідь збережено
+                          </span>
+                        ) : hasSavedAnswer &&
+                          localAnswers === undefined ? (
+                          <span className="text-gray-500">
+                            Збережена відповідь
+                          </span>
+                        ) : displayedAnswers.length >
+                          0 ? (
+                          <span className="text-orange-600">
+                            Відповідь не збережено
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">
+                            Відповідь не вибрана
+                          </span>
+                        )}
+                      </div>
 
-              <div
-                className={[
-                  "mt-1 font-mono text-3xl font-bold",
-                  timeLeft <= 300
-                    ? "text-red-600"
-                    : "text-[#7A1F2B]",
-                ].join(" ")}
-              >
-                {formattedTime}
-              </div>
-
-              <div className="mt-2 text-xs text-gray-500">
-                {timerRunning
-                  ? "Тестування триває"
-                  : "Таймер зупинено"}
-              </div>
-            </div>
-
-            {/* Subjects */}
-
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h3 className="font-semibold text-gray-900">
-                Предмети
-              </h3>
-
-              <div className="mt-3 space-y-2">
-                {complexTest.tests.map(
-                  (item) => {
-                    const active =
-                      item.test.id ===
-                      currentTest.test.id;
-
-                    const switching =
-                      switchingTestId ===
-                      item.test.id;
-
-                    return (
                       <button
-                        key={item.id}
                         type="button"
                         disabled={
                           blocked ||
                           finished ||
                           finishing ||
-                          switchingTestId !== null ||
-                          active
+                          savingQuestionId !== null ||
+                          displayedAnswers.length ===
+                            0
                         }
                         onClick={() =>
-                          switchTest(
-                            item.test.id
+                          handleSaveAnswer(
+                            currentTest.test.id,
+                            question.id
                           )
                         }
                         className={[
-                          "w-full text-left rounded-lg border px-3 py-3 transition",
-                          active
-                            ? "border-[#7A1F2B] bg-red-50 text-[#7A1F2B] cursor-default"
-                            : "border-gray-200 text-gray-700 hover:border-[#7A1F2B] hover:bg-gray-50",
-                          switching
-                            ? "opacity-60 cursor-wait"
-                            : "",
+                          "rounded-lg px-6 py-3 text-sm font-semibold transition",
+                          "disabled:cursor-not-allowed disabled:opacity-50",
+                          isSaved
+                            ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            : "bg-[#7A1F2B] text-white hover:bg-[#651824]",
                         ].join(" ")}
                       >
-                        <div className="font-medium">
-                          {item.test.title}
-                        </div>
-
-                        <div className="text-xs text-gray-500 mt-1">
-                          {switching
-                            ? "Перемикання…"
-                            : `${item.test.questions.length} питань`}
-                        </div>
+                        {saving
+                          ? "Збереження…"
+                          : isSaved
+                          ? "Відповідь збережено"
+                          : "Зберегти відповідь"}
                       </button>
-                    );
-                  }
-                )}
-              </div>
-            </div>
-
-            {/* Question numbers */}
-
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h3 className="font-semibold text-gray-900">
-                Питання
-              </h3>
-
-              <div className="grid grid-cols-5 gap-2 mt-4">
-                {questions.map(
-                  (question, index) => {
-                    const answers =
-                      selectedAnswers[
-                        question.id
-                      ] ?? [];
-
-                    const saved =
-                      savedAnswers[
-                        currentTest.test.id
-                      ]?.[question.id] ??
-                      [];
-
-                    const hasAnswer =
-                      answers.length > 0 ||
-                      saved.length > 0;
-
-                    const active =
-                      index ===
-                      currentQuestion;
-
-                    return (
-                      <button
-                        key={question.id}
-                        type="button"
-                        disabled={
-                          blocked ||
-                          finished ||
-                          finishing ||
-                          savingQuestion ||
-                          switchingTestId !== null
-                        }
-                        onClick={() =>
-                          switchQuestion(index)
-                        }
-                        className={[
-                          "h-9 rounded-md text-sm font-medium border transition",
-                          active
-                            ? "border-[#7A1F2B] bg-[#7A1F2B] text-white"
-                            : hasAnswer
-                            ? "border-red-300 bg-red-50 text-[#7A1F2B] hover:bg-red-100"
-                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                        ].join(" ")}
-                      >
-                        {index + 1}
-                      </button>
-                    );
-                  }
-                )}
-              </div>
-
-              {savingQuestion && (
-                <div className="mt-3 text-xs text-gray-500">
-                  Збереження позиції…
-                </div>
-              )}
-
-              <div className="mt-4 space-y-2 text-xs text-gray-500">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-sm bg-[#7A1F2B]" />
-                  Поточне питання
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-sm bg-red-100 border border-red-300" />
-                  Є відповідь
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-sm bg-white border border-gray-200" />
-                  Без відповіді
-                </div>
-              </div>
-            </div>
-
-            {/* Finish */}
-
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              {unansweredCount > 0 && (
-                <div className="mb-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-3">
-                  <div className="text-sm font-semibold text-orange-800">
-                    Є питання без відповіді
+                    </div>
                   </div>
+                </article>
+              );
+            }
+          )}
+        </section>
 
-                  <div className="mt-1 text-xs text-orange-700">
-                    Без відповіді:{" "}
-                    <span className="font-semibold">
-                      {unansweredCount}
-                    </span>
-                  </div>
-                </div>
-              )}
+        {/* ===================================================
+            НИЖНЯ ПАНЕЛЬ
+            =================================================== */}
 
-              <button
-                type="button"
-                disabled={
-                  blocked ||
-                  finished ||
-                  finishing ||
-                  switchingTestId !== null ||
-                  savingQuestion
-                }
-                onClick={finishTest}
-                className={[
-                  "w-full rounded-lg px-4 py-3 text-sm font-semibold text-white transition",
-                  "bg-[#7A1F2B] hover:opacity-90",
-                  "disabled:opacity-50 disabled:cursor-not-allowed",
-                ].join(" ")}
-              >
-                {finishing
-                  ? "Завершення…"
-                  : "Завершити тестування"}
-              </button>
+        <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-5">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">
+                Завершення тестування
+              </div>
+
+              <div className="mt-1 text-sm text-gray-500">
+                Перед завершенням переконайтеся,
+                що всі відповіді збережено.
+              </div>
             </div>
-          </aside>
+
+            <button
+              type="button"
+              disabled={
+                blocked ||
+                finished ||
+                finishing ||
+                switchingTestId !== null ||
+                savingQuestionId !== null
+              }
+              onClick={finishTest}
+              className="
+                rounded-lg
+                bg-[#7A1F2B]
+                hover:bg-[#651824]
+                disabled:opacity-50
+                disabled:cursor-not-allowed
+                px-6
+                py-3
+                text-sm
+                font-semibold
+                text-white
+                transition
+              "
+            >
+              {finishing
+                ? "Завершення…"
+                : "Завершити роботу над тестом"}
+            </button>
+          </div>
         </div>
       </div>
     </main>
@@ -1213,9 +1453,6 @@ function ComplexTestContent() {
 /*
  * ============================================================
  * ЗОВНІШНІЙ КОМПОНЕНТ
- *
- * Provider знаходиться вище за ComplexTestContent,
- * тому useComplexTestSession() тепер гарантовано працює.
  * ============================================================
  */
 

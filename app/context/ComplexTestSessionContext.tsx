@@ -28,6 +28,7 @@ export interface ComplexTestQuestion {
   id: number;
   text: string;
   type: string;
+  points: number;
   answerOptions: Array<{
     id: number;
     text: string;
