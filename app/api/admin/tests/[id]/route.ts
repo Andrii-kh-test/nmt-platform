@@ -48,9 +48,6 @@ export async function GET(
       },
 
       include: {
-        /*
-         * Новий зв'язок із Subject.
-         */
         subjectRef: true,
 
         questions: {
@@ -127,7 +124,8 @@ export async function GET(
 /**
  * PATCH /api/admin/tests/:id
  *
- * Оновлення основної інформації тесту.
+ * Оновлення основної інформації тесту,
+ * а також архівування / відновлення.
  */
 export async function PATCH(
   request: NextRequest,
@@ -180,6 +178,7 @@ export async function PATCH(
       isPublished?: boolean;
       codeRequired?: boolean;
       accessCode?: string | null;
+      isArchived?: boolean;
     } = {};
 
     /*
@@ -263,9 +262,6 @@ export async function PATCH(
           );
         }
 
-        /*
-         * Перевіряємо, що предмет існує.
-         */
         const existingSubject =
           await prisma.subject.findUnique({
             where: {
@@ -342,7 +338,7 @@ export async function PATCH(
               "Максимальна кількість балів повинна бути невід’ємним цілим числом.",
           },
           {
-            status: 400
+            status: 400,
           }
         );
       }
@@ -390,6 +386,30 @@ export async function PATCH(
           : String(
               body.accessCode
             ).trim();
+    }
+
+    /*
+     * ================================
+     * АРХІВУВАННЯ / ВІДНОВЛЕННЯ
+     * ================================
+     */
+
+    if (
+      typeof body.isArchived === "boolean"
+    ) {
+      data.isArchived =
+        body.isArchived;
+
+      /*
+       * Архівований тест автоматично
+       * знімається з публікації.
+       *
+       * При відновленні стан публікації
+       * не змінюємо автоматично.
+       */
+      if (body.isArchived === true) {
+        data.isPublished = false;
+      }
     }
 
     /*
@@ -453,6 +473,11 @@ export async function PATCH(
 
 /**
  * DELETE /api/admin/tests/:id
+ *
+ * Остаточне видалення тесту.
+ *
+ * Підтвердження виконується на стороні
+ * клієнтського інтерфейсу перед запитом.
  */
 export async function DELETE(
   _request: NextRequest,

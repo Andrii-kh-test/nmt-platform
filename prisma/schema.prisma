@@ -24,6 +24,7 @@ model Test {
   isPublished  Boolean        @default(false)
   examType     String         @default("НМТ")
   displayOrder Int            @unique
+  isArchived   Boolean        @default(false)
   questions    TestQuestion[]
   results      TestResult[]
   sessions     TestSession[]
@@ -34,6 +35,7 @@ model Subject {
   name        String   @unique
   description String?
   isActive    Boolean  @default(true)
+  isArchived  Boolean  @default(false)
 
   tests       Test[]
 }

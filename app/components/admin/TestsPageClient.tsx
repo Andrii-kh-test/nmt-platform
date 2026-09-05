@@ -167,10 +167,15 @@ export default function TestsPageClient({
               ({ subject, tests: subjectTests }) => (
 
                 <SubjectBlock
-                  key={subject}
-                  subject={subject}
-                  tests={subjectTests}
-                />
+  key={subject}
+  subjectId={
+    subjects.find(
+      (item) => item.name === subject
+    )?.id ?? 0
+  }
+  subject={subject}
+  tests={subjectTests}
+/>
 
               )
             )}
