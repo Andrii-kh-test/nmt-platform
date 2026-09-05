@@ -13,10 +13,6 @@ import {
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
 import ComplexAutoSaveSession from "./ComplexAutoSaveSession";
 
-/* =========================================================
-   Безпечний рендер HTML із тексту питань та відповідей
-   ========================================================= */
-
 function sanitizeHtml(html: string): string {
   if (typeof html !== "string") {
     return "";
@@ -24,26 +20,21 @@ function sanitizeHtml(html: string): string {
 
   let result = html;
 
-  // Видаляємо небезпечні блокові теги разом із їхнім вмістом.
   result = result.replace(
     /<(script|style|iframe|object|embed|form|textarea|button|select)[^>]*>[\s\S]*?<\/\1>/gi,
     ""
   );
 
-  // Видаляємо одиночні небезпечні теги.
   result = result.replace(
     /<\/?(script|style|iframe|object|embed|form|textarea|button|select)[^>]*>/gi,
     ""
   );
 
-  // Видаляємо inline event handlers:
-  // onclick="", onload='', onerror=...
   result = result.replace(
     /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
     ""
   );
 
-  // Забороняємо javascript:, vbscript:, data: у href/src.
   result = result.replace(
     /(href|src)\s*=\s*(["'])\s*(javascript:|vbscript:|data:)[^"']*\2/gi,
     ""
@@ -51,10 +42,6 @@ function sanitizeHtml(html: string): string {
 
   return result;
 }
-
-/* =========================================================
-   RichText
-   ========================================================= */
 
 function RichText({
   html,
@@ -73,49 +60,40 @@ function RichText({
   );
 }
 
-/* =========================================================
-   Тип відповіді API сесії
-   ========================================================= */
-
 interface SessionResponse {
   success: boolean;
   message?: string;
+
+  /**
+   * Повні дані комплексного тесту
+   * повертаються API на верхньому рівні.
+   */
+  complexTest?: ComplexTestData;
 
   session?: {
     id: number;
     complexTestId: number;
     participantId: number | null;
-
     currentTestId: number | null;
     currentQuestion: number;
-
     savedAnswers: ComplexAnswerMap;
-
     timeLeft: number;
     extraTime: number;
-
     finished: boolean;
     finishedAt: string | null;
-
     blocked: boolean;
     blockReason: string | null;
     blockedAt: string | null;
-
     startedAt: string | null;
 
-    complexTest: ComplexTestData;
+    /**
+     * Залишаємо це поле в типі,
+     * оскільки воно може бути присутнім
+     * у відповіді API.
+     */
+    complexTest?: ComplexTestData;
   };
 }
-
-/* =========================================================
-   ЗОВНІШНІЙ КОМПОНЕНТ
-
-   ВАЖЛИВО:
-   Тут НЕ можна викликати useComplexTestSession(),
-   оскільки Provider знаходиться нижче.
-
-   Саме тому робимо окремий внутрішній компонент.
-   ========================================================= */
 
 export default function ComplexTestPage() {
   const params = useParams();
@@ -125,17 +103,13 @@ export default function ComplexTestPage() {
 
   return (
     <ComplexTestSessionProvider>
-      <ComplexTestPageContent id={id} sessionId={sessionId} />
+      <ComplexTestPageContent
+        id={id}
+        sessionId={sessionId}
+      />
     </ComplexTestSessionProvider>
   );
 }
-
-/* =========================================================
-   ВНУТРІШНІЙ КОМПОНЕНТ
-
-   Тут useComplexTestSession() уже знаходиться
-   всередині ComplexTestSessionProvider.
-   ========================================================= */
 
 function ComplexTestPageContent({
   id,
@@ -168,11 +142,9 @@ function ComplexTestPageContent({
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [switchingTestId, setSwitchingTestId] = useState<number | null>(
     null
   );
-
   const [savingQuestion, setSavingQuestion] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
@@ -182,9 +154,11 @@ function ComplexTestPageContent({
     middleName?: string;
   } | null>(null);
 
-  /* =========================================================
-     Завантаження сесії
-     ========================================================= */
+  /*
+   * ============================================================
+   * Завантаження сесії
+   * ============================================================
+   */
 
   useEffect(() => {
     if (
@@ -222,7 +196,19 @@ function ComplexTestPageContent({
         }
 
         if (!data.session) {
-          throw new Error("Сервер не повернув дані сесії.");
+          throw new Error(
+            "Сервер не повернув дані сесії."
+          );
+        }
+
+        /*
+         * ВАЖЛИВО:
+         * complexTest повертається API окремо від session.
+         */
+        if (!data.complexTest) {
+          throw new Error(
+            "Сервер не повернув дані комплексного тесту."
+          );
         }
 
         if (cancelled) {
@@ -236,20 +222,26 @@ function ComplexTestPageContent({
             "complexTestSessionId",
             String(session.id)
           );
-        } catch {
-          // sessionStorage може бути недоступним.
-        }
+        } catch {}
 
         /*
-         * Передаємо повні дані тесту в контекст.
-         */
-        loadComplexTest(session.complexTest);
-
-        /*
-         * ВАЖЛИВО:
-         * timeLeft береться безпосередньо із сервера/БД.
+         * Передаємо повні дані комплексного тесту
+         * в контекст.
          *
-         * Контекст уже відповідає за клієнтський countdown.
+         * НЕ використовуємо:
+         * session.complexTest
+         *
+         * Використовуємо:
+         * data.complexTest
+         */
+        loadComplexTest(data.complexTest);
+
+        /*
+         * Відновлюємо серверний стан сесії.
+         *
+         * timeLeft береться безпосередньо з БД.
+         * Контекст сам запускає єдиний глобальний
+         * countdown для всього комплексного тесту.
          */
         restoreSession(
           session.currentTestId,
@@ -262,6 +254,10 @@ function ComplexTestPageContent({
           session.blockReason
         );
 
+        /*
+         * Якщо сесія вже завершена —
+         * переходимо одразу до результатів.
+         */
         if (session.finished) {
           router.replace(
             `/complex-tests/${id}/result/${session.id}`
@@ -273,7 +269,10 @@ function ComplexTestPageContent({
           return;
         }
 
-        console.error("LOAD COMPLEX TEST SESSION:", err);
+        console.error(
+          "LOAD COMPLEX TEST SESSION:",
+          err
+        );
 
         setError(
           err instanceof Error
@@ -300,9 +299,11 @@ function ComplexTestPageContent({
     router,
   ]);
 
-  /* =========================================================
-     Дані учасника
-     ========================================================= */
+  /*
+   * ============================================================
+   * Відновлення даних учасника
+   * ============================================================
+   */
 
   useEffect(() => {
     try {
@@ -330,14 +331,14 @@ function ComplexTestPageContent({
               : undefined,
         });
       }
-    } catch {
-      // Дані учасника не є критичними.
-    }
+    } catch {}
   }, [id]);
 
-  /* =========================================================
-     Поточний предмет
-     ========================================================= */
+  /*
+   * ============================================================
+   * Поточний предмет
+   * ============================================================
+   */
 
   const currentTest = useMemo(() => {
     if (!complexTest) {
@@ -353,11 +354,16 @@ function ComplexTestPageContent({
         (item) => item.test.id === currentTestId
       ) ?? null
     );
-  }, [complexTest, currentTestId]);
+  }, [
+    complexTest,
+    currentTestId,
+  ]);
 
-  /* =========================================================
-     Кількість питань без відповіді
-     ========================================================= */
+  /*
+   * ============================================================
+   * Кількість питань без відповіді
+   * ============================================================
+   */
 
   const unansweredCount = useMemo(() => {
     if (!complexTest) {
@@ -367,10 +373,12 @@ function ComplexTestPageContent({
     let count = 0;
 
     for (const item of complexTest.tests) {
-      const testAnswers = savedAnswers[item.test.id] ?? {};
+      const testAnswers =
+        savedAnswers[item.test.id] ?? {};
 
       for (const question of item.test.questions) {
-        const answers = testAnswers[question.id] ?? [];
+        const answers =
+          testAnswers[question.id] ?? [];
 
         if (answers.length === 0) {
           count += 1;
@@ -379,14 +387,16 @@ function ComplexTestPageContent({
     }
 
     return count;
-  }, [complexTest, savedAnswers]);
+  }, [
+    complexTest,
+    savedAnswers,
+  ]);
 
-  /* =========================================================
-     Перемикання між предметами
-
-     НЕ робимо window.location.reload(),
-     щоб не виходити з fullscreen.
-     ========================================================= */
+  /*
+   * ============================================================
+   * Перемикання предмета
+   * ============================================================
+   */
 
   async function switchTest(testId: number) {
     if (
@@ -423,21 +433,22 @@ function ComplexTestPageContent({
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message || "Не вдалося переключити предмет."
+          data.message ||
+            "Не вдалося переключити предмет."
         );
       }
 
       /*
        * ВАЖЛИВО:
-       * таймер тут НЕ змінюємо.
-       *
-       * Він є глобальним для всього комплексного тесту.
+       * перемикання предмета НЕ змінює таймер.
        */
-
       setCurrentTestId(testId);
       setCurrentQuestion(0);
     } catch (err) {
-      console.error("SWITCH COMPLEX TEST:", err);
+      console.error(
+        "SWITCH COMPLEX TEST:",
+        err
+      );
 
       setError(
         err instanceof Error
@@ -449,11 +460,15 @@ function ComplexTestPageContent({
     }
   }
 
-  /* =========================================================
-     Перемикання між питаннями
-     ========================================================= */
+  /*
+   * ============================================================
+   * Перемикання питання
+   * ============================================================
+   */
 
-  async function switchQuestion(questionIndex: number) {
+  async function switchQuestion(
+    questionIndex: number
+  ) {
     if (
       blocked ||
       finished ||
@@ -466,7 +481,8 @@ function ComplexTestPageContent({
 
     if (
       questionIndex < 0 ||
-      questionIndex >= currentTest.test.questions.length
+      questionIndex >=
+        currentTest.test.questions.length
     ) {
       return;
     }
@@ -474,11 +490,6 @@ function ComplexTestPageContent({
     if (questionIndex === currentQuestion) {
       return;
     }
-
-    /*
-     * Спочатку змінюємо локальний стан,
-     * щоб інтерфейс реагував миттєво.
-     */
 
     setCurrentQuestion(questionIndex);
     setSavingQuestion(true);
@@ -510,7 +521,10 @@ function ComplexTestPageContent({
         );
       }
     } catch (err) {
-      console.error("SAVE CURRENT QUESTION:", err);
+      console.error(
+        "SAVE CURRENT QUESTION:",
+        err
+      );
 
       setError(
         err instanceof Error
@@ -522,9 +536,11 @@ function ComplexTestPageContent({
     }
   }
 
-  /* =========================================================
-     Завершення тестування
-     ========================================================= */
+  /*
+   * ============================================================
+   * Завершення тестування
+   * ============================================================
+   */
 
   async function finishTest() {
     if (
@@ -551,7 +567,8 @@ function ComplexTestPageContent({
 
 Ви впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.`;
 
-    const confirmed = window.confirm(confirmationMessage);
+    const confirmed =
+      window.confirm(confirmationMessage);
 
     if (!confirmed) {
       return;
@@ -583,7 +600,8 @@ function ComplexTestPageContent({
 
       if (!response.ok || !data.success) {
         throw new Error(
-          data.message || "Не вдалося завершити тестування."
+          data.message ||
+            "Не вдалося завершити тестування."
         );
       }
 
@@ -593,7 +611,10 @@ function ComplexTestPageContent({
         `/complex-tests/${id}/result/${sessionId}`
       );
     } catch (err) {
-      console.error("FINISH COMPLEX TEST:", err);
+      console.error(
+        "FINISH COMPLEX TEST:",
+        err
+      );
 
       setFinishing(false);
 
@@ -605,9 +626,11 @@ function ComplexTestPageContent({
     }
   }
 
-  /* =========================================================
-     Формат таймера
-     ========================================================= */
+  /*
+   * ============================================================
+   * Форматування глобального таймера
+   * ============================================================
+   */
 
   const formattedTime = useMemo(() => {
     const safeSeconds = Math.max(
@@ -615,7 +638,9 @@ function ComplexTestPageContent({
       Math.floor(timeLeft)
     );
 
-    const hours = Math.floor(safeSeconds / 3600);
+    const hours = Math.floor(
+      safeSeconds / 3600
+    );
 
     const minutes = Math.floor(
       (safeSeconds % 3600) / 60
@@ -630,9 +655,11 @@ function ComplexTestPageContent({
     ].join(":");
   }, [timeLeft]);
 
-  /* =========================================================
-     Loading
-     ========================================================= */
+  /*
+   * ============================================================
+   * Loading
+   * ============================================================
+   */
 
   if (loading) {
     return (
@@ -650,9 +677,11 @@ function ComplexTestPageContent({
     );
   }
 
-  /* =========================================================
-     Помилка
-     ========================================================= */
+  /*
+   * ============================================================
+   * Error
+   * ============================================================
+   */
 
   if (error) {
     return (
@@ -669,7 +698,9 @@ function ComplexTestPageContent({
           <button
             type="button"
             onClick={() =>
-              router.push(`/complex-tests/${id}`)
+              router.push(
+                `/complex-tests/${id}`
+              )
             }
             className="mt-6 rounded-lg bg-[#7A1F2B] px-5 py-3 text-white font-medium hover:opacity-90"
           >
@@ -680,11 +711,16 @@ function ComplexTestPageContent({
     );
   }
 
-  /* =========================================================
-     Немає даних
-     ========================================================= */
+  /*
+   * ============================================================
+   * Перевірка даних
+   * ============================================================
+   */
 
-  if (!complexTest || !currentTest) {
+  if (
+    !complexTest ||
+    !currentTest
+  ) {
     return (
       <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
         <div className="bg-white rounded-xl shadow-sm p-8">
@@ -696,27 +732,22 @@ function ComplexTestPageContent({
     );
   }
 
-  /* =========================================================
-     Питання поточного предмета
-     ========================================================= */
-
-  const questions = currentTest.test.questions;
+  const questions =
+    currentTest.test.questions;
 
   const currentQuestionData =
     questions[currentQuestion] ??
     questions[0] ??
     null;
 
-  /* =========================================================
-     ОСНОВНА СТОРІНКА
-     ========================================================= */
+  /*
+   * ============================================================
+   * Основний інтерфейс
+   * ============================================================
+   */
 
   return (
     <main className="min-h-screen bg-gray-100">
-      {/* =====================================================
-          MONITOR СЕСІЇ
-          ===================================================== */}
-
       <ComplexTestSessionMonitor
         complexTestId={id}
         sessionId={sessionId}
@@ -724,18 +755,16 @@ function ComplexTestPageContent({
         heartbeatInterval={10000}
       />
 
-      {/* =====================================================
-          АВТОЗБЕРЕЖЕННЯ СЕСІЇ
-          ===================================================== */}
-
       <ComplexAutoSaveSession
         complexTestId={id}
         sessionId={sessionId}
       />
 
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
+      {/*
+       * ========================================================
+       * Верхня панель
+       * ========================================================
+       */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3">
@@ -758,8 +787,6 @@ function ComplexTestPageContent({
               )}
             </div>
 
-            {/* Таймер */}
-
             <div
               className={[
                 "shrink-0 rounded-lg px-4 py-2 font-mono text-xl font-bold",
@@ -774,9 +801,11 @@ function ComplexTestPageContent({
         </div>
       </header>
 
-      {/* =====================================================
-          BLOCKED
-          ===================================================== */}
+      {/*
+       * ========================================================
+       * Блокування адміністратором
+       * ========================================================
+       */}
 
       {blocked && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
@@ -799,40 +828,30 @@ function ComplexTestPageContent({
         </div>
       )}
 
-      {/* =====================================================
-          CONTENT
-          ===================================================== */}
-
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-
-          {/* =================================================
-              QUESTIONS
-              ================================================= */}
+          {/*
+           * ======================================================
+           * Питання
+           * ======================================================
+           */}
 
           <section>
             <div className="bg-white rounded-xl shadow-sm p-6">
-
-              {/* =================================================
-                  CURRENT QUESTION
-                  ================================================= */}
-
               {currentQuestionData ? (
                 <div className="mt-6">
-
                   <div className="text-xs font-medium text-gray-500 mb-2">
-                    Питання {currentQuestion + 1}
+                    Питання{" "}
+                    {currentQuestion + 1}
                   </div>
 
                   <div className="text-lg font-semibold text-gray-900">
                     <RichText
-                      html={currentQuestionData.text}
+                      html={
+                        currentQuestionData.text
+                      }
                     />
                   </div>
-
-                  {/* =================================================
-                      ANSWER OPTIONS
-                      ================================================= */}
 
                   <div className="mt-5 space-y-3">
                     {currentQuestionData.answerOptions.map(
@@ -842,7 +861,9 @@ function ComplexTestPageContent({
                             selectedAnswers[
                               currentQuestionData.id
                             ] ?? []
-                          ).includes(option.id);
+                          ).includes(
+                            option.id
+                          );
 
                         return (
                           <label
@@ -867,7 +888,8 @@ function ComplexTestPageContent({
                                 blocked ||
                                 finished ||
                                 finishing ||
-                                switchingTestId !== null
+                                switchingTestId !==
+                                  null
                               }
                               onChange={() => {
                                 const current =
@@ -883,15 +905,20 @@ function ComplexTestPageContent({
                                 ) {
                                   next = selected
                                     ? current.filter(
-                                        (answerId) =>
-                                          answerId !== option.id
+                                        (
+                                          answerId
+                                        ) =>
+                                          answerId !==
+                                          option.id
                                       )
                                     : [
                                         ...current,
                                         option.id,
                                       ];
                                 } else {
-                                  next = [option.id];
+                                  next = [
+                                    option.id,
+                                  ];
                                 }
 
                                 selectAnswer(
@@ -910,7 +937,9 @@ function ComplexTestPageContent({
 
                             <span className="text-gray-800">
                               <RichText
-                                html={option.text}
+                                html={
+                                  option.text
+                                }
                               />
                             </span>
                           </label>
@@ -927,15 +956,16 @@ function ComplexTestPageContent({
             </div>
           </section>
 
-          {/* =================================================
-              SIDEBAR / НАВІГАЦІЙНА ПАНЕЛЬ
-              ================================================= */}
+          {/*
+           * ======================================================
+           * Бічна панель
+           * ======================================================
+           */}
 
           <aside className="space-y-4">
-
-            {/* =================================================
-                TIMER
-                ================================================= */}
+            {/*
+             * Таймер
+             */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <div className="text-sm text-gray-500">
@@ -960,9 +990,9 @@ function ComplexTestPageContent({
               </div>
             </div>
 
-            {/* =================================================
-                SUBJECTS
-                ================================================= */}
+            {/*
+             * Предмети
+             */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -970,55 +1000,62 @@ function ComplexTestPageContent({
               </h3>
 
               <div className="mt-3 space-y-2">
-                {complexTest.tests.map((item) => {
-                  const active =
-                    item.test.id === currentTest.test.id;
+                {complexTest.tests.map(
+                  (item) => {
+                    const active =
+                      item.test.id ===
+                      currentTest.test.id;
 
-                  const switching =
-                    switchingTestId === item.test.id;
+                    const switching =
+                      switchingTestId ===
+                      item.test.id;
 
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={
-                        blocked ||
-                        finished ||
-                        finishing ||
-                        switchingTestId !== null ||
-                        active
-                      }
-                      onClick={() =>
-                        switchTest(item.test.id)
-                      }
-                      className={[
-                        "w-full text-left rounded-lg border px-3 py-3 transition",
-                        active
-                          ? "border-[#7A1F2B] bg-red-50 text-[#7A1F2B] cursor-default"
-                          : "border-gray-200 text-gray-700 hover:border-[#7A1F2B] hover:bg-gray-50",
-                        switching
-                          ? "opacity-60 cursor-wait"
-                          : "",
-                      ].join(" ")}
-                    >
-                      <div className="font-medium">
-                        {item.test.title}
-                      </div>
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={
+                          blocked ||
+                          finished ||
+                          finishing ||
+                          switchingTestId !==
+                            null ||
+                          active
+                        }
+                        onClick={() =>
+                          switchTest(
+                            item.test.id
+                          )
+                        }
+                        className={[
+                          "w-full text-left rounded-lg border px-3 py-3 transition",
+                          active
+                            ? "border-[#7A1F2B] bg-red-50 text-[#7A1F2B] cursor-default"
+                            : "border-gray-200 text-gray-700 hover:border-[#7A1F2B] hover:bg-gray-50",
+                          switching
+                            ? "opacity-60 cursor-wait"
+                            : "",
+                        ].join(" ")}
+                      >
+                        <div className="font-medium">
+                          {item.test.title}
+                        </div>
 
-                      <div className="text-xs text-gray-500 mt-1">
-                        {switching
-                          ? "Перемикання…"
-                          : `${item.test.questions.length} питань`}
-                      </div>
-                    </button>
-                  );
-                })}
+                        <div className="text-xs text-gray-500 mt-1">
+                          {switching
+                            ? "Перемикання…"
+                            : `${item.test.questions.length} питань`}
+                        </div>
+                      </button>
+                    );
+                  }
+                )}
               </div>
             </div>
 
-            {/* =================================================
-                QUESTION NUMBERS / НАВІГАЦІЯ
-                ================================================= */}
+            {/*
+             * Навігація питаннями
+             */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <h3 className="font-semibold text-gray-900">
@@ -1026,49 +1063,59 @@ function ComplexTestPageContent({
               </h3>
 
               <div className="grid grid-cols-5 gap-2 mt-4">
-                {questions.map((question, index) => {
-                  const answers =
-                    selectedAnswers[question.id] ?? [];
+                {questions.map(
+                  (question, index) => {
+                    const answers =
+                      selectedAnswers[
+                        question.id
+                      ] ?? [];
 
-                  const saved =
-                    savedAnswers[
-                      currentTest.test.id
-                    ]?.[question.id] ?? [];
+                    const saved =
+                      savedAnswers[
+                        currentTest.test.id
+                      ]?.[
+                        question.id
+                      ] ?? [];
 
-                  const hasAnswer =
-                    answers.length > 0 ||
-                    saved.length > 0;
+                    const hasAnswer =
+                      answers.length > 0 ||
+                      saved.length > 0;
 
-                  const active =
-                    index === currentQuestion;
+                    const active =
+                      index ===
+                      currentQuestion;
 
-                  return (
-                    <button
-                      key={question.id}
-                      type="button"
-                      disabled={
-                        blocked ||
-                        finished ||
-                        finishing ||
-                        savingQuestion ||
-                        switchingTestId !== null
-                      }
-                      onClick={() =>
-                        switchQuestion(index)
-                      }
-                      className={[
-                        "h-9 rounded-md text-sm font-medium border transition",
-                        active
-                          ? "border-[#7A1F2B] bg-[#7A1F2B] text-white"
-                          : hasAnswer
-                          ? "border-red-300 bg-red-50 text-[#7A1F2B] hover:bg-red-100"
-                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
-                      ].join(" ")}
-                    >
-                      {index + 1}
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={question.id}
+                        type="button"
+                        disabled={
+                          blocked ||
+                          finished ||
+                          finishing ||
+                          savingQuestion ||
+                          switchingTestId !==
+                            null
+                        }
+                        onClick={() =>
+                          switchQuestion(
+                            index
+                          )
+                        }
+                        className={[
+                          "h-9 rounded-md text-sm font-medium border transition",
+                          active
+                            ? "border-[#7A1F2B] bg-[#7A1F2B] text-white"
+                            : hasAnswer
+                            ? "border-red-300 bg-red-50 text-[#7A1F2B] hover:bg-red-100"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                        ].join(" ")}
+                      >
+                        {index + 1}
+                      </button>
+                    );
+                  }
+                )}
               </div>
 
               {savingQuestion && (
@@ -1095,9 +1142,9 @@ function ComplexTestPageContent({
               </div>
             </div>
 
-            {/* =================================================
-                FINISH
-                ================================================= */}
+            {/*
+             * Завершення
+             */}
 
             <div className="bg-white rounded-xl shadow-sm p-5">
               <button
@@ -1106,7 +1153,8 @@ function ComplexTestPageContent({
                   blocked ||
                   finished ||
                   finishing ||
-                  switchingTestId !== null ||
+                  switchingTestId !==
+                    null ||
                   savingQuestion
                 }
                 onClick={finishTest}
