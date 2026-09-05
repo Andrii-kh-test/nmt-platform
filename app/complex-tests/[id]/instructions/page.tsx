@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
-
-type ComplexTestInfo = {
-  id: number;
-  title: string;
-  description: string | null;
-  duration: number;
-  examType: string;
-  codeRequired: boolean;
-};
+import { ArrowLeft } from "lucide-react";
 
 type ParticipantData = {
   lastName: string;
@@ -20,33 +11,48 @@ type ParticipantData = {
   accessCode: string;
 };
 
+type ComplexTest = {
+  id: number;
+  title: string;
+  description: string | null;
+  duration: number;
+  examType: string;
+  codeRequired: boolean;
+};
+
 export default function ComplexTestInstructionsPage() {
   const params = useParams();
   const router = useRouter();
 
   const id = Number(params.id);
 
-  const [test, setTest] = useState<ComplexTestInfo | null>(null);
   const [participant, setParticipant] =
     useState<ParticipantData | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
+  const [complexTest, setComplexTest] =
+    useState<ComplexTest | null>(null);
+
+  const [confirmed, setConfirmed] =
+    useState(false);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [starting, setStarting] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   useEffect(() => {
-    if (!id || Number.isNaN(id)) {
-      setError("Некоректний ідентифікатор тесту.");
-      setLoading(false);
+    if (!id) {
       return;
     }
 
-    const participantKey =
-      `complex-test-participant-${id}`;
-
     const storedParticipant =
-      sessionStorage.getItem(participantKey);
+      sessionStorage.getItem(
+        `complex-test-participant-${id}`
+      );
 
     if (!storedParticipant) {
       router.replace(`/complex-tests/${id}/start`);
@@ -55,16 +61,19 @@ export default function ComplexTestInstructionsPage() {
 
     try {
       const parsedParticipant =
-        JSON.parse(storedParticipant) as ParticipantData;
+        JSON.parse(storedParticipant);
 
       setParticipant(parsedParticipant);
     } catch {
-      sessionStorage.removeItem(participantKey);
+      sessionStorage.removeItem(
+        `complex-test-participant-${id}`
+      );
+
       router.replace(`/complex-tests/${id}/start`);
       return;
     }
 
-    const loadTest = async () => {
+    async function loadComplexTest() {
       try {
         const response = await fetch(
           `/api/complex-tests/${id}`,
@@ -78,53 +87,82 @@ export default function ComplexTestInstructionsPage() {
         if (!response.ok || !data.success) {
           throw new Error(
             data.message ||
-              "Не вдалося завантажити інформацію про тест."
+              "Не вдалося завантажити тест."
           );
         }
 
-        setTest(data.complexTest);
+        setComplexTest(data.complexTest);
       } catch (err) {
         console.error(
-          "LOAD COMPLEX TEST INSTRUCTIONS ERROR:",
+          "Помилка завантаження комбінованого тесту:",
           err
         );
 
         setError(
           err instanceof Error
             ? err.message
-            : "Не вдалося завантажити інформацію про тест."
+            : "Не вдалося завантажити тест."
         );
       } finally {
         setLoading(false);
       }
-    };
+    }
 
-    loadTest();
+    loadComplexTest();
   }, [id, router]);
 
-  const handleConfirm = async () => {
+  async function handleConfirm() {
     if (!participant) {
       setError(
-        "Дані учасника не знайдено. Поверніться до початку."
+        "Не знайдено дані учасника тестування."
       );
       return;
     }
 
     if (!confirmed) {
+      setError(
+        "Підтвердьте, що ви ознайомилися з інструкцією."
+      );
       return;
     }
 
-    setStarting(true);
     setError("");
+
+    /*
+     * Переходимо в повноекранний режим безпосередньо
+     * з обробника натискання кнопки.
+     *
+     * Це важливо, оскільки браузер дозволяє
+     * requestFullscreen() саме в межах дії користувача.
+     */
+    if (!document.fullscreenElement) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch (fullscreenError) {
+        console.error(
+          "Не вдалося перейти у повноекранний режим:",
+          fullscreenError
+        );
+
+        setError(
+          "Не вдалося перейти у повноекранний режим. Спробуйте ще раз."
+        );
+
+        return;
+      }
+    }
+
+    setStarting(true);
 
     try {
       const response = await fetch(
-        `/api/complex-tests/start`,
+        "/api/complex-tests/start",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
+          cache: "no-store",
           body: JSON.stringify({
             complexTestId: id,
             lastName: participant.lastName,
@@ -147,11 +185,14 @@ export default function ComplexTestInstructionsPage() {
       sessionStorage.setItem(
         `complex-test-session-${id}`,
         JSON.stringify({
-          sessionId: data.sessionId,
+          sessionId: data.session.id,
           complexTestId: id,
-          currentTestId: data.currentTestId,
-          currentQuestion: data.currentQuestion,
-          timeLeft: data.timeLeft,
+          currentTestId:
+            data.session.currentTestId,
+          currentQuestion:
+            data.session.currentQuestion,
+          timeLeft:
+            data.session.timeLeft,
         })
       );
 
@@ -160,299 +201,228 @@ export default function ComplexTestInstructionsPage() {
       );
     } catch (err) {
       console.error(
-        "START COMPLEX TEST ERROR:",
+        "Помилка запуску комбінованого тесту:",
         err
       );
 
       setError(
         err instanceof Error
           ? err.message
-          : "Не вдалося розпочати тестування. Спробуйте ще раз."
+          : "Не вдалося розпочати тестування."
       );
-    } finally {
+
       setStarting(false);
     }
-  };
-
-  const handleBack = () => {
-    router.push(`/complex-tests/${id}`);
-  };
+  }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-100 px-4 py-10">
-        <div className="mx-auto max-w-4xl">
-          <div className="rounded-2xl bg-white p-8 shadow-sm">
-            <div className="flex items-center justify-center py-16">
-              <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
-            </div>
-          </div>
+      <main className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600 text-lg">
+          Завантаження...
         </div>
       </main>
     );
   }
 
-  if (error && !test) {
+  if (!complexTest) {
     return (
-      <main className="min-h-screen bg-gray-100 px-4 py-10">
-        <div className="mx-auto max-w-4xl">
-          <div className="rounded-2xl bg-white p-8 shadow-sm">
-            <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-700">
-              {error}
-            </div>
+      <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-xl w-full text-center">
+          <h1 className="text-2xl font-bold text-[#7A1F2B] mb-4">
+            Тест не знайдено
+          </h1>
 
-            <button
-              type="button"
-              onClick={handleBack}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#7A1F2B] px-5 py-3 font-medium text-white transition hover:bg-[#641923]"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              Повернутися
-            </button>
-          </div>
+          <p className="text-gray-600 mb-6">
+            {error ||
+              "Не вдалося завантажити інформацію про тест."}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              router.push("/complex-tests")
+            }
+            className="
+              inline-flex
+              items-center
+              gap-2
+              px-6
+              py-3
+              rounded-xl
+              bg-[#7A1F2B]
+              hover:bg-[#651722]
+              text-white
+              font-semibold
+              transition
+            "
+          >
+            <ArrowLeft size={18} />
+            До переліку тестів
+          </button>
         </div>
       </main>
     );
-  }
-
-  if (!test) {
-    return null;
   }
 
   return (
-    <main className="min-h-screen bg-gray-100 px-4 py-8 md:px-6">
-      <div className="mx-auto max-w-4xl">
-
-        {/* Повернення */}
-        <button
-          type="button"
-          onClick={handleBack}
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[#7A1F2B]"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Повернутися до тесту
-        </button>
-
-        {/* Основний блок */}
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-
+    <main className="min-h-screen bg-gray-100 py-10 px-6">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           {/* Заголовок */}
-          <div className="border-b border-gray-200 px-6 py-7 md:px-10">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#7A1F2B]/10 px-3 py-1 text-sm font-semibold text-[#7A1F2B]">
-                {test.examType}
-              </span>
+          <div className="bg-[#7A1F2B] text-white px-8 py-7">
+            <div className="text-sm opacity-80 mb-2">
+              {complexTest.examType}
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">
-              {test.title}
+            <h1 className="text-3xl font-bold">
+              {complexTest.title}
             </h1>
+
+            {complexTest.description && (
+              <p className="mt-3 text-white/90 leading-7">
+                {complexTest.description}
+              </p>
+            )}
           </div>
 
-          {/* Інструкція */}
-          <div className="px-6 py-8 md:px-10">
-            <div className="space-y-6 text-gray-700">
+          {/* Основна інформація */}
+          <div className="px-8 py-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+              <div className="rounded-xl bg-gray-50 border border-gray-200 p-5">
+                <div className="text-sm text-gray-500 mb-1">
+                  Учасник
+                </div>
 
-              {/* Звернення */}
-              <p className="text-center text-lg font-bold italic text-gray-900">
-                Шановний учасник / учасниця тренувального
-                тестування!
-              </p>
-
-              {/* Основний текст інструкції */}
-              <div className="space-y-5 text-base leading-relaxed text-gray-700">
-
-                <p>
-                  Обов’язково ознайомтеся з правилами
-                  проходження тестування та правилами роботи
-                  із сервісом і натисніть на кнопку
-                  «Ознайомлений / Ознайомлена з правилами
-                  проходження тестування». Наголошуємо, що в
-                  разі порушення цих правил вас буде позбавлено
-                  права продовжувати роботу, а ваші результати
-                  буде анульовано.
-                </p>
-
-                <p>
-                  Зауважуємо: у ТЕЦ може бути здійснено
-                  контроль за дотриманням процедури проходження
-                  НМТ за допомогою металодетектора. Також у ТЕЦ
-                  здійснюється відеоспостереження.
-                </p>
-
-                <p>
-                  Якщо ви забули вимкнути мобільні телефони чи
-                  залишити їх або зарядні пристрої, смартгодинники,
-                  навушники в спеціально відведеному місці —
-                  пропонуємо зробити це зараз. У разі виникнення
-                  технічних збоїв у роботі сервісу або погіршення
-                  самопочуття потрібно негайно повідомити про це
-                  інструктора.
-                </p>
-
-                <p>
-                  Якщо ви вважатимете, що щодо вас допущено
-                  порушення процедури проведення НМТ, що може
-                  вплинути на ваш результат, — до виходу з
-                  тимчасового екзаменаційного центру (ТЕЦ)
-                  подайте відповідальному за ТЕЦ апеляційну
-                  заяву щодо порушення процедури.
-                </p>
-
-                <p>
-                  У випадку оголошення повітряної тривоги до
-                  початку допуску до ТЕЦ пройдіть в укриття за
-                  вказівниками та перебувайте там до повідомлення
-                  про її завершення. Якщо ж повітряну тривогу
-                  оголосять під час тестування — вас буде
-                  повідомлено про це, а роботу над тестом
-                  заблоковано.
-                </p>
-
-                <p>
-                  Якщо ви не зможете завершити виконання роботи
-                  через виникнення нестандартних ситуацій у ТЕЦ
-                  або через різке погіршення стану здоров’я, вам
-                  буде надано змогу пройти НМТ під час додаткових
-                  сесій відповідно до встановленого порядку.
-                </p>
-
-                <p>
-                  Під час кожного етапу тестування передбачено
-                  виконання завдань із двох предметів, час між
-                  якими ви можете розподіляти самостійно. Таймер
-                  відліку часу, що показує час, який залишився до
-                  завершення відповідного етапу тестування,
-                  відображатиметься у правому верхньому куті
-                  екрана.
-                </p>
-
-                <p>
-                  Розпочати роботу над тестом ви можете як з
-                  української мови, так і з математики.
-                  Повернутися до виконання завдань одного із цих
-                  предметів і надати та зберегти відповіді можна
-                  протягом усього часу, відведеного на виконання
-                  завдань першого етапу тестування. Переходячи
-                  від одного предмета до іншого, уважно читайте
-                  спливні повідомлення. Для зарахування відповіді
-                  на завдання натисніть на кнопку «Зберегти
-                  відповідь».
-                </p>
-
-                <p>
-                  Для виправлення відповіді виберіть інший
-                  варіант та повторно натисніть на кнопку
-                  «Зберегти відповідь» – у такому разі буде
-                  зараховано останню збережену вами відповідь.
-                  На боковій панелі, розташованій справа,
-                  відображатиметься інформація про опрацьовані
-                  вами завдання.
-                </p>
-
-                <p>
-                  За потреби ви можете користуватися
-                  довідковими матеріалами з математики, фізики
-                  чи хімії, що містяться у вкладці
-                  «Довідкові матеріали».
-                </p>
-
-                <p>
-                  На боковій панелі, розташованій праворуч,
-                  відображатиметься інформація про опрацювання
-                  вами завдань.
-                </p>
-
-                <p>
-                  Стежте за вказівками, які з’являються на
-                  моніторі комп’ютера, а також читайте
-                  інформацію у спливних повідомленнях.
-                </p>
-
-                <p>
-                  Якщо ви дочасно закінчите роботу над
-                  завданнями — можете завершити тестування,
-                  натиснувши кнопку «Завершити роботу над
-                  тестом».
-                </p>
-
-                <p>
-                  Будьте уважні: перед завершенням роботи
-                  система повідомить, на які завдання ви не
-                  надали або не зберегли відповіді.
-                </p>
-
-                <p>
-                  Після завершення виконання завдань тестування
-                  на екрані відобразиться інформація про
-                  збережені вами відповіді та набрані тестові
-                  бали.
-                </p>
-
-                <p>
-                  Якщо вам потрібна допомога у вирішенні питань,
-                  які не стосуються змісту завдань тесту,
-                  піднесіть руку, і до вас підійде старший
-                  інструктор.
-                </p>
-
+                <div className="font-semibold text-gray-800">
+                  {participant?.lastName}{" "}
+                  {participant?.firstName}{" "}
+                  {participant?.middleName}
+                </div>
               </div>
 
-              {/* Побажання */}
-              <p className="pt-2 text-center text-lg font-bold italic text-black">
-                Зичимо успіхів!
-              </p>
+              <div className="rounded-xl bg-gray-50 border border-gray-200 p-5">
+                <div className="text-sm text-gray-500 mb-1">
+                  Тривалість тестування
+                </div>
 
-              {/* Підтвердження ознайомлення */}
-              <div className="border-t border-gray-200 pt-6">
-
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={confirmed}
-                    onChange={(event) =>
-                      setConfirmed(event.target.checked)
-                    }
-                    disabled={starting}
-                    className="h-5 w-5 shrink-0 cursor-pointer accent-[#7A1F2B]"
-                  />
-
-                  <span className="text-base font-medium text-gray-900">
-                    Ознайомлений / Ознайомлена з правилами
-                    проходження тестування
-                  </span>
-                </label>
-
-                {/* Помилка */}
-                {error && (
-                  <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {error}
-                  </div>
-                )}
-
-                {/* Кнопка запуску */}
-                <button
-                  type="button"
-                  onClick={handleConfirm}
-                  disabled={!confirmed || starting}
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#7A1F2B] px-6 py-4 text-base font-semibold text-white transition hover:bg-[#641923] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {starting ? (
-                    <>
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                      Розпочинаємо тестування...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-5 w-5" />
-                      Розпочати роботу над тестом
-                    </>
-                  )}
-                </button>
-
+                <div className="font-semibold text-gray-800">
+                  {complexTest.duration} хвилин
+                </div>
               </div>
-
             </div>
+
+            {/* Інструкція */}
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                Інструкція
+              </h2>
+
+              <div className="space-y-5 text-gray-700 leading-7">
+                <p>
+                  Перед початком тестування уважно
+                  ознайомтеся з правилами його
+                  проходження.
+                </p>
+
+                <p>
+                  Тест складається з кількох предметних
+                  блоків, які проходяться послідовно.
+                  Перехід до наступного предмета
+                  здійснюється після завершення
+                  поточного блоку.
+                </p>
+
+                <p>
+                  Під час тестування необхідно
+                  дотримуватися правил академічної
+                  доброчесності та не залишати
+                  повноекранний режим.
+                </p>
+
+                <p>
+                  Заборонено використовувати сторонні
+                  матеріали, інші вкладки браузера,
+                  сторонні програми або інші засоби
+                  отримання допомоги.
+                </p>
+
+                <p>
+                  У разі виходу з повноекранного режиму
+                  система зафіксує порушення правил
+                  тестування. Повторне порушення може
+                  призвести до автоматичного завершення
+                  тестування.
+                </p>
+
+                <p>
+                  Усі надані та збережені відповіді
+                  використовуються для формування
+                  результатів тестування.
+                </p>
+
+                <p>
+                  Після завершення тестування або
+                  автоматичного завершення через
+                  порушення правил результати будуть
+                  доступні на відповідній сторінці.
+                </p>
+              </div>
+            </section>
+
+            {/* Підтвердження та запуск */}
+            <div className="mt-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+              <label className="flex items-center gap-3 cursor-pointer text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(e) =>
+                    setConfirmed(e.target.checked)
+                  }
+                  className="
+                    h-5
+                    w-5
+                    accent-[#7A1F2B]
+                  "
+                />
+
+                <span>
+                  Ознайомлений з інструкцією
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={
+                  !confirmed || starting
+                }
+                className="
+                  px-7
+                  py-3
+                  rounded-xl
+                  bg-[#7A1F2B]
+                  hover:bg-[#651722]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  text-white
+                  font-semibold
+                  transition
+                  whitespace-nowrap
+                "
+              >
+                {starting
+                  ? "Розпочинаємо..."
+                  : "Розпочати роботу над тестом"}
+              </button>
+            </div>
+
+            {/* Помилка */}
+            {error && (
+              <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
+                {error}
+              </div>
+            )}
           </div>
         </div>
       </div>
