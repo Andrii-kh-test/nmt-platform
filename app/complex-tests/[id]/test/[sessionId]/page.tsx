@@ -54,9 +54,23 @@ interface SessionResponse {
  */
 
 function cleanTechnicalSigns(text: string): string {
+  if (!text) {
+    return "";
+  }
+
   return text
-    .replace(/<>/g, "")
-    .replace(/<\/>/g, "");
+    // HTML-сутності
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+
+    // Порожні технічні конструкції
+    .replace(/<\s*\/\s*>/gi, "")
+    .replace(/<\s*>/gi, "")
+
+    // Варіанти <> та </> із пробілами
+    .replace(/<\s*\/?\s*>/g, "")
+
+    .trim();
 }
 
 /*
@@ -88,6 +102,13 @@ function ComplexTestContent() {
     selectAnswer,
     saveAnswer,
     setFinished,
+
+    /*
+     * ВАЖЛИВО:
+     * Перемикання предмета відбувається без перезавантаження
+     * сторінки. Тому використовуємо setter із контексту.
+     */
+    setCurrentTestId,
   } = useComplexTestSession();
 
   const [loading, setLoading] = useState(true);
@@ -450,7 +471,17 @@ function ComplexTestContent() {
    * =========================================================
    * ПЕРЕМИКАННЯ МІЖ ПРЕДМЕТАМИ
    *
-   * Перед перемиканням повторно активуємо fullscreen.
+   * ВАЖЛИВО:
+   *
+   * НЕ використовуємо window.location.reload().
+   *
+   * Provider залишається змонтованим, тому:
+   *
+   * - timeLeft не скидається;
+   * - timerRef не знищується;
+   * - deadlineRef не знищується;
+   * - countdown продовжується;
+   * - змінюється лише currentTestId.
    * =========================================================
    */
 
@@ -486,6 +517,21 @@ function ComplexTestContent() {
         );
       }
 
+      /*
+       * =====================================================
+       * ЗАПИСУЄМО НОВИЙ ПОТОЧНИЙ ПРЕДМЕТ НА СЕРВЕР
+       *
+       * timeLeft тут НЕ передаємо і НЕ змінюємо.
+       *
+       * Сервер змінює тільки:
+       * - currentTestId
+       * - currentQuestion
+       * - savedAnswers
+       *
+       * Глобальний таймер залишається недоторканим.
+       * =====================================================
+       */
+
       const response = await fetch(
         `/api/complex-tests/${id}/session`,
         {
@@ -503,7 +549,8 @@ function ComplexTestContent() {
         }
       );
 
-      const data = await response.json();
+      const data: SessionResponse =
+        await response.json();
 
       if (!response.ok || !data.success) {
         throw new Error(
@@ -513,14 +560,26 @@ function ComplexTestContent() {
       }
 
       /*
-       * Перезавантаження потрібне для повного відновлення
-       * нового поточного предмета із серверної сесії.
+       * =====================================================
+       * КЛЮЧОВЕ ВИПРАВЛЕННЯ
        *
-       * Глобальний таймер при цьому не скидається:
-       * restoreSession отримує timeLeft із БД.
+       * НЕ reload().
+       *
+       * Змінюємо currentTestId безпосередньо
+       * в існуючому ComplexTestSessionContext.
+       *
+       * Завдяки цьому timerRef і deadlineRef
+       * продовжують працювати.
+       * =====================================================
        */
 
-      window.location.reload();
+      setCurrentTestId(testId);
+
+      /*
+       * Очищаємо індикатор перемикання.
+       */
+
+      setSwitchingTestId(null);
     } catch (err) {
       console.error(
         "SWITCH COMPLEX TEST:",
