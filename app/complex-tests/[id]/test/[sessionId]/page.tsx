@@ -15,7 +15,7 @@ import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
-import PdfMaterialViewer from "@/components/PdfMaterialViewer";
+import PdfMaterialViewer from "@/app/components/PdfMaterialViewer";
 
 interface SessionResponse {
   success: boolean;
