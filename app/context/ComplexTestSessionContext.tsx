@@ -24,16 +24,53 @@ export type ComplexSelectedAnswers = Record<
   number[]
 >;
 
+/* =========================================================
+   MATCHING
+   ========================================================= */
+
+export interface ComplexMatchingLeftItem {
+  id: number;
+  text: string;
+  correctRightId: number;
+}
+
+export interface ComplexMatchingRightItem {
+  id: number;
+  text: string;
+}
+
+/* =========================================================
+   QUESTION
+   ========================================================= */
+
 export interface ComplexTestQuestion {
   id: number;
   text: string;
   type: string;
   points: number;
+
   answerOptions: Array<{
     id: number;
     text: string;
   }>;
+
+  /*
+   * Завдання на встановлення відповідності.
+   *
+   * Дані формуються з AnswerOption у
+   * app/utils/mapPrismaTest.ts:
+   *
+   * L|id|text|correctRightId
+   * R|id|text
+   */
+  matchingLeftItems: ComplexMatchingLeftItem[];
+
+  matchingRightItems: ComplexMatchingRightItem[];
 }
+
+/* =========================================================
+   COMPLEX TEST ITEM
+   ========================================================= */
 
 export interface ComplexTestItem {
   id: number;
@@ -47,6 +84,10 @@ export interface ComplexTestItem {
     questions: ComplexTestQuestion[];
   };
 }
+
+/* =========================================================
+   COMPLEX TEST DATA
+   ========================================================= */
 
 export interface ComplexTestData {
   id: number;
@@ -404,7 +445,7 @@ export function ComplexTestSessionProvider({
 
   /* =======================================================
      CURRENT TEST
-     
+
      ПЕРЕМИКАННЯ ПРЕДМЕТА НЕ ЧІПАЄ ТАЙМЕР.
      ======================================================= */
 
@@ -633,9 +674,9 @@ export function ComplexTestSessionProvider({
 
   /* =======================================================
      RESTORE SESSION
-     
+
      Серверне timeLeft — авторитетне.
-     
+
      Після restore створюється ОДИН
      глобальний countdown.
      ======================================================= */

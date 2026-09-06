@@ -250,6 +250,21 @@ export async function GET(
     /*
      * ========================================================
      * ПІДГОТОВКА COMPLEX TEST
+     *
+     * ВАЖЛИВО:
+     *
+     * Для matching AnswerOption зберігає дані
+     * у форматі:
+     *
+     * L|id|text|correctRightId
+     * R|id|text
+     *
+     * Тут ми розділяємо їх на:
+     *
+     * matchingLeftItems
+     * matchingRightItems
+     *
+     * Точна логіка відповідає mapPrismaTest.ts.
      * ========================================================
      */
 
@@ -298,32 +313,14 @@ export async function GET(
                 item.test.questions.map(
                   (
                     testQuestion
-                  ) => ({
-                    id:
-                      testQuestion
-                        .question
-                        .id,
+                  ) => {
+                    /*
+                     * ==================================================
+                     * ANSWER OPTIONS
+                     * ==================================================
+                     */
 
-                    order:
-                      testQuestion
-                        .order,
-
-                    text:
-                      testQuestion
-                        .question
-                        .text,
-
-                    type:
-                      testQuestion
-                        .question
-                        .type,
-
-                    points:
-                      testQuestion
-                        .question
-                        .points,
-
-                    answerOptions:
+                    const answerOptions =
                       testQuestion
                         .question
                         .answerOptions.map(
@@ -339,8 +336,163 @@ export async function GET(
                             text:
                               option.text,
                           })
-                        ),
-                  })
+                        );
+
+                    /*
+                     * ==================================================
+                     * MATCHING
+                     * ==================================================
+                     */
+
+                    const isMatching =
+                      testQuestion
+                        .question
+                        .type ===
+                      "matching";
+
+                    const matchingLeftItems =
+                      isMatching
+                        ? answerOptions
+                            .filter(
+                              (
+                                option
+                              ) =>
+                                option.text.startsWith(
+                                  "L|"
+                                )
+                            )
+                            .map(
+                              (
+                                option
+                              ) => {
+                                const parts =
+                                  option.text.split(
+                                    "|"
+                                  );
+
+                                return {
+                                  id:
+                                    Number(
+                                      parts[1]
+                                    ),
+
+                                  text:
+                                    parts[2] ??
+                                    "",
+
+                                  correctRightId:
+                                    Number(
+                                      parts[3]
+                                    ),
+                                };
+                              }
+                            )
+                            .sort(
+                              (
+                                a,
+                                b
+                              ) =>
+                                a.id -
+                                b.id
+                            )
+                        : [];
+
+                    const matchingRightItems =
+                      isMatching
+                        ? answerOptions
+                            .filter(
+                              (
+                                option
+                              ) =>
+                                option.text.startsWith(
+                                  "R|"
+                                )
+                            )
+                            .map(
+                              (
+                                option
+                              ) => {
+                                const parts =
+                                  option.text.split(
+                                    "|"
+                                  );
+
+                                return {
+                                  id:
+                                    Number(
+                                      parts[1]
+                                    ),
+
+                                  text:
+                                    parts
+                                      .slice(
+                                        2
+                                      )
+                                      .join(
+                                        "|"
+                                      ),
+                                };
+                              }
+                            )
+                            .sort(
+                              (
+                                a,
+                                b
+                              ) =>
+                                a.id -
+                                b.id
+                            )
+                        : [];
+
+                    /*
+                     * ==================================================
+                     * QUESTION
+                     * ==================================================
+                     */
+
+                    return {
+                      id:
+                        testQuestion
+                          .question
+                          .id,
+
+                      order:
+                        testQuestion
+                          .order,
+
+                      text:
+                        testQuestion
+                          .question
+                          .text,
+
+                      type:
+                        testQuestion
+                          .question
+                          .type,
+
+                      points:
+                        testQuestion
+                          .question
+                          .points,
+
+                      /*
+                       * Для matching звичайні
+                       * answerOptions не потрібні.
+                       *
+                       * Для інших типів залишаємо
+                       * їх без змін.
+                       */
+
+                      answerOptions:
+                        isMatching
+                          ? []
+                          : answerOptions,
+
+                      matchingLeftItems,
+
+                      matchingRightItems,
+                    };
+                  }
                 ),
             },
           })

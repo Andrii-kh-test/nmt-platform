@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import { useParams, useRouter } from "next/navigation";
 
 import {
@@ -14,8 +15,15 @@ import FullscreenGuard from "@/app/components/test/FullscreenGuard";
 import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
+
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
+
 import PdfMaterialViewer from "@/app/components/PdfMaterialViewer";
+import HtmlContent from "@/app/components/common/HtmlContent";
+
+import Matching from "@/app/components/test/question-types/Matching";
+
+import type { Question } from "@/app/types/question";
 
 interface SessionResponse {
   success: boolean;
@@ -25,133 +33,26 @@ interface SessionResponse {
     id: number;
     complexTestId: number;
     participantId: number | null;
+
     currentTestId: number | null;
     currentQuestion: number;
+
     savedAnswers: ComplexAnswerMap;
+
     timeLeft: number;
     extraTime: number;
+
     finished: boolean;
     finishedAt: string | null;
+
     blocked: boolean;
     blockReason: string | null;
     blockedAt: string | null;
+
     startedAt: string | null;
   };
 
   complexTest?: ComplexTestData;
-}
-
-/*
- * ============================================================
- * ОЧИЩЕННЯ ТЕХНІЧНИХ ЗНАКІВ
- * ============================================================
- */
-
-function cleanTechnicalSigns(text: string): string {
-  if (!text) {
-    return "";
-  }
-
-  let cleaned = text;
-
-  // ------------------------------------------------------------
-  // 1. Декодуємо HTML entities
-  // ------------------------------------------------------------
-  cleaned = cleaned
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&nbsp;/gi, " ");
-
-  // ------------------------------------------------------------
-  // 2. Видаляємо нормальні HTML-теги
-  // ------------------------------------------------------------
-  cleaned = cleaned.replace(/<\/?[a-z][^>]*>/gi, "");
-
-  // ------------------------------------------------------------
-  // 3. Видаляємо залишки Markdown
-  // ------------------------------------------------------------
-
-  // **текст**
-  cleaned = cleaned.replace(/\*\*/g, "");
-
-  // __текст__
-  cleaned = cleaned.replace(/__/g, "");
-
-  // залишки потрійних зірочок
-  cleaned = cleaned.replace(/\*\*\*/g, "");
-
-  // ------------------------------------------------------------
-  // 4. Видаляємо пошкоджені HTML/Markdown конструкції
-  // ------------------------------------------------------------
-
-  // p ... /p
-  cleaned = cleaned.replace(/\/?p\b/gi, (match, offset, fullText) => {
-    /*
-     * Не видаляємо звичайну літеру "п" усередині слова.
-     * Видаляємо тільки "p" або "/p", якщо після неї
-     * починається службова конструкція.
-     */
-    const before = fullText.slice(Math.max(0, offset - 1), offset);
-    const after = fullText.slice(offset + match.length, offset + match.length + 1);
-
-    if (
-      match.toLowerCase() === "p" &&
-      before &&
-      /[А-Яа-яІіЇїЄєҐґA-Za-z]/.test(before) &&
-      after &&
-      /[А-Яа-яІіЇїЄєҐґA-Za-z]/.test(after)
-    ) {
-      return match;
-    }
-
-    return "";
-  });
-
-  // ------------------------------------------------------------
-  // 5. Видаляємо характерні уламки strong/em
-  // ------------------------------------------------------------
-
-  cleaned = cleaned
-    .replace(/strongem/gi, "")
-    .replace(/\/em\/strong/gi, "")
-    .replace(/\/strong/gi, "")
-    .replace(/strong/gi, "")
-    .replace(/\/em/gi, "")
-    .replace(/em/gi, "");
-
-  // ------------------------------------------------------------
-  // 6. Видаляємо інші характерні технічні уламки
-  // ------------------------------------------------------------
-
-  cleaned = cleaned
-    .replace(/\?<<>/g, "")
-    .replace(/<<>/g, "")
-    .replace(/<\|/g, "")
-    .replace(/\|>/g, "")
-    .replace(/<\|>/g, "");
-
-  // ------------------------------------------------------------
-  // 7. Видаляємо залишкові кутові дужки
-  // ------------------------------------------------------------
-
-  cleaned = cleaned
-    .replace(/</g, "")
-    .replace(/>/g, "");
-
-  // ------------------------------------------------------------
-  // 8. Прибираємо зайві службові пробіли
-  // ------------------------------------------------------------
-
-  cleaned = cleaned
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n[ \t]+/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .trim();
-
-  return cleaned;
 }
 
 /*
@@ -186,7 +87,9 @@ function ComplexTestContent() {
   } = useComplexTestSession();
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   const [switchingTestId, setSwitchingTestId] =
     useState<number | null>(null);
@@ -197,7 +100,8 @@ function ComplexTestContent() {
   const [savedSuccessfully, setSavedSuccessfully] =
     useState<Record<number, boolean>>({});
 
-  const [finishing, setFinishing] = useState(false);
+  const [finishing, setFinishing] =
+    useState(false);
 
   const [participant, setParticipant] = useState<{
     lastName: string;
@@ -211,15 +115,24 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  const [pdfMaterial, setPdfMaterial] = useState<{
-    title: string;
-    src: string;
-  } | null>(null);
+  const [pdfMaterial, setPdfMaterial] =
+    useState<{
+      title: string;
+      src: string;
+    } | null>(null);
 
-  const [pdfMinimized, setPdfMinimized] = useState(false);
+  const [pdfMinimized, setPdfMinimized] =
+    useState(false);
 
-  function openPdfMaterial(title: string, src: string) {
-    if (blocked || finished || finishing) {
+  function openPdfMaterial(
+    title: string,
+    src: string
+  ) {
+    if (
+      blocked ||
+      finished ||
+      finishing
+    ) {
       return;
     }
 
@@ -263,7 +176,10 @@ function ComplexTestContent() {
    */
 
   async function finishSecurityTest() {
-    if (finishing || finished) {
+    if (
+      finishing ||
+      finished
+    ) {
       return;
     }
 
@@ -276,19 +192,27 @@ function ComplexTestContent() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           cache: "no-store",
+
           body: JSON.stringify({
             sessionId,
+
             currentTestId:
               currentTestId ??
               complexTest?.tests[0]?.test.id ??
               null,
+
             currentQuestion,
+
             savedAnswers,
+
             finished: true,
-            finishReason: "security",
+
+            finishReason:
+              "security",
           }),
         }
       );
@@ -296,7 +220,10 @@ function ComplexTestContent() {
       const data: SessionResponse =
         await response.json();
 
-      if (!response.ok || !data.success) {
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             "Не вдалося автоматично завершити тестування."
@@ -337,8 +264,12 @@ function ComplexTestContent() {
       !Number.isInteger(sessionId) ||
       sessionId <= 0
     ) {
-      setError("Некоректні параметри тестування.");
+      setError(
+        "Некоректні параметри тестування."
+      );
+
       setLoading(false);
+
       return;
     }
 
@@ -360,7 +291,10 @@ function ComplexTestContent() {
         const data: SessionResponse =
           await response.json();
 
-        if (!response.ok || !data.success) {
+        if (
+          !response.ok ||
+          !data.success
+        ) {
           throw new Error(
             data.message ||
               "Не вдалося завантажити сесію."
@@ -383,7 +317,8 @@ function ComplexTestContent() {
           return;
         }
 
-        const session = data.session;
+        const session =
+          data.session;
 
         try {
           sessionStorage.setItem(
@@ -394,7 +329,9 @@ function ComplexTestContent() {
           // sessionStorage може бути недоступним
         }
 
-        loadComplexTest(data.complexTest);
+        loadComplexTest(
+          data.complexTest
+        );
 
         restoreSession(
           session.currentTestId,
@@ -457,9 +394,10 @@ function ComplexTestContent() {
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(
-        `complex-test-participant-${id}`
-      );
+      const raw =
+        sessionStorage.getItem(
+          `complex-test-participant-${id}`
+        );
 
       if (!raw) {
         return;
@@ -469,14 +407,21 @@ function ComplexTestContent() {
 
       if (
         parsed &&
-        typeof parsed.lastName === "string" &&
-        typeof parsed.firstName === "string"
+        typeof parsed.lastName ===
+          "string" &&
+        typeof parsed.firstName ===
+          "string"
       ) {
         setParticipant({
-          lastName: parsed.lastName,
-          firstName: parsed.firstName,
+          lastName:
+            parsed.lastName,
+
+          firstName:
+            parsed.firstName,
+
           middleName:
-            typeof parsed.middleName === "string"
+            typeof parsed.middleName ===
+            "string"
               ? parsed.middleName
               : undefined,
         });
@@ -492,21 +437,32 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  const currentTest = useMemo(() => {
-    if (!complexTest) {
-      return null;
-    }
+  const currentTest =
+    useMemo(() => {
+      if (!complexTest) {
+        return null;
+      }
 
-    if (currentTestId === null) {
-      return complexTest.tests[0] ?? null;
-    }
+      if (
+        currentTestId === null
+      ) {
+        return (
+          complexTest.tests[0] ??
+          null
+        );
+      }
 
-    return (
-      complexTest.tests.find(
-        (item) => item.test.id === currentTestId
-      ) ?? null
-    );
-  }, [complexTest, currentTestId]);
+      return (
+        complexTest.tests.find(
+          (item) =>
+            item.test.id ===
+            currentTestId
+        ) ?? null
+      );
+    }, [
+      complexTest,
+      currentTestId,
+    ]);
 
   /*
    * =========================================================
@@ -514,23 +470,49 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  function getSectionTitle(subject: string): string {
-    const normalized = subject.trim();
+  function getSectionTitle(
+    subject: string
+  ): string {
+    const normalized =
+      subject.trim();
 
-    const knownSubjects: Record<string, string> = {
-      "Українська мова": "Українська мова",
+    const knownSubjects:
+      Record<string, string> = {
+      "Українська мова":
+        "Українська мова",
+
       "Українська мова та література":
         "Українська мова",
-      Математика: "Математика",
-      "Історія України": "Історія України",
-      Фізика: "Фізика",
-      Хімія: "Хімія",
-      Біологія: "Біологія",
-      Географія: "Географія",
-      "Англійська мова": "Англійська мова",
-      "Німецька мова": "Німецька мова",
-      "Французька мова": "Французька мова",
-      "Іспанська мова": "Іспанська мова",
+
+      Математика:
+        "Математика",
+
+      "Історія України":
+        "Історія України",
+
+      Фізика:
+        "Фізика",
+
+      Хімія:
+        "Хімія",
+
+      Біологія:
+        "Біологія",
+
+      Географія:
+        "Географія",
+
+      "Англійська мова":
+        "Англійська мова",
+
+      "Німецька мова":
+        "Німецька мова",
+
+      "Французька мова":
+        "Французька мова",
+
+      "Іспанська мова":
+        "Іспанська мова",
     };
 
     return (
@@ -547,7 +529,9 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  async function switchTest(testId: number) {
+  async function switchTest(
+    testId: number
+  ) {
     if (
       blocked ||
       finished ||
@@ -567,10 +551,14 @@ function ComplexTestContent() {
        */
 
       try {
-        if (!document.fullscreenElement) {
+        if (
+          !document.fullscreenElement
+        ) {
           await document.documentElement.requestFullscreen();
         }
-      } catch (fullscreenError) {
+      } catch (
+        fullscreenError
+      ) {
         console.warn(
           "FULLSCREEN REQUEST DURING TEST SWITCH:",
           fullscreenError
@@ -583,27 +571,39 @@ function ComplexTestContent() {
        * timeLeft НЕ передаємо і НЕ змінюємо.
        */
 
-      const response = await fetch(
-        `/api/complex-tests/${id}/session`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            sessionId,
-            currentTestId: testId,
-            currentQuestion: 0,
-            savedAnswers,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `/api/complex-tests/${id}/session`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            cache: "no-store",
+
+            body: JSON.stringify({
+              sessionId,
+
+              currentTestId:
+                testId,
+
+              currentQuestion: 0,
+
+              savedAnswers,
+            }),
+          }
+        );
 
       const data: SessionResponse =
         await response.json();
 
-      if (!response.ok || !data.success) {
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             "Не вдалося переключити предмет."
@@ -614,15 +614,22 @@ function ComplexTestContent() {
        * Змінюємо currentTestId без reload().
        */
 
-      setCurrentTestId(testId);
-      setSwitchingTestId(null);
+      setCurrentTestId(
+        testId
+      );
+
+      setSwitchingTestId(
+        null
+      );
     } catch (err) {
       console.error(
         "SWITCH COMPLEX TEST:",
         err
       );
 
-      setSwitchingTestId(null);
+      setSwitchingTestId(
+        null
+      );
 
       setError(
         err instanceof Error
@@ -655,45 +662,71 @@ function ComplexTestContent() {
     }
 
     const answers = [
-      ...(selectedAnswers[questionId] ??
-        savedAnswers[testId]?.[questionId] ??
+      ...(selectedAnswers[
+        questionId
+      ] ??
+        savedAnswers[
+          testId
+        ]?.[questionId] ??
         []),
     ];
 
-    setSavingQuestionId(questionId);
+    setSavingQuestionId(
+      questionId
+    );
+
     setError(null);
 
     try {
-      const nextSavedAnswers: ComplexAnswerMap = {
+      const nextSavedAnswers:
+        ComplexAnswerMap = {
         ...savedAnswers,
+
         [testId]: {
-          ...(savedAnswers[testId] ?? {}),
-          [questionId]: answers,
+          ...(savedAnswers[
+            testId
+          ] ?? {}),
+
+          [questionId]:
+            answers,
         },
       };
 
-      const response = await fetch(
-        `/api/complex-tests/${id}/session`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            sessionId,
-            currentTestId:
-              currentTest?.test.id ??
-              testId,
-            currentQuestion,
-            savedAnswers: nextSavedAnswers,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `/api/complex-tests/${id}/session`,
+          {
+            method: "POST",
 
-      const data = await response.json();
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-      if (!response.ok || !data.success) {
+            cache: "no-store",
+
+            body: JSON.stringify({
+              sessionId,
+
+              currentTestId:
+                currentTest?.test.id ??
+                testId,
+
+              currentQuestion,
+
+              savedAnswers:
+                nextSavedAnswers,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             "Не вдалося зберегти відповідь."
@@ -714,7 +747,9 @@ function ComplexTestContent() {
       setSavedSuccessfully(
         (previous) => ({
           ...previous,
-          [questionId]: true,
+
+          [questionId]:
+            true,
         })
       );
     } catch (err) {
@@ -729,7 +764,9 @@ function ComplexTestContent() {
           : "Не вдалося зберегти відповідь."
       );
     } finally {
-      setSavingQuestionId(null);
+      setSavingQuestionId(
+        null
+      );
     }
   }
 
@@ -762,7 +799,9 @@ function ComplexTestContent() {
     setSavedSuccessfully(
       (previous) => ({
         ...previous,
-        [questionId]: false,
+
+        [questionId]:
+          false,
       })
     );
   }
@@ -799,29 +838,41 @@ function ComplexTestContent() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/complex-tests/${id}/session`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-          body: JSON.stringify({
-            sessionId,
-            currentTestId:
-              currentTest.test.id,
-            currentQuestion,
-            savedAnswers,
-            finished: true,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          `/api/complex-tests/${id}/session`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            cache: "no-store",
+
+            body: JSON.stringify({
+              sessionId,
+
+              currentTestId:
+                currentTest.test.id,
+
+              currentQuestion,
+
+              savedAnswers,
+
+              finished: true,
+            }),
+          }
+        );
 
       const data: SessionResponse =
         await response.json();
 
-      if (!response.ok || !data.success) {
+      if (
+        !response.ok ||
+        !data.success
+      ) {
         throw new Error(
           data.message ||
             "Не вдалося завершити тестування."
@@ -855,35 +906,42 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  const formattedTime = useMemo(() => {
-    const safeSeconds = Math.max(
-      0,
-      Math.floor(timeLeft)
-    );
+  const formattedTime =
+    useMemo(() => {
+      const safeSeconds =
+        Math.max(
+          0,
+          Math.floor(timeLeft)
+        );
 
-    const hours = Math.floor(
-      safeSeconds / 3600
-    );
+      const hours =
+        Math.floor(
+          safeSeconds / 3600
+        );
 
-    const minutes = Math.floor(
-      (safeSeconds % 3600) / 60
-    );
+      const minutes =
+        Math.floor(
+          (safeSeconds % 3600) /
+            60
+        );
 
-    const seconds =
-      safeSeconds % 60;
+      const seconds =
+        safeSeconds % 60;
 
-    return [
-      hours
-        .toString()
-        .padStart(2, "0"),
-      minutes
-        .toString()
-        .padStart(2, "0"),
-      seconds
-        .toString()
-        .padStart(2, "0"),
-    ].join(":");
-  }, [timeLeft]);
+      return [
+        hours
+          .toString()
+          .padStart(2, "0"),
+
+        minutes
+          .toString()
+          .padStart(2, "0"),
+
+        seconds
+          .toString()
+          .padStart(2, "0"),
+      ].join(":");
+    }, [timeLeft]);
 
   /*
    * =========================================================
@@ -988,11 +1046,10 @@ function ComplexTestContent() {
 
   return (
     <main className="min-h-screen bg-gray-100">
-      {/*
-       * =====================================================
-       * СИСТЕМА БЕЗПЕКИ
-       * =====================================================
-       */}
+
+      {/* =====================================================
+          СИСТЕМА БЕЗПЕКИ
+          ===================================================== */}
 
       <FullscreenGuard
         onViolationFinish={
@@ -1010,11 +1067,9 @@ function ComplexTestContent() {
 
       <TestSecurityGuard />
 
-      {/*
-       * =====================================================
-       * MONITOR
-       * =====================================================
-       */}
+      {/* =====================================================
+          MONITOR
+          ===================================================== */}
 
       <ComplexTestSessionMonitor
         complexTestId={id}
@@ -1023,45 +1078,46 @@ function ComplexTestContent() {
         heartbeatInterval={10000}
       />
 
-      {/*
-       * =====================================================
-       * PDF-ДОВІДКОВІ МАТЕРІАЛИ
-       *
-       * Відкриваються поверх тесту.
-       * Сторінка не перезавантажується.
-       * Fullscreen не змінюється.
-       * =====================================================
-       */}
+      {/* =====================================================
+          PDF-ДОВІДКОВІ МАТЕРІАЛИ
+          ===================================================== */}
 
       {pdfMaterial && (
         <PdfMaterialViewer
           title={pdfMaterial.title}
           src={pdfMaterial.src}
           isOpen={true}
-          isMinimized={pdfMinimized}
-          onMinimize={minimizePdfMaterial}
-          onClose={closePdfMaterial}
-          onRestore={restorePdfMaterial}
+          isMinimized={
+            pdfMinimized
+          }
+          onMinimize={
+            minimizePdfMaterial
+          }
+          onClose={
+            closePdfMaterial
+          }
+          onRestore={
+            restorePdfMaterial
+          }
         />
       )}
 
-      {/*
-       * =====================================================
-       * HEADER
-       * =====================================================
-       */}
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="w-full px-4 lg:px-8 py-3">
           <div className="flex flex-col gap-3">
-            {/*
-             * =================================================
-             * ПЕРШИЙ РЯДОК
-             * =================================================
-             */}
+
+            {/* =================================================
+                ПЕРШИЙ РЯДОК
+                ================================================= */}
 
             <div className="flex items-center justify-between gap-6">
+
               <div className="flex flex-wrap items-center gap-2 min-w-0">
+
                 <button
                   type="button"
                   className="
@@ -1079,11 +1135,9 @@ function ComplexTestContent() {
                   Іспит
                 </button>
 
-                {/*
-                 * =================================================
-                 * МАТЕМАТИКА
-                 * =================================================
-                 */}
+                {/* =================================================
+                    МАТЕМАТИКА
+                    ================================================= */}
 
                 <button
                   type="button"
@@ -1118,11 +1172,9 @@ function ComplexTestContent() {
                   Математика: довідкові матеріали
                 </button>
 
-                {/*
-                 * =================================================
-                 * ФІЗИКА
-                 * =================================================
-                 */}
+                {/* =================================================
+                    ФІЗИКА
+                    ================================================= */}
 
                 <button
                   type="button"
@@ -1157,11 +1209,9 @@ function ComplexTestContent() {
                   Фізика: довідкові матеріали
                 </button>
 
-                {/*
-                 * =================================================
-                 * ХІМІЯ
-                 * =================================================
-                 */}
+                {/* =================================================
+                    ХІМІЯ
+                    ================================================= */}
 
                 <button
                   type="button"
@@ -1196,11 +1246,9 @@ function ComplexTestContent() {
                   Хімія: довідкові матеріали
                 </button>
 
-                {/*
-                 * =================================================
-                 * ІНСТРУКЦІЯ
-                 * =================================================
-                 */}
+                {/* =================================================
+                    ІНСТРУКЦІЯ
+                    ================================================= */}
 
                 <button
                   type="button"
@@ -1236,13 +1284,12 @@ function ComplexTestContent() {
                 </button>
               </div>
 
-              {/*
-               * =================================================
-               * ТАЙМЕР + ЗАВЕРШЕННЯ
-               * =================================================
-               */}
+              {/* =================================================
+                  ТАЙМЕР + ЗАВЕРШЕННЯ
+                  ================================================= */}
 
               <div className="shrink-0 flex items-center gap-3">
+
                 <div
                   className="
                     rounded-lg
@@ -1269,9 +1316,12 @@ function ComplexTestContent() {
                     blocked ||
                     finished ||
                     finishing ||
-                    switchingTestId !== null
+                    switchingTestId !==
+                      null
                   }
-                  onClick={finishTest}
+                  onClick={
+                    finishTest
+                  }
                   className="
                     rounded-lg
                     bg-[#7A1F2B]
@@ -1294,15 +1344,14 @@ function ComplexTestContent() {
               </div>
             </div>
 
-            {/*
-             * =================================================
-             * ДРУГИЙ РЯДОК:
-             * ПЕРЕМИКАЧ ПРЕДМЕТІВ
-             * =================================================
-             */}
+            {/* =================================================
+                ДРУГИЙ РЯДОК:
+                ПЕРЕМИКАЧ ПРЕДМЕТІВ
+                ================================================= */}
 
             <div className="w-full border-t border-gray-200 pt-2">
               <div className="flex w-full overflow-x-auto">
+
                 {complexTest.tests.map(
                   (item) => {
                     const active =
@@ -1321,7 +1370,8 @@ function ComplexTestContent() {
                           blocked ||
                           finished ||
                           finishing ||
-                          switchingTestId !== null ||
+                          switchingTestId !==
+                            null ||
                           active
                         }
                         onClick={() =>
@@ -1331,9 +1381,11 @@ function ComplexTestContent() {
                         }
                         className={[
                           "flex-1 min-w-[180px] px-6 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap",
+
                           active
                             ? "bg-gray-100 border-gray-300 text-gray-900"
                             : "bg-white border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+
                           switching
                             ? "opacity-60 cursor-wait"
                             : "",
@@ -1354,15 +1406,14 @@ function ComplexTestContent() {
         </div>
       </header>
 
-      {/*
-       * =====================================================
-       * BLOCKED
-       * =====================================================
-       */}
+      {/* =====================================================
+          BLOCKED
+          ===================================================== */}
 
       {blocked && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white rounded-xl shadow-xl p-8 text-center">
+
             <h2 className="text-xl font-bold text-gray-900">
               Тестування заблоковано
             </h2>
@@ -1381,30 +1432,28 @@ function ComplexTestContent() {
         </div>
       )}
 
-      {/*
-       * =====================================================
-       * CONTENT
-       * =====================================================
-       */}
+      {/* =====================================================
+          CONTENT
+          ===================================================== */}
 
       <div className="w-full px-4 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-6 items-start">
-          {/*
-           * =================================================
-           * ОСНОВНА ОБЛАСТЬ
-           * =================================================
-           */}
+
+          {/* =================================================
+              ОСНОВНА ОБЛАСТЬ
+              ================================================= */}
 
           <div className="min-w-0">
-            {/*
-             * =================================================
-             * УСІ ПИТАННЯ
-             * =================================================
-             */}
+
+            {/* =================================================
+                УСІ ПИТАННЯ
+                ================================================= */}
 
             <section className="space-y-5">
+
               {questions.map(
                 (question, index) => {
+
                   const localAnswers =
                     selectedAnswers[
                       question.id
@@ -1413,10 +1462,13 @@ function ComplexTestContent() {
                   const saved =
                     savedAnswers[
                       currentTest.test.id
-                    ]?.[question.id] ?? [];
+                    ]?.[
+                      question.id
+                    ] ?? [];
 
                   const displayedAnswers =
-                    localAnswers !== undefined
+                    localAnswers !==
+                    undefined
                       ? localAnswers
                       : saved;
 
@@ -1432,6 +1484,61 @@ function ComplexTestContent() {
                     savingQuestionId ===
                     question.id;
 
+                  /*
+                   * =================================================
+                   * MATCHING QUESTION
+                   *
+                   * Matching.tsx очікує повний Question
+                   * із app/types/question.ts.
+                   *
+                   * Дані з ComplexTestContext мають усі
+                   * необхідні matching-поля, тому тут
+                   * створюємо мінімальний адаптер.
+                   *
+                   * order для компонента Matching
+                   * не впливає на логіку відповіді.
+                   * =================================================
+                   */
+
+                  const matchingQuestion:
+                    Question | null =
+                    question.type ===
+                    "matching"
+                      ? {
+                          id:
+                            question.id,
+
+                          order:
+                            index + 1,
+
+                          type:
+                            "matching",
+
+                          text:
+                            question.text,
+
+                          points:
+                            question.points,
+
+                          shuffleQuestion:
+                            true,
+
+                          options: [],
+
+                          matchingLeftItems:
+                            question.matchingLeftItems,
+
+                          matchingRightItems:
+                            question.matchingRightItems,
+
+                          sequenceItems: [],
+
+                          textAnswer: "",
+
+                          explanation: "",
+                        }
+                      : null;
+
                   return (
                     <article
                       key={question.id}
@@ -1446,15 +1553,17 @@ function ComplexTestContent() {
                         scroll-mt-40
                       "
                     >
-                      {/*
-                       * =====================================
-                       * ЗАГОЛОВОК ПИТАННЯ
-                       * =====================================
-                       */}
+
+                      {/* =====================================
+                          ЗАГОЛОВОК ПИТАННЯ
+                          ===================================== */}
 
                       <div className="px-6 py-5 border-b border-gray-200">
+
                         <div className="flex items-start justify-between gap-5">
+
                           <div className="flex items-start gap-4 min-w-0">
+
                             <div
                               className="
                                 shrink-0
@@ -1473,138 +1582,195 @@ function ComplexTestContent() {
                             </div>
 
                             <div className="min-w-0">
+
                               <div className="text-xs font-medium text-gray-500 mb-2">
                                 Питання {index + 1}
                               </div>
 
                               <h3 className="text-lg font-semibold text-gray-900 leading-7">
-                                {cleanTechnicalSigns(
-                                  question.text
-                                )}
+                                <HtmlContent
+                                  html={
+                                    question.text
+                                  }
+                                />
                               </h3>
+
                             </div>
                           </div>
 
                           <div className="shrink-0 text-xs text-gray-500">
                             {question.points}{" "}
-                            {question.points === 1
+                            {question.points ===
+                            1
                               ? "бал"
                               : question.points < 5
                               ? "бали"
                               : "балів"}
                           </div>
+
                         </div>
                       </div>
 
-                      {/*
-                       * =====================================
-                       * ВАРІАНТИ ВІДПОВІДІ
-                       * =====================================
-                       */}
+                      {/* =====================================
+                          ВАРІАНТИ / MATCHING
+                          ===================================== */}
 
                       <div className="px-6 py-5">
-                        <div className="space-y-3">
-                          {question.answerOptions.map(
-                            (option) => {
-                              const selected =
-                                displayedAnswers.includes(
-                                  option.id
-                                );
 
-                              return (
-                                <label
-                                  key={option.id}
-                                  className={[
-                                    "flex items-start gap-3 rounded-lg border p-4 transition",
-                                    blocked ||
-                                    finished ||
-                                    finishing
-                                      ? "cursor-not-allowed opacity-70"
-                                      : "cursor-pointer",
-                                    selected
-                                      ? "border-[#7A1F2B] bg-red-50"
-                                      : "border-gray-200 bg-white hover:bg-gray-50",
-                                  ].join(" ")}
-                                >
-                                  <input
-                                    type={
-                                      question.type ===
-                                      "multiple"
-                                        ? "checkbox"
-                                        : "radio"
+                        {matchingQuestion ? (
+                          /*
+                           * =================================================
+                           * MATCHING
+                           * =================================================
+                           */
+
+                          <Matching
+                            question={
+                              matchingQuestion
+                            }
+                            selectedAnswers={
+                              displayedAnswers
+                            }
+                            onChange={(
+                              answers
+                            ) =>
+                              handleSelectAnswer(
+                                question.id,
+                                answers
+                              )
+                            }
+                          />
+                        ) : (
+                          /*
+                           * =================================================
+                           * ЗВИЧАЙНІ ПИТАННЯ
+                           *
+                           * single / multiple
+                           * =================================================
+                           */
+
+                          <div className="space-y-3">
+
+                            {question.answerOptions.map(
+                              (option) => {
+
+                                const selected =
+                                  displayedAnswers.includes(
+                                    option.id
+                                  );
+
+                                return (
+                                  <label
+                                    key={
+                                      option.id
                                     }
-                                    name={`question-${question.id}`}
-                                    checked={selected}
-                                    disabled={
+                                    className={[
+                                      "flex items-start gap-3 rounded-lg border p-4 transition",
+
                                       blocked ||
                                       finished ||
                                       finishing
-                                    }
-                                    onChange={() => {
-                                      const current =
-                                        selectedAnswers[
-                                          question.id
-                                        ] ??
-                                        savedAnswers[
-                                          currentTest
-                                            .test.id
-                                        ]?.[
-                                          question.id
-                                        ] ??
-                                        [];
+                                        ? "cursor-not-allowed opacity-70"
+                                        : "cursor-pointer",
 
-                                      let next: number[];
+                                      selected
+                                        ? "border-[#7A1F2B] bg-red-50"
+                                        : "border-gray-200 bg-white hover:bg-gray-50",
+                                    ].join(
+                                      " "
+                                    )}
+                                  >
 
-                                      if (
+                                    <input
+                                      type={
                                         question.type ===
                                         "multiple"
-                                      ) {
-                                        next =
-                                          selected
-                                            ? current.filter(
-                                                (
-                                                  answerId
-                                                ) =>
-                                                  answerId !==
-                                                  option.id
-                                              )
-                                            : [
-                                                ...current,
-                                                option.id,
-                                              ];
-                                      } else {
-                                        next = [
-                                          option.id,
-                                        ];
+                                          ? "checkbox"
+                                          : "radio"
                                       }
+                                      name={`question-${question.id}`}
+                                      checked={
+                                        selected
+                                      }
+                                      disabled={
+                                        blocked ||
+                                        finished ||
+                                        finishing
+                                      }
+                                      onChange={() => {
 
-                                      handleSelectAnswer(
-                                        question.id,
-                                        next
-                                      );
-                                    }}
-                                    className="mt-1 h-4 w-4 accent-[#7A1F2B]"
-                                  />
+                                        const current =
+                                          selectedAnswers[
+                                            question.id
+                                          ] ??
+                                          savedAnswers[
+                                            currentTest
+                                              .test
+                                              .id
+                                          ]?.[
+                                            question.id
+                                          ] ??
+                                          [];
 
-                                  <span className="text-gray-800 leading-6">
-                                    {cleanTechnicalSigns(
-                                      option.text
-                                    )}
-                                  </span>
-                                </label>
-                              );
-                            }
-                          )}
-                        </div>
+                                        let next:
+                                          number[];
 
-                        {/*
-                         * =====================================
-                         * ЗБЕРЕГТИ ВІДПОВІДЬ
-                         * =====================================
-                         */}
+                                        if (
+                                          question.type ===
+                                          "multiple"
+                                        ) {
+                                          next =
+                                            selected
+                                              ? current.filter(
+                                                  (
+                                                    answerId
+                                                  ) =>
+                                                    answerId !==
+                                                    option.id
+                                                )
+                                              : [
+                                                  ...current,
+                                                  option.id,
+                                                ];
+                                        } else {
+                                          next =
+                                            [
+                                              option.id,
+                                            ];
+                                        }
+
+                                        handleSelectAnswer(
+                                          question.id,
+                                          next
+                                        );
+                                      }}
+                                      className="mt-1 h-4 w-4 accent-[#7A1F2B]"
+                                    />
+
+                                    <span className="text-gray-800 leading-6">
+                                      <HtmlContent
+                                        html={
+                                          option.text
+                                        }
+                                      />
+                                    </span>
+
+                                  </label>
+                                );
+                              }
+                            )}
+
+                          </div>
+                        )}
+
+                        {/* =====================================
+                            ЗБЕРЕГТИ ВІДПОВІДЬ
+                            ===================================== */}
 
                         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
+
                           <div className="text-sm">
+
                             {isSaved ? (
                               <span className="font-medium text-green-700">
                                 Відповідь збережено
@@ -1625,6 +1791,7 @@ function ComplexTestContent() {
                                 Відповідь не вибрана
                               </span>
                             )}
+
                           </div>
 
                           <button
@@ -1633,7 +1800,8 @@ function ComplexTestContent() {
                               blocked ||
                               finished ||
                               finishing ||
-                              savingQuestionId !== null ||
+                              savingQuestionId !==
+                                null ||
                               displayedAnswers.length ===
                                 0
                             }
@@ -1646,10 +1814,13 @@ function ComplexTestContent() {
                             className={[
                               "rounded-lg px-6 py-3 text-sm font-semibold transition",
                               "disabled:cursor-not-allowed disabled:opacity-50",
+
                               isSaved
                                 ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                 : "bg-[#7A1F2B] text-white hover:bg-[#651824]",
-                            ].join(" ")}
+                            ].join(
+                              " "
+                            )}
                           >
                             {saving
                               ? "Збереження…"
@@ -1657,20 +1828,20 @@ function ComplexTestContent() {
                               ? "Відповідь збережено"
                               : "Зберегти відповідь"}
                           </button>
+
                         </div>
                       </div>
                     </article>
                   );
                 }
               )}
+
             </section>
           </div>
 
-          {/*
-           * =================================================
-           * ПРАВА НАВІГАЦІЙНА ПАНЕЛЬ
-           * =================================================
-           */}
+          {/* =================================================
+              ПРАВА НАВІГАЦІЙНА ПАНЕЛЬ
+              ================================================= */}
 
           <aside
             className="
@@ -1686,11 +1857,11 @@ function ComplexTestContent() {
               overflow-hidden
             "
           >
-            {/*
-             * Заголовок
-             */}
+
+            {/* Заголовок */}
 
             <div className="px-5 py-4 border-b border-gray-200">
+
               <div className="text-sm font-semibold text-gray-900">
                 Навігація
               </div>
@@ -1700,71 +1871,91 @@ function ComplexTestContent() {
                   currentTest.test.subject
                 )}
               </div>
+
             </div>
 
-            {/*
-             * Питання
-             */}
+            {/* Питання */}
 
             <div className="p-4">
+
               <div className="grid grid-cols-4 gap-2">
+
                 {questions.map(
                   (question, index) => {
+
                     const saved =
                       savedAnswers[
                         currentTest.test.id
-                      ]?.[question.id] ?? [];
+                      ]?.[
+                        question.id
+                      ] ?? [];
 
                     const hasSaved =
                       saved.length > 0;
 
                     return (
                       <button
-                        key={question.id}
+                        key={
+                          question.id
+                        }
                         type="button"
                         onClick={() => {
                           document
                             .getElementById(
                               `question-${question.id}`
                             )
-                            ?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "start",
-                            });
+                            ?.scrollIntoView(
+                              {
+                                behavior:
+                                  "smooth",
+                                block:
+                                  "start",
+                              }
+                            );
                         }}
                         className={[
                           "relative w-full aspect-square rounded-lg border text-sm font-semibold transition",
+
                           hasSaved
                             ? "border-[#7A1F2B] bg-[#7A1F2B] text-white hover:bg-[#651824]"
                             : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
-                        ].join(" ")}
+                        ].join(
+                          " "
+                        )}
                       >
                         {index + 1}
                       </button>
                     );
                   }
                 )}
+
               </div>
             </div>
 
-            {/*
-             * Легенда
-             */}
+            {/* Легенда */}
 
             <div className="px-5 py-4 border-t border-gray-200 space-y-3">
+
               <div className="flex items-center gap-2 text-xs text-gray-600">
+
                 <span className="w-3 h-3 rounded bg-[#7A1F2B]" />
+
                 <span>
                   Відповідь збережено
                 </span>
+
               </div>
 
               <div className="flex items-center gap-2 text-xs text-gray-600">
+
                 <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" />
+
                 <span>
                   Відповідь не збережена
                 </span>
+
               </div>
+
             </div>
           </aside>
         </div>
