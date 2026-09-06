@@ -15,6 +15,7 @@ import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
+import PdfMaterialViewer from "@/components/PdfMaterialViewer";
 
 interface SessionResponse {
   success: boolean;
@@ -51,32 +52,106 @@ function cleanTechnicalSigns(text: string): string {
     return "";
   }
 
-  return text
-    // HTML-сутності
+  let cleaned = text;
+
+  // ------------------------------------------------------------
+  // 1. Декодуємо HTML entities
+  // ------------------------------------------------------------
+  cleaned = cleaned
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&nbsp;/gi, " ");
 
-    // Технічні конструкції типу ?<>
+  // ------------------------------------------------------------
+  // 2. Видаляємо нормальні HTML-теги
+  // ------------------------------------------------------------
+  cleaned = cleaned.replace(/<\/?[a-z][^>]*>/gi, "");
+
+  // ------------------------------------------------------------
+  // 3. Видаляємо залишки Markdown
+  // ------------------------------------------------------------
+
+  // **текст**
+  cleaned = cleaned.replace(/\*\*/g, "");
+
+  // __текст__
+  cleaned = cleaned.replace(/__/g, "");
+
+  // залишки потрійних зірочок
+  cleaned = cleaned.replace(/\*\*\*/g, "");
+
+  // ------------------------------------------------------------
+  // 4. Видаляємо пошкоджені HTML/Markdown конструкції
+  // ------------------------------------------------------------
+
+  // p ... /p
+  cleaned = cleaned.replace(/\/?p\b/gi, (match, offset, fullText) => {
+    /*
+     * Не видаляємо звичайну літеру "п" усередині слова.
+     * Видаляємо тільки "p" або "/p", якщо після неї
+     * починається службова конструкція.
+     */
+    const before = fullText.slice(Math.max(0, offset - 1), offset);
+    const after = fullText.slice(offset + match.length, offset + match.length + 1);
+
+    if (
+      match.toLowerCase() === "p" &&
+      before &&
+      /[А-Яа-яІіЇїЄєҐґA-Za-z]/.test(before) &&
+      after &&
+      /[А-Яа-яІіЇїЄєҐґA-Za-z]/.test(after)
+    ) {
+      return match;
+    }
+
+    return "";
+  });
+
+  // ------------------------------------------------------------
+  // 5. Видаляємо характерні уламки strong/em
+  // ------------------------------------------------------------
+
+  cleaned = cleaned
+    .replace(/strongem/gi, "")
+    .replace(/\/em\/strong/gi, "")
+    .replace(/\/strong/gi, "")
+    .replace(/strong/gi, "")
+    .replace(/\/em/gi, "")
+    .replace(/em/gi, "");
+
+  // ------------------------------------------------------------
+  // 6. Видаляємо інші характерні технічні уламки
+  // ------------------------------------------------------------
+
+  cleaned = cleaned
     .replace(/\?<<>/g, "")
-
-    // Технічна конструкція <<>
     .replace(/<<>/g, "")
-
-    // Маркер <|
     .replace(/<\|/g, "")
+    .replace(/\|>/g, "")
+    .replace(/<\|>/g, "");
 
-    // Маркери ***
-    .replace(/\*\*\*/g, "")
+  // ------------------------------------------------------------
+  // 7. Видаляємо залишкові кутові дужки
+  // ------------------------------------------------------------
 
-    // Кутові дужки, що залишилися від технічних маркерів
+  cleaned = cleaned
     .replace(/</g, "")
-    .replace(/>/g, "")
+    .replace(/>/g, "");
 
-    // Зайві пробіли
-    .replace(/\s{2,}/g, " ")
+  // ------------------------------------------------------------
+  // 8. Прибираємо зайві службові пробіли
+  // ------------------------------------------------------------
 
+  cleaned = cleaned
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
     .trim();
+
+  return cleaned;
 }
 
 /*
@@ -107,12 +182,6 @@ function ComplexTestContent() {
     selectAnswer,
     saveAnswer,
     setFinished,
-
-    /*
-     * ВАЖЛИВО:
-     * Перемикання предмета відбувається без перезавантаження
-     * сторінки.
-     */
     setCurrentTestId,
   } = useComplexTestSession();
 
@@ -135,6 +204,57 @@ function ComplexTestContent() {
     firstName: string;
     middleName?: string;
   } | null>(null);
+
+  /*
+   * =========================================================
+   * PDF-ДОВІДКОВІ МАТЕРІАЛИ
+   * =========================================================
+   */
+
+  const [pdfMaterial, setPdfMaterial] = useState<{
+    title: string;
+    src: string;
+  } | null>(null);
+
+  const [pdfMinimized, setPdfMinimized] = useState(false);
+
+  function openPdfMaterial(title: string, src: string) {
+    if (blocked || finished || finishing) {
+      return;
+    }
+
+    setPdfMaterial({
+      title,
+      src,
+    });
+
+    setPdfMinimized(false);
+  }
+
+  function closePdfMaterial() {
+    setPdfMaterial(null);
+    setPdfMinimized(false);
+  }
+
+  function minimizePdfMaterial() {
+    setPdfMinimized(true);
+  }
+
+  function restorePdfMaterial() {
+    setPdfMinimized(false);
+  }
+
+  /*
+   * Якщо тест заблоковано або завершено,
+   * довідковий PDF автоматично закривається.
+   */
+
+  useEffect(() => {
+    if (blocked || finished) {
+      setPdfMaterial(null);
+      setPdfMinimized(false);
+    }
+  }, [blocked, finished]);
 
   /*
    * =========================================================
@@ -291,6 +411,7 @@ function ComplexTestContent() {
           router.replace(
             `/complex-tests/${id}/result/${session.id}`
           );
+
           return;
         }
       } catch (err) {
@@ -457,7 +578,7 @@ function ComplexTestContent() {
       }
 
       /*
-       * ЗАПИСУЄМО НОВИЙ ПОТОЧНИЙ ПРЕДМЕТ НА СЕРВЕР
+       * ЗАПИСУЄМО НОВИЙ ПОТОЧНИЙ ПРЕДМЕТ НА СЕРВЕР.
        *
        * timeLeft НЕ передаємо і НЕ змінюємо.
        */
@@ -494,7 +615,6 @@ function ComplexTestContent() {
        */
 
       setCurrentTestId(testId);
-
       setSwitchingTestId(null);
     } catch (err) {
       console.error(
@@ -546,7 +666,6 @@ function ComplexTestContent() {
     try {
       const nextSavedAnswers: ComplexAnswerMap = {
         ...savedAnswers,
-
         [testId]: {
           ...(savedAnswers[testId] ?? {}),
           [questionId]: answers,
@@ -757,11 +876,9 @@ function ComplexTestContent() {
       hours
         .toString()
         .padStart(2, "0"),
-
       minutes
         .toString()
         .padStart(2, "0"),
-
       seconds
         .toString()
         .padStart(2, "0"),
@@ -908,6 +1025,28 @@ function ComplexTestContent() {
 
       {/*
        * =====================================================
+       * PDF-ДОВІДКОВІ МАТЕРІАЛИ
+       *
+       * Відкриваються поверх тесту.
+       * Сторінка не перезавантажується.
+       * Fullscreen не змінюється.
+       * =====================================================
+       */}
+
+      {pdfMaterial && (
+        <PdfMaterialViewer
+          title={pdfMaterial.title}
+          src={pdfMaterial.src}
+          isOpen={true}
+          isMinimized={pdfMinimized}
+          onMinimize={minimizePdfMaterial}
+          onClose={closePdfMaterial}
+          onRestore={restorePdfMaterial}
+        />
+      )}
+
+      {/*
+       * =====================================================
        * HEADER
        * =====================================================
        */}
@@ -915,7 +1054,6 @@ function ComplexTestContent() {
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="w-full px-4 lg:px-8 py-3">
           <div className="flex flex-col gap-3">
-
             {/*
              * =================================================
              * ПЕРШИЙ РЯДОК
@@ -924,7 +1062,6 @@ function ComplexTestContent() {
 
             <div className="flex items-center justify-between gap-6">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
-
                 <button
                   type="button"
                   className="
@@ -942,8 +1079,25 @@ function ComplexTestContent() {
                   Іспит
                 </button>
 
+                {/*
+                 * =================================================
+                 * МАТЕМАТИКА
+                 * =================================================
+                 */}
+
                 <button
                   type="button"
+                  onClick={() =>
+                    openPdfMaterial(
+                      "Математика: довідкові матеріали",
+                      "/pdf/mathematics.pdf"
+                    )
+                  }
+                  disabled={
+                    blocked ||
+                    finished ||
+                    finishing
+                  }
                   className="
                     rounded-lg
                     border
@@ -955,6 +1109,8 @@ function ComplexTestContent() {
                     font-medium
                     text-gray-700
                     hover:bg-gray-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
                     transition
                     whitespace-nowrap
                   "
@@ -962,8 +1118,25 @@ function ComplexTestContent() {
                   Математика: довідкові матеріали
                 </button>
 
+                {/*
+                 * =================================================
+                 * ФІЗИКА
+                 * =================================================
+                 */}
+
                 <button
                   type="button"
+                  onClick={() =>
+                    openPdfMaterial(
+                      "Фізика: довідкові матеріали",
+                      "/pdf/physics.pdf"
+                    )
+                  }
+                  disabled={
+                    blocked ||
+                    finished ||
+                    finishing
+                  }
                   className="
                     rounded-lg
                     border
@@ -975,6 +1148,8 @@ function ComplexTestContent() {
                     font-medium
                     text-gray-700
                     hover:bg-gray-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
                     transition
                     whitespace-nowrap
                   "
@@ -982,8 +1157,25 @@ function ComplexTestContent() {
                   Фізика: довідкові матеріали
                 </button>
 
+                {/*
+                 * =================================================
+                 * ХІМІЯ
+                 * =================================================
+                 */}
+
                 <button
                   type="button"
+                  onClick={() =>
+                    openPdfMaterial(
+                      "Хімія: довідкові матеріали",
+                      "/pdf/chemistry.pdf"
+                    )
+                  }
+                  disabled={
+                    blocked ||
+                    finished ||
+                    finishing
+                  }
                   className="
                     rounded-lg
                     border
@@ -995,6 +1187,8 @@ function ComplexTestContent() {
                     font-medium
                     text-gray-700
                     hover:bg-gray-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
                     transition
                     whitespace-nowrap
                   "
@@ -1002,8 +1196,25 @@ function ComplexTestContent() {
                   Хімія: довідкові матеріали
                 </button>
 
+                {/*
+                 * =================================================
+                 * ІНСТРУКЦІЯ
+                 * =================================================
+                 */}
+
                 <button
                   type="button"
+                  onClick={() =>
+                    openPdfMaterial(
+                      "Інструкція",
+                      "/pdf/instruction.pdf"
+                    )
+                  }
+                  disabled={
+                    blocked ||
+                    finished ||
+                    finishing
+                  }
                   className="
                     rounded-lg
                     border
@@ -1015,6 +1226,8 @@ function ComplexTestContent() {
                     font-medium
                     text-gray-700
                     hover:bg-gray-50
+                    disabled:opacity-50
+                    disabled:cursor-not-allowed
                     transition
                     whitespace-nowrap
                   "
@@ -1118,11 +1331,9 @@ function ComplexTestContent() {
                         }
                         className={[
                           "flex-1 min-w-[180px] px-6 py-3 text-sm font-semibold border-b-2 transition whitespace-nowrap",
-
                           active
                             ? "bg-gray-100 border-gray-300 text-gray-900"
                             : "bg-white border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-
                           switching
                             ? "opacity-60 cursor-wait"
                             : "",
@@ -1178,7 +1389,6 @@ function ComplexTestContent() {
 
       <div className="w-full px-4 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-6 items-start">
-
           {/*
            * =================================================
            * ОСНОВНА ОБЛАСТЬ
@@ -1186,7 +1396,6 @@ function ComplexTestContent() {
            */}
 
           <div className="min-w-0">
-
             {/*
              * =================================================
              * УСІ ПИТАННЯ
@@ -1245,7 +1454,6 @@ function ComplexTestContent() {
 
                       <div className="px-6 py-5 border-b border-gray-200">
                         <div className="flex items-start justify-between gap-5">
-
                           <div className="flex items-start gap-4 min-w-0">
                             <div
                               className="
@@ -1308,13 +1516,11 @@ function ComplexTestContent() {
                                   key={option.id}
                                   className={[
                                     "flex items-start gap-3 rounded-lg border p-4 transition",
-
                                     blocked ||
                                     finished ||
                                     finishing
                                       ? "cursor-not-allowed opacity-70"
                                       : "cursor-pointer",
-
                                     selected
                                       ? "border-[#7A1F2B] bg-red-50"
                                       : "border-gray-200 bg-white hover:bg-gray-50",
@@ -1398,7 +1604,6 @@ function ComplexTestContent() {
                          */}
 
                         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
-
                           <div className="text-sm">
                             {isSaved ? (
                               <span className="font-medium text-green-700">
@@ -1441,7 +1646,6 @@ function ComplexTestContent() {
                             className={[
                               "rounded-lg px-6 py-3 text-sm font-semibold transition",
                               "disabled:cursor-not-allowed disabled:opacity-50",
-
                               isSaved
                                 ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
                                 : "bg-[#7A1F2B] text-white hover:bg-[#651824]",
@@ -1530,7 +1734,6 @@ function ComplexTestContent() {
                         }}
                         className={[
                           "relative w-full aspect-square rounded-lg border text-sm font-semibold transition",
-
                           hasSaved
                             ? "border-[#7A1F2B] bg-[#7A1F2B] text-white hover:bg-[#651824]"
                             : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
@@ -1551,7 +1754,6 @@ function ComplexTestContent() {
             <div className="px-5 py-4 border-t border-gray-200 space-y-3">
               <div className="flex items-center gap-2 text-xs text-gray-600">
                 <span className="w-3 h-3 rounded bg-[#7A1F2B]" />
-
                 <span>
                   Відповідь збережено
                 </span>
@@ -1559,7 +1761,6 @@ function ComplexTestContent() {
 
               <div className="flex items-center gap-2 text-xs text-gray-600">
                 <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" />
-
                 <span>
                   Відповідь не збережена
                 </span>
