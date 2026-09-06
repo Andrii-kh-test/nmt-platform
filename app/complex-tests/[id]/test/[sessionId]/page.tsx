@@ -1389,7 +1389,9 @@ function ComplexTestContent() {
                           switching
                             ? "opacity-60 cursor-wait"
                             : "",
-                        ].join(" ")}
+                        ].join(
+                          " "
+                        )}
                       >
                         {switching
                           ? "Перемикання…"
@@ -1400,6 +1402,7 @@ function ComplexTestContent() {
                     );
                   }
                 )}
+
               </div>
             </div>
           </div>
@@ -1428,6 +1431,7 @@ function ComplexTestContent() {
                 Причина: {blockReason}
               </p>
             )}
+
           </div>
         </div>
       )}
@@ -1492,11 +1496,7 @@ function ComplexTestContent() {
                    * із app/types/question.ts.
                    *
                    * Дані з ComplexTestContext мають усі
-                   * необхідні matching-поля, тому тут
-                   * створюємо мінімальний адаптер.
-                   *
-                   * order для компонента Matching
-                   * не впливає на логіку відповіді.
+                   * необхідні matching-поля.
                    * =================================================
                    */
 
@@ -1539,299 +1539,259 @@ function ComplexTestContent() {
                         }
                       : null;
 
+                  /*
+                   * =================================================
+                   * КАРТКА ПИТАННЯ
+                   *
+                   * Дизайн приведений до вигляду
+                   * звичайного QuestionCard.tsx.
+                   * =================================================
+                   */
+
                   return (
-                    <article
+                    <div
                       key={question.id}
                       id={`question-${question.id}`}
                       className="
                         bg-white
-                        rounded-xl
-                        shadow-sm
+                        rounded-lg
                         border
                         border-gray-200
-                        overflow-hidden
+                        p-6
                         scroll-mt-40
                       "
                     >
 
-                      {/* =====================================
-                          ЗАГОЛОВОК ПИТАННЯ
-                          ===================================== */}
+                      {/* =========================================
+                          ЗАГОЛОВОК
+                          ========================================= */}
 
-                      <div className="px-6 py-5 border-b border-gray-200">
+                      <div className="flex justify-between items-center mb-6">
 
-                        <div className="flex items-start justify-between gap-5">
+                        <h2 className="text-xl font-semibold text-[#7A1F2B]">
+                          Питання {index + 1} із {questions.length}
+                        </h2>
 
-                          <div className="flex items-start gap-4 min-w-0">
+                        {isSaved ? (
+                          <span className="text-green-600 font-semibold">
+                            ✓ Відповідь збережено
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">
+                            Не збережено
+                          </span>
+                        )}
 
-                            <div
-                              className="
-                                shrink-0
-                                w-10
-                                h-10
-                                rounded-full
-                                bg-gray-100
-                                text-gray-800
-                                flex
-                                items-center
-                                justify-center
-                                font-bold
-                              "
-                            >
-                              {index + 1}
-                            </div>
-
-                            <div className="min-w-0">
-
-                              <div className="text-xs font-medium text-gray-500 mb-2">
-                                Питання {index + 1}
-                              </div>
-
-                              <h3 className="text-lg font-semibold text-gray-900 leading-7">
-                                <HtmlContent
-                                  html={
-                                    question.text
-                                  }
-                                />
-                              </h3>
-
-                            </div>
-                          </div>
-
-                          <div className="shrink-0 text-xs text-gray-500">
-                            {question.points}{" "}
-                            {question.points ===
-                            1
-                              ? "бал"
-                              : question.points < 5
-                              ? "бали"
-                              : "балів"}
-                          </div>
-
-                        </div>
                       </div>
 
-                      {/* =====================================
+                      {/* =========================================
+                          ТЕКСТ ПИТАННЯ
+                          ========================================= */}
+
+                      <div className="mb-8">
+
+                        <HtmlContent
+                          html={
+                            question.text
+                          }
+                          className="text-lg leading-7"
+                        />
+
+                      </div>
+
+                      {/* =========================================
                           ВАРІАНТИ / MATCHING
-                          ===================================== */}
+                          ========================================= */}
 
-                      <div className="px-6 py-5">
+                      {matchingQuestion ? (
 
-                        {matchingQuestion ? (
-                          /*
-                           * =================================================
-                           * MATCHING
-                           * =================================================
-                           */
-
-                          <Matching
-                            question={
-                              matchingQuestion
-                            }
-                            selectedAnswers={
-                              displayedAnswers
-                            }
-                            onChange={(
+                        <Matching
+                          question={
+                            matchingQuestion
+                          }
+                          selectedAnswers={
+                            displayedAnswers
+                          }
+                          onChange={(
+                            answers
+                          ) =>
+                            handleSelectAnswer(
+                              question.id,
                               answers
-                            ) =>
-                              handleSelectAnswer(
-                                question.id,
-                                answers
-                              )
-                            }
-                          />
-                        ) : (
-                          /*
-                           * =================================================
-                           * ЗВИЧАЙНІ ПИТАННЯ
-                           *
-                           * single / multiple
-                           * =================================================
-                           */
+                            )
+                          }
+                        />
 
-                          <div className="space-y-3">
+                      ) : (
 
-                            {question.answerOptions.map(
-                              (option) => {
+                        <div className="space-y-3">
 
-                                const selected =
-                                  displayedAnswers.includes(
+                          {question.answerOptions.map(
+                            (option) => {
+
+                              const selected =
+                                displayedAnswers.includes(
+                                  option.id
+                                );
+
+                              return (
+                                <label
+                                  key={
                                     option.id
-                                  );
+                                  }
+                                  className={[
+                                    "flex items-start gap-3 rounded-lg border p-4 transition",
 
-                                return (
-                                  <label
-                                    key={
-                                      option.id
+                                    blocked ||
+                                    finished ||
+                                    finishing
+                                      ? "cursor-not-allowed opacity-70"
+                                      : "cursor-pointer",
+
+                                    selected
+                                      ? "border-[#7A1F2B] bg-red-50"
+                                      : "border-gray-200 bg-white hover:bg-gray-50",
+                                  ].join(
+                                    " "
+                                  )}
+                                >
+
+                                  <input
+                                    type={
+                                      question.type ===
+                                      "multiple"
+                                        ? "checkbox"
+                                        : "radio"
                                     }
-                                    className={[
-                                      "flex items-start gap-3 rounded-lg border p-4 transition",
-
+                                    name={`question-${question.id}`}
+                                    checked={
+                                      selected
+                                    }
+                                    disabled={
                                       blocked ||
                                       finished ||
                                       finishing
-                                        ? "cursor-not-allowed opacity-70"
-                                        : "cursor-pointer",
+                                    }
+                                    onChange={() => {
 
-                                      selected
-                                        ? "border-[#7A1F2B] bg-red-50"
-                                        : "border-gray-200 bg-white hover:bg-gray-50",
-                                    ].join(
-                                      " "
-                                    )}
-                                  >
+                                      const current =
+                                        selectedAnswers[
+                                          question.id
+                                        ] ??
+                                        savedAnswers[
+                                          currentTest
+                                            .test
+                                            .id
+                                        ]?.[
+                                          question.id
+                                        ] ??
+                                        [];
 
-                                    <input
-                                      type={
+                                      let next:
+                                        number[];
+
+                                      if (
                                         question.type ===
                                         "multiple"
-                                          ? "checkbox"
-                                          : "radio"
+                                      ) {
+                                        next =
+                                          selected
+                                            ? current.filter(
+                                                (
+                                                  answerId
+                                                ) =>
+                                                  answerId !==
+                                                  option.id
+                                              )
+                                            : [
+                                                ...current,
+                                                option.id,
+                                              ];
+                                      } else {
+                                        next =
+                                          [
+                                            option.id,
+                                          ];
                                       }
-                                      name={`question-${question.id}`}
-                                      checked={
-                                        selected
+
+                                      handleSelectAnswer(
+                                        question.id,
+                                        next
+                                      );
+                                    }}
+                                    className="mt-1 h-4 w-4 accent-[#7A1F2B]"
+                                  />
+
+                                  <span className="text-gray-800 leading-6">
+
+                                    <HtmlContent
+                                      html={
+                                        option.text
                                       }
-                                      disabled={
-                                        blocked ||
-                                        finished ||
-                                        finishing
-                                      }
-                                      onChange={() => {
-
-                                        const current =
-                                          selectedAnswers[
-                                            question.id
-                                          ] ??
-                                          savedAnswers[
-                                            currentTest
-                                              .test
-                                              .id
-                                          ]?.[
-                                            question.id
-                                          ] ??
-                                          [];
-
-                                        let next:
-                                          number[];
-
-                                        if (
-                                          question.type ===
-                                          "multiple"
-                                        ) {
-                                          next =
-                                            selected
-                                              ? current.filter(
-                                                  (
-                                                    answerId
-                                                  ) =>
-                                                    answerId !==
-                                                    option.id
-                                                )
-                                              : [
-                                                  ...current,
-                                                  option.id,
-                                                ];
-                                        } else {
-                                          next =
-                                            [
-                                              option.id,
-                                            ];
-                                        }
-
-                                        handleSelectAnswer(
-                                          question.id,
-                                          next
-                                        );
-                                      }}
-                                      className="mt-1 h-4 w-4 accent-[#7A1F2B]"
                                     />
 
-                                    <span className="text-gray-800 leading-6">
-                                      <HtmlContent
-                                        html={
-                                          option.text
-                                        }
-                                      />
-                                    </span>
+                                  </span>
 
-                                  </label>
-                                );
-                              }
-                            )}
-
-                          </div>
-                        )}
-
-                        {/* =====================================
-                            ЗБЕРЕГТИ ВІДПОВІДЬ
-                            ===================================== */}
-
-                        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
-
-                          <div className="text-sm">
-
-                            {isSaved ? (
-                              <span className="font-medium text-green-700">
-                                Відповідь збережено
-                              </span>
-                            ) : hasSavedAnswer &&
-                              localAnswers ===
-                                undefined ? (
-                              <span className="text-gray-500">
-                                Збережена відповідь
-                              </span>
-                            ) : displayedAnswers.length >
-                              0 ? (
-                              <span className="text-gray-500">
-                                Відповідь не збережено
-                              </span>
-                            ) : (
-                              <span className="text-gray-500">
-                                Відповідь не вибрана
-                              </span>
-                            )}
-
-                          </div>
-
-                          <button
-                            type="button"
-                            disabled={
-                              blocked ||
-                              finished ||
-                              finishing ||
-                              savingQuestionId !==
-                                null ||
-                              displayedAnswers.length ===
-                                0
+                                </label>
+                              );
                             }
-                            onClick={() =>
-                              handleSaveAnswer(
-                                currentTest.test.id,
-                                question.id
-                              )
-                            }
-                            className={[
-                              "rounded-lg px-6 py-3 text-sm font-semibold transition",
-                              "disabled:cursor-not-allowed disabled:opacity-50",
-
-                              isSaved
-                                ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                                : "bg-[#7A1F2B] text-white hover:bg-[#651824]",
-                            ].join(
-                              " "
-                            )}
-                          >
-                            {saving
-                              ? "Збереження…"
-                              : isSaved
-                              ? "Відповідь збережено"
-                              : "Зберегти відповідь"}
-                          </button>
+                          )}
 
                         </div>
+                      )}
+
+                      {/* =========================================
+                          РОЗДІЛЮВАЧ
+                          ========================================= */}
+
+                      <hr className="my-8 border-gray-200" />
+
+                      {/* =========================================
+                          ЗБЕРЕГТИ ВІДПОВІДЬ
+                          ========================================= */}
+
+                      <div className="mt-10 flex justify-end">
+
+                        <button
+                          type="button"
+                          disabled={
+                            blocked ||
+                            finished ||
+                            finishing ||
+                            savingQuestionId !==
+                              null ||
+                            displayedAnswers.length ===
+                              0
+                          }
+                          onClick={() =>
+                            handleSaveAnswer(
+                              currentTest.test.id,
+                              question.id
+                            )
+                          }
+                          className="
+                            bg-[#7A1F2B]
+                            hover:bg-[#641823]
+                            disabled:cursor-not-allowed
+                            disabled:opacity-50
+                            text-white
+                            px-6
+                            py-2.5
+                            rounded-lg
+                            font-medium
+                            transition
+                          "
+                        >
+                          {saving
+                            ? "Збереження…"
+                            : isSaved
+                            ? "Відповідь збережено"
+                            : "Зберегти відповідь"}
+                        </button>
+
                       </div>
-                    </article>
+
+                    </div>
                   );
                 }
               )}
