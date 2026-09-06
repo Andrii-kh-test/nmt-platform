@@ -166,26 +166,7 @@ function normalizeSeconds(
 }
 
 /* =========================================================
-   ЗАГАЛЬНА ТРИВАЛІСТЬ КОМБІНОВАНОГО ТЕСТУ
-   =========================================================
-   
-   ВАЖЛИВО:
-   
-   Час комбінованого тесту визначається
-   як сума duration усіх складових Test.
-   
-   duration кожного Test зберігається у хвилинах.
-   
-   Наприклад:
-   
-   Test 1 = 60 хв
-   Test 2 = 60 хв
-   Test 3 = 60 хв
-   
-   Загальний час = 180 хв = 10800 секунд.
-   
-   complexTest.duration тут НЕ використовується
-   для таймера.
+   ЗАГАЛЬНА ТРИВАЛІСТЬ
    ========================================================= */
 
 function getTotalDurationSeconds(
@@ -278,20 +259,37 @@ export function ComplexTestSessionProvider({
   const [finished, setFinishedState] =
     useState(false);
 
+  /*
+   * Один-єдиний interval для всього
+   * комбінованого тесту.
+   */
   const timerRef =
     useRef<ReturnType<
       typeof setInterval
     > | null>(null);
 
+  /*
+   * Абсолютний момент завершення
+   * поточного countdown.
+   */
   const deadlineRef =
     useRef<number | null>(null);
+
+  /*
+   * Захист від повторного запуску
+   * timer через повторний render.
+   */
+  const timerStartedRef =
+    useRef(false);
 
   /* =======================================================
      CLEANUP TIMER
      ======================================================= */
 
   const clearTimer = useCallback(() => {
-    if (timerRef.current !== null) {
+    if (
+      timerRef.current !== null
+    ) {
       clearInterval(
         timerRef.current
       );
@@ -301,30 +299,36 @@ export function ComplexTestSessionProvider({
 
     deadlineRef.current = null;
 
+    timerStartedRef.current = false;
+
     setTimerRunning(false);
   }, []);
 
   /* =======================================================
      LOAD COMPLEX TEST
-     =======================================================
-     
-     ВАЖЛИВО:
-     
-     Початковий час тут також визначається
-     сумою duration усіх складових тестів.
-     
-     Це потрібно для того, щоб контекст не показував,
-     наприклад, 01:00:00 перед відновленням серверної
-     сесії з правильними 03:00:00.
-     
-     Після отримання сесії restoreSession() встановить
-     авторитетне значення timeLeft із БД.
      ======================================================= */
 
   const loadComplexTest = useCallback(
     (
       data: ComplexTestData
     ) => {
+      /*
+       * На випадок повторного завантаження
+       * очищаємо старий countdown.
+       */
+      if (
+        timerRef.current !== null
+      ) {
+        clearInterval(
+          timerRef.current
+        );
+
+        timerRef.current = null;
+      }
+
+      deadlineRef.current = null;
+      timerStartedRef.current = false;
+
       setComplexTest(data);
 
       setCurrentTestIdState(
@@ -337,13 +341,11 @@ export function ComplexTestSessionProvider({
       setSavedAnswers({});
 
       /*
-       * Глобальний час усього комбінованого тесту.
+       * Це лише початкове значення.
        *
-       * НЕ:
-       * data.duration
-       *
-       * А:
-       * сума duration усіх data.tests[].test
+       * Після отримання session серверне
+       * timeLeft буде встановлено через
+       * restoreSession().
        */
       setTimeLeftState(
         getTotalDurationSeconds(data)
@@ -369,7 +371,9 @@ export function ComplexTestSessionProvider({
     ) => {
       setSessionIdState(value);
 
-      if (typeof window === "undefined") {
+      if (
+        typeof window === "undefined"
+      ) {
         return;
       }
 
@@ -401,15 +405,7 @@ export function ComplexTestSessionProvider({
   /* =======================================================
      CURRENT TEST
      
-     ВАЖЛИВО:
-     
-     Перемикання предмета НЕ:
-     
-     - змінює timeLeft;
-     - запускає новий таймер;
-     - скидає deadline;
-     - використовує duration нового Test.
-     
+     ПЕРЕМИКАННЯ ПРЕДМЕТА НЕ ЧІПАЄ ТАЙМЕР.
      ======================================================= */
 
   const setCurrentTestId = useCallback(
@@ -498,32 +494,48 @@ export function ComplexTestSessionProvider({
     (
       seconds: number
     ) => {
+      const normalized =
+        normalizeSeconds(seconds);
+
       setTimeLeftState(
-        normalizeSeconds(seconds)
+        normalized
       );
+
+      /*
+       * Якщо адміністративно встановлено
+       * 0 — countdown більше не повинен
+       * продовжувати працювати.
+       */
+      if (
+        normalized <= 0 &&
+        timerRef.current !== null
+      ) {
+        clearInterval(
+          timerRef.current
+        );
+
+        timerRef.current = null;
+        deadlineRef.current = null;
+        timerStartedRef.current = false;
+
+        setTimerRunning(false);
+      }
     },
     []
   );
 
   /* =======================================================
-     START TIMER
-     
-     ВАЖЛИВО:
-     
-     Це ОДИН глобальний таймер комбінованого тесту.
-     
-     Він працює з поточного timeLeft.
-     
-     Він НЕ:
-     
-     - бере duration поточного предмета;
-     - залежить від currentTestId;
-     - перезапускається при зміні предмета.
-     
+     ВНУТРІШНІЙ ЗАПУСК GLOBAL TIMER
      ======================================================= */
 
   const startTimer = useCallback(() => {
-    if (timerRef.current !== null) {
+    /*
+     * Якщо старий timer існує —
+     * спочатку гарантовано прибираємо його.
+     */
+    if (
+      timerRef.current !== null
+    ) {
       clearInterval(
         timerRef.current
       );
@@ -531,10 +543,12 @@ export function ComplexTestSessionProvider({
       timerRef.current = null;
     }
 
+    deadlineRef.current = null;
+
+    timerStartedRef.current = false;
+
     const seconds =
-      normalizeSeconds(
-        timeLeft
-      );
+      normalizeSeconds(timeLeft);
 
     if (
       seconds <= 0 ||
@@ -545,23 +559,32 @@ export function ComplexTestSessionProvider({
       return;
     }
 
+    /*
+     * Глобальний countdown.
+     *
+     * НЕ currentTest.duration.
+     */
     deadlineRef.current =
       Date.now() +
       seconds * 1000;
+
+    timerStartedRef.current = true;
 
     setTimerRunning(true);
 
     timerRef.current =
       setInterval(() => {
+        const deadline =
+          deadlineRef.current;
+
         if (
-          deadlineRef.current ===
-          null
+          deadline === null
         ) {
           return;
         }
 
         const remainingMs =
-          deadlineRef.current -
+          deadline -
           Date.now();
 
         const remainingSeconds =
@@ -594,6 +617,11 @@ export function ComplexTestSessionProvider({
           deadlineRef.current =
             null;
 
+          timerStartedRef.current =
+            false;
+
+          setTimeLeftState(0);
+
           setTimerRunning(false);
         }
       }, 250);
@@ -606,20 +634,10 @@ export function ComplexTestSessionProvider({
   /* =======================================================
      RESTORE SESSION
      
-     Сервер повертає вже актуальний глобальний timeLeft.
+     Серверне timeLeft — авторитетне.
      
-     НЕ:
-     
-     startedAt + duration
-     
-     НЕ:
-     
-     lastActivityAt → розрахунок часу
-     
-     НЕ:
-     
-     currentTestId → розрахунок часу
-     
+     Після restore створюється ОДИН
+     глобальний countdown.
      ======================================================= */
 
   const restoreSession =
@@ -638,24 +656,27 @@ export function ComplexTestSessionProvider({
         restoredBlockReason:
           string | null
       ) => {
+        /*
+         * Гарантовано зупиняємо старий
+         * countdown перед відновленням.
+         */
         if (
-          timerRef.current !==
-          null
+          timerRef.current !== null
         ) {
           clearInterval(
             timerRef.current
           );
 
-          timerRef.current =
-            null;
+          timerRef.current = null;
         }
 
-        deadlineRef.current =
-          null;
+        deadlineRef.current = null;
+        timerStartedRef.current = false;
 
         /*
-         * timeLeft із сервера є
-         * авторитетним значенням.
+         * Серверне timeLeft —
+         * єдине значення, яке використовуємо
+         * для відновлення.
          */
         const seconds =
           normalizeSeconds(
@@ -704,9 +725,8 @@ export function ComplexTestSessionProvider({
         setTimerRunning(false);
 
         /*
-         * Якщо сесія не розпочата,
-         * завершена, заблокована або часу немає —
-         * countdown не запускаємо.
+         * Якщо тест ще не стартував —
+         * час не відраховується.
          */
         if (
           !startedAt ||
@@ -718,34 +738,37 @@ export function ComplexTestSessionProvider({
         }
 
         /*
-         * Один глобальний deadline
-         * для всієї комбінованої сесії.
+         * Створюємо один глобальний deadline.
          */
         deadlineRef.current =
           Date.now() +
           seconds * 1000;
 
+        timerStartedRef.current =
+          true;
+
         setTimerRunning(true);
 
         timerRef.current =
           setInterval(() => {
+            const deadline =
+              deadlineRef.current;
+
             if (
-              deadlineRef.current ===
-              null
+              deadline === null
             ) {
               return;
             }
 
             const remainingMs =
-              deadlineRef.current -
+              deadline -
               Date.now();
 
             const remainingSeconds =
               Math.max(
                 0,
                 Math.ceil(
-                  remainingMs /
-                    1000
+                  remainingMs / 1000
                 )
               );
 
@@ -753,9 +776,15 @@ export function ComplexTestSessionProvider({
               remainingSeconds
             );
 
+            /*
+             * Коли час закінчився —
+             * countdown припиняється.
+             *
+             * Завершення серверної сесії
+             * виконується сторінкою.
+             */
             if (
-              remainingSeconds <=
-              0
+              remainingSeconds <= 0
             ) {
               if (
                 timerRef.current !==
@@ -772,9 +801,12 @@ export function ComplexTestSessionProvider({
               deadlineRef.current =
                 null;
 
-              setTimerRunning(
-                false
-              );
+              timerStartedRef.current =
+                false;
+
+              setTimeLeftState(0);
+
+              setTimerRunning(false);
             }
           }, 250);
       },
@@ -801,19 +833,18 @@ export function ComplexTestSessionProvider({
 
         if (value) {
           if (
-            timerRef.current !==
-            null
+            timerRef.current !== null
           ) {
             clearInterval(
               timerRef.current
             );
 
-            timerRef.current =
-              null;
+            timerRef.current = null;
           }
 
-          deadlineRef.current =
-            null;
+          deadlineRef.current = null;
+          timerStartedRef.current =
+            false;
 
           setTimerRunning(false);
         }
@@ -834,19 +865,18 @@ export function ComplexTestSessionProvider({
 
         if (value) {
           if (
-            timerRef.current !==
-            null
+            timerRef.current !== null
           ) {
             clearInterval(
               timerRef.current
             );
 
-            timerRef.current =
-              null;
+            timerRef.current = null;
           }
 
-          deadlineRef.current =
-            null;
+          deadlineRef.current = null;
+          timerStartedRef.current =
+            false;
 
           setTimerRunning(false);
         }
@@ -894,7 +924,7 @@ export function ComplexTestSessionProvider({
     }, [clearTimer]);
 
   /* =======================================================
-     RESTORE SESSION ID ПІСЛЯ ПЕРЕЗАВАНТАЖЕННЯ
+     RESTORE SESSION ID
      ======================================================= */
 
   useEffect(() => {
@@ -929,14 +959,13 @@ export function ComplexTestSessionProvider({
   }, []);
 
   /* =======================================================
-     CLEANUP ПРИ ЗНИЩЕННІ PROVIDER
+     CLEANUP
      ======================================================= */
 
   useEffect(() => {
     return () => {
       if (
-        timerRef.current !==
-        null
+        timerRef.current !== null
       ) {
         clearInterval(
           timerRef.current
@@ -945,6 +974,7 @@ export function ComplexTestSessionProvider({
 
       timerRef.current = null;
       deadlineRef.current = null;
+      timerStartedRef.current = false;
     };
   }, []);
 
