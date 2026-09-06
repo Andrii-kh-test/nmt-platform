@@ -14,7 +14,6 @@ import FullscreenGuard from "@/app/components/test/FullscreenGuard";
 import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
-
 import ComplexTestSessionMonitor from "./ComplexTestSessionMonitor";
 
 interface SessionResponse {
@@ -25,22 +24,16 @@ interface SessionResponse {
     id: number;
     complexTestId: number;
     participantId: number | null;
-
     currentTestId: number | null;
     currentQuestion: number;
-
     savedAnswers: ComplexAnswerMap;
-
     timeLeft: number;
     extraTime: number;
-
     finished: boolean;
     finishedAt: string | null;
-
     blocked: boolean;
     blockReason: string | null;
     blockedAt: string | null;
-
     startedAt: string | null;
   };
 
@@ -62,13 +55,26 @@ function cleanTechnicalSigns(text: string): string {
     // HTML-сутності
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
 
-    // Порожні технічні конструкції
-    .replace(/<\s*\/\s*>/gi, "")
-    .replace(/<\s*>/gi, "")
+    // Технічні конструкції типу ?<>
+    .replace(/\?<<>/g, "")
 
-    // Варіанти <> та </> із пробілами
-    .replace(/<\s*\/?\s*>/g, "")
+    // Технічна конструкція <<>
+    .replace(/<<>/g, "")
+
+    // Маркер <|
+    .replace(/<\|/g, "")
+
+    // Маркери ***
+    .replace(/\*\*\*/g, "")
+
+    // Кутові дужки, що залишилися від технічних маркерів
+    .replace(/</g, "")
+    .replace(/>/g, "")
+
+    // Зайві пробіли
+    .replace(/\s{2,}/g, " ")
 
     .trim();
 }
@@ -96,7 +102,6 @@ function ComplexTestContent() {
     blocked,
     blockReason,
     finished,
-
     loadComplexTest,
     restoreSession,
     selectAnswer,
@@ -106,7 +111,7 @@ function ComplexTestContent() {
     /*
      * ВАЖЛИВО:
      * Перемикання предмета відбувається без перезавантаження
-     * сторінки. Тому використовуємо setter із контексту.
+     * сторінки.
      */
     setCurrentTestId,
   } = useComplexTestSession();
@@ -156,18 +161,13 @@ function ComplexTestContent() {
           cache: "no-store",
           body: JSON.stringify({
             sessionId,
-
             currentTestId:
               currentTestId ??
               complexTest?.tests[0]?.test.id ??
               null,
-
             currentQuestion,
-
             savedAnswers,
-
             finished: true,
-
             finishReason: "security",
           }),
         }
@@ -291,7 +291,6 @@ function ComplexTestContent() {
           router.replace(
             `/complex-tests/${id}/result/${session.id}`
           );
-
           return;
         }
       } catch (err) {
@@ -394,41 +393,23 @@ function ComplexTestContent() {
    * =========================================================
    */
 
-  function getSectionTitle(
-    subject: string
-  ): string {
+  function getSectionTitle(subject: string): string {
     const normalized = subject.trim();
 
     const knownSubjects: Record<string, string> = {
       "Українська мова": "Українська мова",
-
       "Українська мова та література":
         "Українська мова",
-
       Математика: "Математика",
-
-      "Історія України":
-        "Історія України",
-
+      "Історія України": "Історія України",
       Фізика: "Фізика",
-
       Хімія: "Хімія",
-
       Біологія: "Біологія",
-
       Географія: "Географія",
-
-      "Англійська мова":
-        "Англійська мова",
-
-      "Німецька мова":
-        "Німецька мова",
-
-      "Французька мова":
-        "Французька мова",
-
-      "Іспанська мова":
-        "Іспанська мова",
+      "Англійська мова": "Англійська мова",
+      "Німецька мова": "Німецька мова",
+      "Французька мова": "Французька мова",
+      "Іспанська мова": "Іспанська мова",
     };
 
     return (
@@ -439,49 +420,9 @@ function ComplexTestContent() {
 
   /*
    * =========================================================
-   * КІЛЬКІСТЬ ПИТАНЬ БЕЗ ВІДПОВІДІ
-   * =========================================================
-   */
-
-  const unansweredCount = useMemo(() => {
-    if (!complexTest) {
-      return 0;
-    }
-
-    let count = 0;
-
-    for (const item of complexTest.tests) {
-      const testAnswers =
-        savedAnswers[item.test.id] ?? {};
-
-      for (const question of item.test.questions) {
-        const answers =
-          testAnswers[question.id] ?? [];
-
-        if (answers.length === 0) {
-          count += 1;
-        }
-      }
-    }
-
-    return count;
-  }, [complexTest, savedAnswers]);
-
-  /*
-   * =========================================================
    * ПЕРЕМИКАННЯ МІЖ ПРЕДМЕТАМИ
    *
-   * ВАЖЛИВО:
-   *
    * НЕ використовуємо window.location.reload().
-   *
-   * Provider залишається змонтованим, тому:
-   *
-   * - timeLeft не скидається;
-   * - timerRef не знищується;
-   * - deadlineRef не знищується;
-   * - countdown продовжується;
-   * - змінюється лише currentTestId.
    * =========================================================
    */
 
@@ -501,9 +442,7 @@ function ComplexTestContent() {
 
     try {
       /*
-       * =====================================================
        * FULLSCREEN ПЕРЕД ПЕРЕМИКАННЯМ
-       * =====================================================
        */
 
       try {
@@ -518,18 +457,9 @@ function ComplexTestContent() {
       }
 
       /*
-       * =====================================================
        * ЗАПИСУЄМО НОВИЙ ПОТОЧНИЙ ПРЕДМЕТ НА СЕРВЕР
        *
-       * timeLeft тут НЕ передаємо і НЕ змінюємо.
-       *
-       * Сервер змінює тільки:
-       * - currentTestId
-       * - currentQuestion
-       * - savedAnswers
-       *
-       * Глобальний таймер залишається недоторканим.
-       * =====================================================
+       * timeLeft НЕ передаємо і НЕ змінюємо.
        */
 
       const response = await fetch(
@@ -560,24 +490,10 @@ function ComplexTestContent() {
       }
 
       /*
-       * =====================================================
-       * КЛЮЧОВЕ ВИПРАВЛЕННЯ
-       *
-       * НЕ reload().
-       *
-       * Змінюємо currentTestId безпосередньо
-       * в існуючому ComplexTestSessionContext.
-       *
-       * Завдяки цьому timerRef і deadlineRef
-       * продовжують працювати.
-       * =====================================================
+       * Змінюємо currentTestId без reload().
        */
 
       setCurrentTestId(testId);
-
-      /*
-       * Очищаємо індикатор перемикання.
-       */
 
       setSwitchingTestId(null);
     } catch (err) {
@@ -633,7 +549,6 @@ function ComplexTestContent() {
 
         [testId]: {
           ...(savedAnswers[testId] ?? {}),
-
           [questionId]: answers,
         },
       };
@@ -648,15 +563,11 @@ function ComplexTestContent() {
           cache: "no-store",
           body: JSON.stringify({
             sessionId,
-
             currentTestId:
               currentTest?.test.id ??
               testId,
-
             currentQuestion,
-
-            savedAnswers:
-              nextSavedAnswers,
+            savedAnswers: nextSavedAnswers,
           }),
         }
       );
@@ -754,15 +665,7 @@ function ComplexTestContent() {
     }
 
     const confirmationMessage =
-      unansweredCount > 0
-        ? `У Вас залишилося ${unansweredCount} ${
-            unansweredCount === 1
-              ? "питання"
-              : unansweredCount < 5
-              ? "питання"
-              : "питань"
-          } без відповіді.\n\nВи впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.`
-        : "Усі питання мають відповіді.\n\nВи впевнені, що хочете завершити тестування? Після завершення повернутися до тесту буде неможливо.";
+      "Ви впевнені, що хочете завершити тестування?\n\nПісля завершення повернутися до тесту буде неможливо.";
 
     const confirmed =
       window.confirm(
@@ -787,14 +690,10 @@ function ComplexTestContent() {
           cache: "no-store",
           body: JSON.stringify({
             sessionId,
-
             currentTestId:
               currentTest.test.id,
-
             currentQuestion,
-
             savedAnswers,
-
             finished: true,
           }),
         }
@@ -916,7 +815,16 @@ function ComplexTestContent() {
                 `/complex-tests/${id}`
               )
             }
-            className="mt-6 rounded-lg bg-[#7A1F2B] px-5 py-3 text-white font-medium hover:opacity-90"
+            className="
+              mt-6
+              rounded-lg
+              bg-[#7A1F2B]
+              px-5
+              py-3
+              text-white
+              font-medium
+              hover:opacity-90
+            "
           >
             Повернутися до тесту
           </button>
@@ -963,10 +871,11 @@ function ComplexTestContent() {
 
   return (
     <main className="min-h-screen bg-gray-100">
-
-      {/* =====================================================
-          СИСТЕМА БЕЗПЕКИ
-          ===================================================== */}
+      {/*
+       * =====================================================
+       * СИСТЕМА БЕЗПЕКИ
+       * =====================================================
+       */}
 
       <FullscreenGuard
         onViolationFinish={
@@ -984,9 +893,11 @@ function ComplexTestContent() {
 
       <TestSecurityGuard />
 
-      {/* =====================================================
-          MONITOR
-          ===================================================== */}
+      {/*
+       * =====================================================
+       * MONITOR
+       * =====================================================
+       */}
 
       <ComplexTestSessionMonitor
         complexTestId={id}
@@ -995,20 +906,23 @@ function ComplexTestContent() {
         heartbeatInterval={10000}
       />
 
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
+      {/*
+       * =====================================================
+       * HEADER
+       * =====================================================
+       */}
 
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="w-full px-4 lg:px-8 py-3">
           <div className="flex flex-col gap-3">
 
-            {/* =================================================
-                ПЕРШИЙ РЯДОК
-                ================================================= */}
+            {/*
+             * =================================================
+             * ПЕРШИЙ РЯДОК
+             * =================================================
+             */}
 
             <div className="flex items-center justify-between gap-6">
-
               <div className="flex flex-wrap items-center gap-2 min-w-0">
 
                 <button
@@ -1107,15 +1021,15 @@ function ComplexTestContent() {
                 >
                   Інструкція
                 </button>
-
               </div>
 
-              {/* =================================================
-                  ТАЙМЕР + ЗАВЕРШЕННЯ
-                  ================================================= */}
+              {/*
+               * =================================================
+               * ТАЙМЕР + ЗАВЕРШЕННЯ
+               * =================================================
+               */}
 
               <div className="shrink-0 flex items-center gap-3">
-
                 <div
                   className="
                     rounded-lg
@@ -1164,20 +1078,18 @@ function ComplexTestContent() {
                     ? "Завершення…"
                     : "Завершити роботу над тестом"}
                 </button>
-
               </div>
-
             </div>
 
-            {/* =================================================
-                ДРУГИЙ РЯДОК:
-                ПЕРЕМИКАЧ ПРЕДМЕТІВ
-                ================================================= */}
+            {/*
+             * =================================================
+             * ДРУГИЙ РЯДОК:
+             * ПЕРЕМИКАЧ ПРЕДМЕТІВ
+             * =================================================
+             */}
 
             <div className="w-full border-t border-gray-200 pt-2">
-
               <div className="flex w-full overflow-x-auto">
-
                 {complexTest.tests.map(
                   (item) => {
                     const active =
@@ -1225,24 +1137,21 @@ function ComplexTestContent() {
                     );
                   }
                 )}
-
               </div>
-
             </div>
-
           </div>
         </div>
       </header>
 
-      {/* =====================================================
-          BLOCKED
-          ===================================================== */}
+      {/*
+       * =====================================================
+       * BLOCKED
+       * =====================================================
+       */}
 
       {blocked && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-6">
-
           <div className="max-w-md w-full bg-white rounded-xl shadow-xl p-8 text-center">
-
             <h2 className="text-xl font-bold text-gray-900">
               Тестування заблоковано
             </h2>
@@ -1257,35 +1166,36 @@ function ComplexTestContent() {
                 Причина: {blockReason}
               </p>
             )}
-
           </div>
-
         </div>
       )}
 
-      {/* =====================================================
-          CONTENT
-          ===================================================== */}
+      {/*
+       * =====================================================
+       * CONTENT
+       * =====================================================
+       */}
 
       <div className="w-full px-4 lg:px-8 py-6">
-
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_260px] gap-6 items-start">
 
-          {/* =================================================
-              ОСНОВНА ОБЛАСТЬ
-              ================================================= */}
+          {/*
+           * =================================================
+           * ОСНОВНА ОБЛАСТЬ
+           * =================================================
+           */}
 
           <div className="min-w-0">
 
-            {/* =================================================
-                УСІ ПИТАННЯ
-                ================================================= */}
+            {/*
+             * =================================================
+             * УСІ ПИТАННЯ
+             * =================================================
+             */}
 
             <section className="space-y-5">
-
               {questions.map(
                 (question, index) => {
-
                   const localAnswers =
                     selectedAnswers[
                       question.id
@@ -1327,17 +1237,16 @@ function ComplexTestContent() {
                         scroll-mt-40
                       "
                     >
-
-                      {/* =====================================
-                          ЗАГОЛОВОК ПИТАННЯ
-                          ===================================== */}
+                      {/*
+                       * =====================================
+                       * ЗАГОЛОВОК ПИТАННЯ
+                       * =====================================
+                       */}
 
                       <div className="px-6 py-5 border-b border-gray-200">
-
                         <div className="flex items-start justify-between gap-5">
 
                           <div className="flex items-start gap-4 min-w-0">
-
                             <div
                               className="
                                 shrink-0
@@ -1356,7 +1265,6 @@ function ComplexTestContent() {
                             </div>
 
                             <div className="min-w-0">
-
                               <div className="text-xs font-medium text-gray-500 mb-2">
                                 Питання {index + 1}
                               </div>
@@ -1366,9 +1274,7 @@ function ComplexTestContent() {
                                   question.text
                                 )}
                               </h3>
-
                             </div>
-
                           </div>
 
                           <div className="shrink-0 text-xs text-gray-500">
@@ -1379,22 +1285,19 @@ function ComplexTestContent() {
                               ? "бали"
                               : "балів"}
                           </div>
-
                         </div>
-
                       </div>
 
-                      {/* =====================================
-                          ВАРІАНТИ ВІДПОВІДІ
-                          ===================================== */}
+                      {/*
+                       * =====================================
+                       * ВАРІАНТИ ВІДПОВІДІ
+                       * =====================================
+                       */}
 
                       <div className="px-6 py-5">
-
                         <div className="space-y-3">
-
                           {question.answerOptions.map(
                             (option) => {
-
                               const selected =
                                 displayedAnswers.includes(
                                   option.id
@@ -1417,7 +1320,6 @@ function ComplexTestContent() {
                                       : "border-gray-200 bg-white hover:bg-gray-50",
                                   ].join(" ")}
                                 >
-
                                   <input
                                     type={
                                       question.type ===
@@ -1433,7 +1335,6 @@ function ComplexTestContent() {
                                       finishing
                                     }
                                     onChange={() => {
-
                                       const current =
                                         selectedAnswers[
                                           question.id
@@ -1484,22 +1385,21 @@ function ComplexTestContent() {
                                       option.text
                                     )}
                                   </span>
-
                                 </label>
                               );
                             }
                           )}
-
                         </div>
 
-                        {/* =====================================
-                            ЗБЕРЕГТИ ВІДПОВІДЬ
-                            ===================================== */}
+                        {/*
+                         * =====================================
+                         * ЗБЕРЕГТИ ВІДПОВІДЬ
+                         * =====================================
+                         */}
 
                         <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-5">
 
                           <div className="text-sm">
-
                             {isSaved ? (
                               <span className="font-medium text-green-700">
                                 Відповідь збережено
@@ -1512,7 +1412,7 @@ function ComplexTestContent() {
                               </span>
                             ) : displayedAnswers.length >
                               0 ? (
-                              <span className="text-orange-600">
+                              <span className="text-gray-500">
                                 Відповідь не збережено
                               </span>
                             ) : (
@@ -1520,7 +1420,6 @@ function ComplexTestContent() {
                                 Відповідь не вибрана
                               </span>
                             )}
-
                           </div>
 
                           <button
@@ -1554,77 +1453,20 @@ function ComplexTestContent() {
                               ? "Відповідь збережено"
                               : "Зберегти відповідь"}
                           </button>
-
                         </div>
-
                       </div>
-
                     </article>
                   );
                 }
               )}
-
             </section>
-
-            {/* =================================================
-                НИЖНЯ ПАНЕЛЬ
-                ================================================= */}
-
-            <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-
-              <div className="flex flex-wrap items-center justify-between gap-5">
-
-                <div>
-
-                  <div className="text-sm font-semibold text-gray-900">
-                    Завершення тестування
-                  </div>
-
-                  <div className="mt-1 text-sm text-gray-500">
-                    Перед завершенням переконайтеся,
-                    що всі відповіді збережено.
-                  </div>
-
-                </div>
-
-                <button
-                  type="button"
-                  disabled={
-                    blocked ||
-                    finished ||
-                    finishing ||
-                    switchingTestId !== null ||
-                    savingQuestionId !== null
-                  }
-                  onClick={finishTest}
-                  className="
-                    rounded-lg
-                    bg-[#7A1F2B]
-                    hover:bg-[#651824]
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    px-6
-                    py-3
-                    text-sm
-                    font-semibold
-                    text-white
-                    transition
-                  "
-                >
-                  {finishing
-                    ? "Завершення…"
-                    : "Завершити роботу над тестом"}
-                </button>
-
-              </div>
-
-            </div>
-
           </div>
 
-          {/* =================================================
-              ПРАВА НАВІГАЦІЙНА ПАНЕЛЬ
-              ================================================= */}
+          {/*
+           * =================================================
+           * ПРАВА НАВІГАЦІЙНА ПАНЕЛЬ
+           * =================================================
+           */}
 
           <aside
             className="
@@ -1640,11 +1482,11 @@ function ComplexTestContent() {
               overflow-hidden
             "
           >
-
-            {/* Заголовок */}
+            {/*
+             * Заголовок
+             */}
 
             <div className="px-5 py-4 border-b border-gray-200">
-
               <div className="text-sm font-semibold text-gray-900">
                 Навігація
               </div>
@@ -1654,35 +1496,23 @@ function ComplexTestContent() {
                   currentTest.test.subject
                 )}
               </div>
-
             </div>
 
-            {/* Питання */}
+            {/*
+             * Питання
+             */}
 
             <div className="p-4">
-
               <div className="grid grid-cols-4 gap-2">
-
                 {questions.map(
                   (question, index) => {
-
                     const saved =
                       savedAnswers[
                         currentTest.test.id
                       ]?.[question.id] ?? [];
 
-                    const local =
-                      selectedAnswers[
-                        question.id
-                      ];
-
                     const hasSaved =
                       saved.length > 0;
-
-                    const hasUnsaved =
-                      local !== undefined &&
-                      JSON.stringify(local) !==
-                        JSON.stringify(saved);
 
                     return (
                       <button
@@ -1703,98 +1533,41 @@ function ComplexTestContent() {
 
                           hasSaved
                             ? "border-[#7A1F2B] bg-[#7A1F2B] text-white hover:bg-[#651824]"
-                            : hasUnsaved
-                            ? "border-orange-400 bg-orange-50 text-orange-700 hover:bg-orange-100"
                             : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
                         ].join(" ")}
                       >
                         {index + 1}
-
-                        {hasUnsaved && (
-                          <span
-                            className="
-                              absolute
-                              -top-1
-                              -right-1
-                              w-3
-                              h-3
-                              rounded-full
-                              bg-orange-500
-                              border-2
-                              border-white
-                            "
-                          />
-                        )}
-
                       </button>
                     );
                   }
                 )}
-
               </div>
-
             </div>
 
-            {/* Легенда */}
+            {/*
+             * Легенда
+             */}
 
             <div className="px-5 py-4 border-t border-gray-200 space-y-3">
-
               <div className="flex items-center gap-2 text-xs text-gray-600">
-
                 <span className="w-3 h-3 rounded bg-[#7A1F2B]" />
 
                 <span>
                   Відповідь збережено
                 </span>
-
               </div>
 
               <div className="flex items-center gap-2 text-xs text-gray-600">
-
-                <span className="w-3 h-3 rounded bg-orange-50 border border-orange-400" />
-
-                <span>
-                  Відповідь не збережено
-                </span>
-
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-gray-600">
-
                 <span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" />
 
                 <span>
-                  Відповідь не вибрана
+                  Відповідь не збережена
                 </span>
-
               </div>
-
             </div>
-
-            {/* Статистика */}
-
-            <div className="px-5 py-4 border-t border-gray-200">
-
-              <div className="text-xs text-gray-500">
-                Без відповіді
-              </div>
-
-              <div className="mt-1 text-2xl font-bold text-[#7A1F2B]">
-                {unansweredCount}
-              </div>
-
-              <div className="text-xs text-gray-500 mt-1">
-                із {questions.length} питань у цьому предметі
-              </div>
-
-            </div>
-
           </aside>
-
         </div>
-
       </div>
-
     </main>
   );
 }
