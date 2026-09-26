@@ -106,7 +106,7 @@ function EditTestContent() {
     }
 
     loadTest();
-  }, [params.id, setTest]);
+  }, [params.id]);
 
   if (loading) {
     return (
