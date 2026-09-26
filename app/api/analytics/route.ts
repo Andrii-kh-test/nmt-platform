@@ -25,15 +25,8 @@ type QuestionType =
   | "SEQUENCE"
   | string;
 
-type DifficultyCode =
-  | "VERY_EASY"
-  | "EASY"
-  | "OPTIMAL"
-  | "DIFFICULT"
-  | "VERY_DIFFICULT";
-
 type DifficultyResult = {
-  label: DifficultyCode;
+  label: string;
   color: string;
 };
 
@@ -42,48 +35,53 @@ type DifficultyResult = {
 // =====================================================
 
 /**
- * Визначає код складності за P-value.
- *
- * ВАЖЛИВО:
- * AnalyticsClient.tsx очікує саме коди:
- * VERY_EASY / EASY / OPTIMAL / DIFFICULT / VERY_DIFFICULT
+ * Визначає назву складності за P-value.
  *
  * P-value у psychometrics.ts уже представлений
  * у відсотках: 0–100.
+ *
+ * AnalyticsClient.tsx очікує саме ці текстові
+ * значення:
+ *
+ * Дуже легке
+ * Легке
+ * Оптимальне
+ * Складне
+ * Дуже складне
  */
 function getDifficulty(
   correctPercent: number
 ): DifficultyResult {
   if (correctPercent > 80) {
     return {
-      label: "VERY_EASY",
+      label: "Дуже легке",
       color: "green",
     };
   }
 
   if (correctPercent >= 60) {
     return {
-      label: "EASY",
+      label: "Легке",
       color: "green",
     };
   }
 
   if (correctPercent >= 40) {
     return {
-      label: "OPTIMAL",
+      label: "Оптимальне",
       color: "yellow",
     };
   }
 
   if (correctPercent >= 21) {
     return {
-      label: "DIFFICULT",
+      label: "Складне",
       color: "orange",
     };
   }
 
   return {
-    label: "VERY_DIFFICULT",
+    label: "Дуже складне",
     color: "red",
   };
 }
@@ -186,14 +184,21 @@ function isSameAnswers(
 ): boolean {
   const userIds = getAnswerIds(userAnswer);
 
-  if (userIds.length !== correctAnswers.length) {
+  if (
+    userIds.length !==
+    correctAnswers.length
+  ) {
     return false;
   }
 
   const userSet = new Set(userIds);
-  const correctSet = new Set(correctAnswers);
+  const correctSet =
+    new Set(correctAnswers);
 
-  if (userSet.size !== correctSet.size) {
+  if (
+    userSet.size !==
+    correctSet.size
+  ) {
     return false;
   }
 
@@ -221,7 +226,8 @@ function getMatchingLeftItems(
   const result: MatchingLeftItem[] = [];
 
   for (const option of options) {
-    const parts = option.text.split("|");
+    const parts =
+      option.text.split("|");
 
     if (parts.length < 4) {
       continue;
@@ -233,13 +239,20 @@ function getMatchingLeftItems(
       continue;
     }
 
-    const leftId = Number(parts[1]);
-    const text = parts[2];
-    const correctRightId = Number(parts[3]);
+    const leftId =
+      Number(parts[1]);
+
+    const text =
+      parts[2];
+
+    const correctRightId =
+      Number(parts[3]);
 
     if (
       !Number.isFinite(leftId) ||
-      !Number.isFinite(correctRightId)
+      !Number.isFinite(
+        correctRightId
+      )
     ) {
       continue;
     }
@@ -252,7 +265,8 @@ function getMatchingLeftItems(
   }
 
   return result.sort(
-    (a, b) => a.leftId - b.leftId
+    (a, b) =>
+      a.leftId - b.leftId
   );
 }
 
@@ -260,9 +274,13 @@ function isMatchingCorrect(
   userAnswer: unknown,
   leftItems: MatchingLeftItem[]
 ): boolean {
-  const userIds = getAnswerIds(userAnswer);
+  const userIds =
+    getAnswerIds(userAnswer);
 
-  if (userIds.length !== leftItems.length) {
+  if (
+    userIds.length !==
+    leftItems.length
+  ) {
     return false;
   }
 
@@ -303,7 +321,8 @@ export async function GET(
     if (!testIdParam) {
       return NextResponse.json(
         {
-          error: "Не вказано testId.",
+          error:
+            "Не вказано testId.",
         },
         {
           status: 400,
@@ -311,7 +330,8 @@ export async function GET(
       );
     }
 
-    const testId = Number(testIdParam);
+    const testId =
+      Number(testIdParam);
 
     if (
       !Number.isInteger(testId) ||
@@ -319,7 +339,8 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          error: "Некоректний testId.",
+          error:
+            "Некоректний testId.",
         },
         {
           status: 400,
@@ -332,9 +353,12 @@ export async function GET(
     // =================================================
 
     const participantIdsParam =
-      searchParams.get("participantIds");
+      searchParams.get(
+        "participantIds"
+      );
 
-    let participantIds: number[] = [];
+    let participantIds: number[] =
+      [];
 
     if (participantIdsParam) {
       let values: string[] = [];
@@ -345,29 +369,40 @@ export async function GET(
             .trim()
             .startsWith("[")
         ) {
-          const parsed = JSON.parse(
-            participantIdsParam
-          );
+          const parsed =
+            JSON.parse(
+              participantIdsParam
+            );
 
-          if (Array.isArray(parsed)) {
-            values = parsed.map(String);
+          if (
+            Array.isArray(parsed)
+          ) {
+            values =
+              parsed.map(String);
           }
         } else {
           values =
-            participantIdsParam.split(",");
+            participantIdsParam.split(
+              ","
+            );
         }
       } catch {
         values =
-          participantIdsParam.split(",");
+          participantIdsParam.split(
+            ","
+          );
       }
 
-      participantIds = values
-        .map((id) => Number(id.trim()))
-        .filter(
-          (id) =>
-            Number.isInteger(id) &&
-            id > 0
-        );
+      participantIds =
+        values
+          .map((id) =>
+            Number(id.trim())
+          )
+          .filter(
+            (id) =>
+              Number.isInteger(id) &&
+              id > 0
+          );
     }
 
     // =================================================
@@ -424,7 +459,8 @@ export async function GET(
     if (!test) {
       return NextResponse.json(
         {
-          error: "Тест не знайдено.",
+          error:
+            "Тест не знайдено.",
         },
         {
           status: 404,
@@ -441,7 +477,8 @@ export async function GET(
         where: {
           testId,
 
-          ...(participantIds.length > 0
+          ...(participantIds.length >
+          0
             ? {
                 id: {
                   in: participantIds,
@@ -491,11 +528,13 @@ export async function GET(
         id: result.id,
 
         participantId:
-          result.session?.participantId ??
+          result.session
+            ?.participantId ??
           null,
 
         sessionId:
-          result.session?.id ?? null,
+          result.session?.id ??
+          null,
 
         firstName:
           result.firstName,
@@ -562,14 +601,16 @@ export async function GET(
           let skipped = 0;
 
           const answersRecord =
-            results.map((result) => ({
-              result,
+            results.map(
+              (result) => ({
+                result,
 
-              answers:
-                getAnswersRecord(
-                  result.answers
-                ),
-            }));
+                answers:
+                  getAnswersRecord(
+                    result.answers
+                  ),
+              })
+            );
 
           const correctOptions =
             question.answerOptions
@@ -578,7 +619,8 @@ export async function GET(
                   option.isCorrect
               )
               .map(
-                (option) => option.id
+                (option) =>
+                  option.id
               );
 
           const matchingLeftItems =
@@ -596,7 +638,9 @@ export async function GET(
           for (const item of answersRecord) {
             const rawAnswer =
               item.answers[
-                String(question.id)
+                String(
+                  question.id
+                )
               ] ??
               item.answers[
                 question.id
@@ -612,13 +656,15 @@ export async function GET(
             // -------------------------------------------
 
             if (
-              answerIds.length === 0
+              answerIds.length ===
+              0
             ) {
               skipped++;
               continue;
             }
 
-            let isCorrect = false;
+            let isCorrect =
+              false;
 
             // -------------------------------------------
             // MATCHING
@@ -664,7 +710,10 @@ export async function GET(
                 answerIds.length ===
                   correctOptions.length &&
                 answerIds.every(
-                  (id, index) =>
+                  (
+                    id,
+                    index
+                  ) =>
                     id ===
                     correctOptions[
                       index
@@ -763,20 +812,12 @@ export async function GET(
           // DIFFICULTY
           // ---------------------------------------------
 
-          /**
-           * P-value вже є відсотком 0–100.
-           *
-           * Якщо даних недостатньо, pValue === null.
-           * AnalyticsClient наразі не має окремого
-           * INSUFFICIENT_DATA enum, тому повертаємо
-           * OPTIMAL із сірим кольором.
-           *
-           * Це не впливає на розрахунок psychometrics.
-           */
           const difficulty =
-            psychometrics.pValue === null
+            psychometrics.pValue ===
+            null
               ? {
-                  label: "OPTIMAL" as DifficultyCode,
+                  label:
+                    "Не визначено",
                   color: "gray",
                 }
               : getDifficulty(
@@ -895,7 +936,8 @@ export async function GET(
             (sum, value) =>
               sum + value,
             0
-          ) / participantsCount
+          ) /
+          participantsCount
         : 0;
 
     const averagePercent =
@@ -904,7 +946,8 @@ export async function GET(
             (sum, value) =>
               sum + value,
             0
-          ) / participantsCount
+          ) /
+          participantsCount
         : 0;
 
     // =================================================
