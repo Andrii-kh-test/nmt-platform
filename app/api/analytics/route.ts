@@ -25,41 +25,65 @@ type QuestionType =
   | "SEQUENCE"
   | string;
 
+type DifficultyCode =
+  | "VERY_EASY"
+  | "EASY"
+  | "OPTIMAL"
+  | "DIFFICULT"
+  | "VERY_DIFFICULT";
+
+type DifficultyResult = {
+  label: DifficultyCode;
+  color: string;
+};
+
 // =====================================================
 // HELPERS
 // =====================================================
 
-function getDifficulty(correctPercent: number) {
+/**
+ * Визначає код складності за P-value.
+ *
+ * ВАЖЛИВО:
+ * AnalyticsClient.tsx очікує саме коди:
+ * VERY_EASY / EASY / OPTIMAL / DIFFICULT / VERY_DIFFICULT
+ *
+ * P-value у psychometrics.ts уже представлений
+ * у відсотках: 0–100.
+ */
+function getDifficulty(
+  correctPercent: number
+): DifficultyResult {
   if (correctPercent > 80) {
     return {
-      label: "Дуже легке",
+      label: "VERY_EASY",
       color: "green",
     };
   }
 
   if (correctPercent >= 60) {
     return {
-      label: "Легке",
+      label: "EASY",
       color: "green",
     };
   }
 
   if (correctPercent >= 40) {
     return {
-      label: "Оптимальне",
+      label: "OPTIMAL",
       color: "yellow",
     };
   }
 
   if (correctPercent >= 21) {
     return {
-      label: "Складне",
+      label: "DIFFICULT",
       color: "orange",
     };
   }
 
   return {
-    label: "Дуже складне",
+    label: "VERY_DIFFICULT",
     color: "red",
   };
 }
@@ -101,7 +125,13 @@ function getAnswersRecord(
   return {};
 }
 
-function getAnswerIds(value: unknown): number[] {
+// =====================================================
+// ANSWER IDS
+// =====================================================
+
+function getAnswerIds(
+  value: unknown
+): number[] {
   if (
     value === null ||
     value === undefined ||
@@ -253,7 +283,7 @@ function isMatchingCorrect(
 }
 
 // =====================================================
-// MAIN
+// GET /api/analytics
 // =====================================================
 
 export async function GET(
@@ -273,7 +303,7 @@ export async function GET(
     if (!testIdParam) {
       return NextResponse.json(
         {
-          error: "Не вказано testId",
+          error: "Не вказано testId.",
         },
         {
           status: 400,
@@ -289,7 +319,7 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          error: "Некоректний testId",
+          error: "Некоректний testId.",
         },
         {
           status: 400,
@@ -302,9 +332,7 @@ export async function GET(
     // =================================================
 
     const participantIdsParam =
-      searchParams.get(
-        "participantIds"
-      );
+      searchParams.get("participantIds");
 
     let participantIds: number[] = [];
 
@@ -396,7 +424,7 @@ export async function GET(
     if (!test) {
       return NextResponse.json(
         {
-          error: "Тест не знайдено",
+          error: "Тест не знайдено.",
         },
         {
           status: 404,
@@ -561,6 +589,10 @@ export async function GET(
                 )
               : [];
 
+          // ---------------------------------------------
+          // ANALYZE EACH PARTICIPANT
+          // ---------------------------------------------
+
           for (const item of answersRecord) {
             const rawAnswer =
               item.answers[
@@ -708,8 +740,13 @@ export async function GET(
                 question.answerOptions.map(
                   (option) => ({
                     id: option.id,
-                    order: option.order,
-                    text: option.text,
+
+                    order:
+                      option.order,
+
+                    text:
+                      option.text,
+
                     isCorrect:
                       option.isCorrect,
                   })
@@ -726,10 +763,25 @@ export async function GET(
           // DIFFICULTY
           // ---------------------------------------------
 
+          /**
+           * P-value вже є відсотком 0–100.
+           *
+           * Якщо даних недостатньо, pValue === null.
+           * AnalyticsClient наразі не має окремого
+           * INSUFFICIENT_DATA enum, тому повертаємо
+           * OPTIMAL із сірим кольором.
+           *
+           * Це не впливає на розрахунок psychometrics.
+           */
           const difficulty =
-  getDifficulty(
-    psychometrics.pValue ?? 0
-  );
+            psychometrics.pValue === null
+              ? {
+                  label: "OPTIMAL" as DifficultyCode,
+                  color: "gray",
+                }
+              : getDifficulty(
+                  psychometrics.pValue
+                );
 
           // ---------------------------------------------
           // QUESTION RESULT
