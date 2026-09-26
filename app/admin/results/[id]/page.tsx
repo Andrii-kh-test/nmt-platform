@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/app/lib/prisma";
 
 import HtmlContent from "@/app/components/common/HtmlContent";
-
+import ExportResultPdfButton from "@/app/components/admin/ExportResultPdfButton";
 type Props = {
   params: Promise<{
     id: string;
@@ -397,12 +397,18 @@ export default async function ResultDetailsPage({
               </p>
             </div>
 
-            <Link
-              href="/admin/results"
-              className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white hover:text-[#7A1F2B]"
-            >
-              ← До журналу
-            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+  <ExportResultPdfButton
+    resultId={result.id}
+  />
+
+  <Link
+    href="/admin/results"
+    className="inline-flex items-center justify-center rounded-xl border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-white hover:text-[#7A1F2B]"
+  >
+    ← До журналу
+  </Link>
+</div>
           </div>
         </header>
 
