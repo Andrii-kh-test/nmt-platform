@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import Link from "next/link";
 
@@ -13,20 +8,20 @@ import Link from "next/link";
 // TYPES
 // =====================================================
 
-type Props = {
-  testId: string;
-};
-
-type Difficulty = {
-  label: string;
-  color: string;
-};
+type Difficulty =
+  | "VERY_EASY"
+  | "EASY"
+  | "OPTIMAL"
+  | "DIFFICULT"
+  | "VERY_DIFFICULT";
 
 type Participant = {
   id: number;
-  lastName: string | null;
-  firstName: string | null;
-  middleName: string | null;
+  participantId?: number | null;
+  sessionId?: number | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  middleName?: string | null;
   earnedPoints: number;
   maxPoints: number;
   percent: number;
@@ -36,32 +31,47 @@ type Participant = {
   createdAt: string;
 };
 
+type AnswerDistributionItem = {
+  label: string;
+  value: number;
+};
+
+type Psychometrics = {
+  key: string | null;
+  pValue: number | null;
+  dIndex: number | null;
+  rit: number | null;
+  answerDistribution: AnswerDistributionItem[];
+  insufficientData?: boolean;
+};
+
 type QuestionStatistic = {
   id: number;
   order: number;
   type: string;
   text: string;
   points: number;
-
   correct: number;
   incorrect: number;
   skipped: number;
-
   total: number;
-
   correctPercent: number;
   incorrectPercent: number;
   skippedPercent: number;
-
-  difficulty: string | Difficulty;
+  difficulty: Difficulty;
   difficultyColor?: string;
+
+  // Психометричні показники додаються опційно,
+  // тому стара аналітика продовжує працювати,
+  // навіть якщо API їх ще не повертає.
+  psychometrics?: Psychometrics | null;
 };
 
 type AnalyticsData = {
   test: {
     id: number;
     title: string;
-    subject: string | null;
+    subject?: string | null;
     maxPoints: number;
     questionCount: number;
   };
@@ -86,384 +96,191 @@ type QuestionDetails = {
   text: string;
   points: number;
 
-  options: Array<{
+  options: {
     id: number;
     order: number;
     text: string;
     isCorrect: boolean;
-  }>;
+  }[];
 };
 
 // =====================================================
-// НОРМАЛІЗАЦІЯ СКЛАДНОСТІ
+// HELPERS
 // =====================================================
 
 function getDifficultyData(
-  difficulty: string | Difficulty | undefined,
-  difficultyColor?: string
-): Difficulty {
-  if (
-    difficulty &&
-    typeof difficulty === "object"
-  ) {
-    return difficulty;
-  }
+  difficulty: Difficulty
+): {
+  label: string;
+  shortLabel: string;
+  description: string;
+} {
+  switch (difficulty) {
+    case "VERY_EASY":
+      return {
+        label: "Дуже легке",
+        shortLabel: "Дуже легке",
+        description:
+          "Понад 80% учасників виконали завдання правильно.",
+      };
 
-  return {
-    label:
-      typeof difficulty === "string"
-        ? difficulty
-        : "Не визначено",
-    color:
-      difficultyColor || "gray",
-  };
+    case "EASY":
+      return {
+        label: "Легке",
+        shortLabel: "Легке",
+        description:
+          "60–80% учасників виконали завдання правильно.",
+      };
+
+    case "OPTIMAL":
+      return {
+        label: "Оптимальне",
+        shortLabel: "Оптимальне",
+        description:
+          "40–59% учасників виконали завдання правильно.",
+      };
+
+    case "DIFFICULT":
+      return {
+        label: "Складне",
+        shortLabel: "Складне",
+        description:
+          "21–39% учасників виконали завдання правильно.",
+      };
+
+    case "VERY_DIFFICULT":
+      return {
+        label: "Дуже складне",
+        shortLabel: "Дуже складне",
+        description:
+          "Не більше 20% учасників виконали завдання правильно.",
+      };
+  }
 }
 
-// =====================================================
-// СТИЛІ СКЛАДНОСТІ
-// =====================================================
+function getDifficultyClasses(difficulty: Difficulty): string {
+  switch (difficulty) {
+    case "VERY_EASY":
+      return "bg-green-100 text-green-800 border-green-200";
 
-function getDifficultyClasses(
-  color: string
-) {
-  switch (color) {
-    case "green":
-      return "bg-green-100 text-green-700 border border-green-200";
+    case "EASY":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200";
 
-    case "yellow":
-      return "bg-yellow-100 text-yellow-700 border border-yellow-200";
+    case "OPTIMAL":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
 
-    case "orange":
-      return "bg-orange-100 text-orange-700 border border-orange-200";
+    case "DIFFICULT":
+      return "bg-orange-100 text-orange-800 border-orange-200";
 
-    case "red":
-      return "bg-red-100 text-red-700 border border-red-200";
+    case "VERY_DIFFICULT":
+      return "bg-red-100 text-red-800 border-red-200";
 
     default:
-      return "bg-gray-100 text-gray-700 border border-gray-200";
+      return "bg-gray-100 text-gray-700 border-gray-200";
   }
 }
-
-// =====================================================
-// СТИЛІ ШКАЛИ СКЛАДНОСТІ
-// =====================================================
 
 function getDifficultyScaleClasses(
-  color: string
-) {
-  switch (color) {
-    case "green":
-      return {
-        wrapper:
-          "border-green-200 bg-green-50",
-        badge:
-          "bg-green-600 text-white",
-        percent:
-          "text-green-700",
-      };
+  difficulty: Difficulty,
+  active: boolean
+): string {
+  const base =
+    "flex-1 rounded-lg border px-3 py-2 text-center text-xs font-medium transition";
 
-    case "yellow":
-      return {
-        wrapper:
-          "border-yellow-200 bg-yellow-50",
-        badge:
-          "bg-yellow-500 text-white",
-        percent:
-          "text-yellow-700",
-      };
+  if (!active) {
+    return `${base} border-gray-200 bg-gray-50 text-gray-400`;
+  }
 
-    case "orange":
-      return {
-        wrapper:
-          "border-orange-200 bg-orange-50",
-        badge:
-          "bg-orange-500 text-white",
-        percent:
-          "text-orange-700",
-      };
+  switch (difficulty) {
+    case "VERY_EASY":
+      return `${base} border-green-300 bg-green-100 text-green-800`;
 
-    case "red":
-      return {
-        wrapper:
-          "border-red-200 bg-red-50",
-        badge:
-          "bg-red-600 text-white",
-        percent:
-          "text-red-700",
-      };
+    case "EASY":
+      return `${base} border-emerald-300 bg-emerald-100 text-emerald-800`;
+
+    case "OPTIMAL":
+      return `${base} border-yellow-300 bg-yellow-100 text-yellow-800`;
+
+    case "DIFFICULT":
+      return `${base} border-orange-300 bg-orange-100 text-orange-800`;
+
+    case "VERY_DIFFICULT":
+      return `${base} border-red-300 bg-red-100 text-red-800`;
 
     default:
-      return {
-        wrapper:
-          "border-gray-200 bg-gray-50",
-        badge:
-          "bg-gray-600 text-white",
-        percent:
-          "text-gray-700",
-      };
+      return `${base} border-gray-200 bg-gray-50 text-gray-400`;
   }
 }
 
-// =====================================================
-// ТИП ЗАВДАННЯ
-// =====================================================
-
-function getQuestionTypeLabel(
-  type: string
-) {
+function getQuestionTypeLabel(type: string): string {
   switch (type) {
-    case "single":
-      return "Одна правильна відповідь";
+    case "SINGLE":
+    case "SINGLE_CHOICE":
+      return "Одна відповідь";
 
-    case "multiple":
-      return "Кілька правильних відповідей";
+    case "MULTIPLE":
+    case "MULTIPLE_CHOICE":
+      return "Кілька відповідей";
 
-    case "matching":
+    case "MATCHING":
       return "Встановлення відповідності";
 
-    case "sequence":
+    case "SEQUENCE":
+    case "ORDER":
       return "Встановлення послідовності";
+
+    case "SHORT_TEXT":
+    case "TEXT":
+      return "Коротка відповідь";
 
     default:
       return type;
   }
 }
 
-// =====================================================
-// ОЧИЩЕННЯ ТЕХНІЧНОГО ТЕКСТУ
-//
-// Видаляє:
-// <p>
-// <strong>
-// <em>
-// <span>
-// <div>
-// тощо.
-//
-// Також прибирає службові маркери:
-// L|1|Текст|25
-// R|25|Текст
-//
-// І декодує HTML-сутності:
-// &nbsp;
-// &amp;
-// &lt;
-// &gt;
-// &quot;
-// тощо.
-// =====================================================
+function cleanText(value: string | null | undefined): string {
+  if (!value) return "";
 
-function cleanText(
-  text: string
-): string {
-  if (!text) {
-    return "";
-  }
-
-  let result = String(text);
-
-  // ---------------------------------------------------
-  // JSON-обгортка
-  // ---------------------------------------------------
-
-  try {
-    const parsed =
-      JSON.parse(result);
-
-    if (
-      typeof parsed === "string"
-    ) {
-      result = parsed;
-    } else if (
-      parsed &&
-      typeof parsed === "object"
-    ) {
-      const object =
-        parsed as {
-          text?: unknown;
-          question?: unknown;
-        };
-
-      if (
-        typeof object.text ===
-        "string"
-      ) {
-        result = object.text;
-      } else if (
-        typeof object.question ===
-        "string"
-      ) {
-        result = object.question;
-      }
-    }
-  } catch {
-    // Це звичайний текст.
-  }
-
-  // ---------------------------------------------------
-  // MATCHING:
-  //
-  // L|1|Текст|25
-  // R|25|Текст
-  // ---------------------------------------------------
-
-  if (
-    result.startsWith("L|") ||
-    result.startsWith("R|")
-  ) {
-    const parts =
-      result.split("|");
-
-    if (parts.length >= 3) {
-      if (parts[0] === "L") {
-        result =
-          parts[2] ?? "";
-
-      } else if (
-        parts[0] === "R"
-      ) {
-        result =
-          parts.slice(2).join("|");
-      }
-    }
-  }
-
-  // ---------------------------------------------------
-  // Прибираємо залишкові L|ID|
-  // ---------------------------------------------------
-
-  result = result.replace(
-    /^\s*(L|R)\|\d+\|/i,
-    ""
-  );
-
-  // ---------------------------------------------------
-  // Прибираємо кінцевий ID
-  // ---------------------------------------------------
-
-  result = result.replace(
-    /\|\d+\s*$/g,
-    ""
-  );
-
-  // ---------------------------------------------------
-  // НАЙВАЖЛИВІШЕ:
-  //
-  // Видаляємо ВСІ HTML-ТЕГИ.
-  //
-  // Наприклад:
-  //
-  // <p>Вели<strong><em>к</em></strong>день</p>
-  //
-  // перетворюється на:
-  //
-  // Великдень
-  // ---------------------------------------------------
-
-  result = result.replace(
-    /<[^>]*>/g,
-    ""
-  );
-
-  // ---------------------------------------------------
-  // HTML-сутності
-  // ---------------------------------------------------
-
-  if (
-    typeof document !==
-    "undefined"
-  ) {
-    const textarea =
-      document.createElement(
-        "textarea"
-      );
-
-    textarea.innerHTML =
-      result;
-
-    result =
-      textarea.value;
-  } else {
-    result = result
-      .replace(
-        /&nbsp;/gi,
-        " "
-      )
-      .replace(
-        /&amp;/gi,
-        "&"
-      )
-      .replace(
-        /&lt;/gi,
-        "<"
-      )
-      .replace(
-        /&gt;/gi,
-        ">"
-      )
-      .replace(
-        /&quot;/gi,
-        '"'
-      )
-      .replace(
-        /&#39;/gi,
-        "'"
-      );
-  }
-
-  return result
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-// =====================================================
-// MATCHING
-// =====================================================
+function getMatchingParts(text: string): {
+  leftId: number;
+  leftText: string;
+  rightId: number;
+} | null {
+  const parts = text.split("|");
 
-function getMatchingParts(
-  text: string
-) {
-  const parts =
-    text.split("|");
-
-  if (parts[0] === "L") {
-    return {
-      side: "left",
-      id: Number(parts[1]),
-      text: parts[2] ?? "",
-      correctId:
-        parts[3] !== undefined
-          ? Number(parts[3])
-          : null,
-    };
+  if (parts.length < 4) {
+    return null;
   }
 
-  if (parts[0] === "R") {
-    return {
-      side: "right",
-      id: Number(parts[1]),
-      text: parts[2] ?? "",
-      correctId: null,
-    };
+  const leftId = Number(parts[1]);
+  const rightId = Number(parts[3]);
+
+  if (!Number.isFinite(leftId) || !Number.isFinite(rightId)) {
+    return null;
   }
 
   return {
-    side: null,
-    id: null,
-    text,
-    correctId: null,
+    leftId,
+    leftText: parts[2],
+    rightId,
   };
 }
 
-// =====================================================
-// ІМ'Я УЧАСНИКА
-// =====================================================
-
-function getParticipantName(
-  participant: Participant
-) {
+function getParticipantName(participant: Participant): string {
   const parts = [
     participant.lastName,
     participant.firstName,
@@ -474,7 +291,47 @@ function getParticipantName(
     return parts.join(" ");
   }
 
-  return `Учасник №${participant.id}`;
+  return `Учасник #${participant.id}`;
+}
+
+function formatNumber(value: number, digits = 2): string {
+  if (!Number.isFinite(value)) {
+    return "—";
+  }
+
+  return value.toLocaleString("uk-UA", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatPercent(
+  value: number | null | undefined
+): string {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(value)
+  ) {
+    return "—";
+  }
+
+  return `${formatNumber(value, 1)}%`;
+}
+
+function formatPsychometricValue(
+  value: number | null | undefined,
+  digits = 2
+): string {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(value)
+  ) {
+    return "—";
+  }
+
+  return formatNumber(value, digits);
 }
 
 // =====================================================
@@ -483,632 +340,494 @@ function getParticipantName(
 
 export default function AnalyticsClient({
   testId,
-}: Props) {
-  const [
-    analytics,
-    setAnalytics,
-  ] =
-    useState<AnalyticsData | null>(
-      null
-    );
+}: {
+  testId: string;
+}) {
+  // ===================================================
+  // STATE
+  // ===================================================
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const [analytics, setAnalytics] =
+    useState<AnalyticsData | null>(null);
 
-  const [
-    error,
-    setError,
-  ] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const [
-    expandedQuestion,
-    setExpandedQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  const [error, setError] = useState<string | null>(null);
 
-  const [
-    questionDetails,
-    setQuestionDetails,
-  ] = useState<
-    Record<
-      number,
-      QuestionDetails
-    >
-  >({});
+  const [expandedQuestion, setExpandedQuestion] =
+    useState<number | null>(null);
 
-  const [
-    loadingQuestion,
-    setLoadingQuestion,
-  ] = useState<number | null>(
-    null
-  );
+  const [questionDetails, setQuestionDetails] =
+    useState<QuestionDetails | null>(null);
 
-  // =====================================================
-  // ФІЛЬТР УЧАСНИКІВ
-  //
-  // За замовчуванням — ВСІ.
-  // =====================================================
+  const [loadingQuestion, setLoadingQuestion] =
+    useState(false);
 
-  const [
-    participantMode,
-    setParticipantMode,
-  ] = useState<
+  // ---------------------------------------------------
+  // PARTICIPANT FILTER
+  // ---------------------------------------------------
+
+  const [participantMode, setParticipantMode] = useState<
     "all" | "selected"
   >("all");
 
-  const [
-    selectedParticipantIds,
-    setSelectedParticipantIds,
-  ] = useState<number[]>(
-    []
-  );
+  const [selectedParticipantIds, setSelectedParticipantIds] =
+    useState<number[]>([]);
 
-  const [
-    appliedParticipantIds,
-    setAppliedParticipantIds,
-  ] = useState<
-    number[] | null
-  >(null);
+  const [appliedParticipantIds, setAppliedParticipantIds] =
+    useState<number[]>([]);
 
-  const [
-    applyingFilter,
-    setApplyingFilter,
-  ] = useState(false);
+  const [applyingFilter, setApplyingFilter] =
+    useState(false);
 
-  // =====================================================
-  // ЗАВАНТАЖЕННЯ АНАЛІТИКИ
-  // =====================================================
+  // ===================================================
+  // LOAD ANALYTICS
+  // ===================================================
 
-  useEffect(() => {
-    if (!testId) {
-      setError(
-        "Не вказано ID тесту."
-      );
-
-      setLoading(false);
-
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadAnalytics() {
-      try {
-        setLoading(true);
-        setError("");
-
-        const params =
-          new URLSearchParams();
-
-        params.set(
-          "testId",
-          testId
-        );
-
-        if (
-          appliedParticipantIds &&
-          appliedParticipantIds.length >
-            0
-        ) {
-          params.set(
-            "participantIds",
-            appliedParticipantIds.join(
-              ","
-            )
-          );
-        }
-
-        const response =
-          await fetch(
-            `/api/analytics?${params.toString()}`,
-            {
-              cache: "no-store",
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              "Не вдалося завантажити аналітику."
-          );
-        }
-
-        if (!cancelled) {
-          setAnalytics(data);
-
-          // При першому завантаженні
-          // автоматично вибираємо всіх.
-          if (
-            data.participants &&
-            selectedParticipantIds.length ===
-              0
-          ) {
-            setSelectedParticipantIds(
-              data.participants.map(
-                (
-                  participant: Participant
-                ) =>
-                  participant.id
-              )
-            );
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Не вдалося завантажити аналітику."
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setApplyingFilter(false);
-        }
-      }
-    }
-
-    loadAnalytics();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    testId,
-    appliedParticipantIds,
-  ]);
-
-  // =====================================================
-  // УСІ УЧАСНИКИ
-  // =====================================================
-
-  const allParticipantIds =
-    useMemo(() => {
-      return (
-        analytics?.participants.map(
-          (participant) =>
-            participant.id
-        ) ?? []
-      );
-    }, [analytics]);
-
-  // =====================================================
-  // ЗМІНА УЧАСНИКА
-  // =====================================================
-
-  function toggleParticipant(
-    participantId: number
+  async function loadAnalytics(
+    participantIds?: number[],
+    signal?: AbortSignal
   ) {
-    setSelectedParticipantIds(
-      (previous) => {
-        if (
-          previous.includes(
-            participantId
-          )
-        ) {
-          return previous.filter(
-            (id) =>
-              id !==
-              participantId
-          );
-        }
-
-        return [
-          ...previous,
-          participantId,
-        ];
-      }
-    );
-  }
-
-  // =====================================================
-  // ВИБРАТИ ВСІХ
-  // =====================================================
-
-  function selectAllParticipants() {
-    setSelectedParticipantIds(
-      allParticipantIds
-    );
-  }
-
-  // =====================================================
-  // ЗНЯТИ ВСІ ВИДІЛЕННЯ
-  // =====================================================
-
-  function clearParticipants() {
-    setSelectedParticipantIds(
-      []
-    );
-  }
-
-  // =====================================================
-  // ЗАСТОСУВАТИ ФІЛЬТР
-  // =====================================================
-
-  function applyParticipantFilter() {
-    if (
-      participantMode === "all"
-    ) {
-      setApplyingFilter(true);
-
-      setAppliedParticipantIds(
-        null
-      );
-
-      return;
-    }
-
-    if (
-      selectedParticipantIds.length ===
-      0
-    ) {
-      setError(
-        "Оберіть хоча б одного учасника."
-      );
-
-      return;
-    }
-
-    setError("");
-    setApplyingFilter(true);
-
-    setAppliedParticipantIds(
-      [...selectedParticipantIds]
-    );
-  }
-
-  // =====================================================
-  // РОЗГОРТАННЯ ПИТАННЯ
-  // =====================================================
-
-  async function toggleQuestion(
-    questionId: number
-  ) {
-    if (
-      expandedQuestion ===
-      questionId
-    ) {
-      setExpandedQuestion(null);
-
-      return;
-    }
-
-    setExpandedQuestion(
-      questionId
-    );
-
-    if (
-      questionDetails[
-        questionId
-      ]
-    ) {
-      return;
-    }
-
     try {
-      setLoadingQuestion(
-        questionId
-      );
+      setLoading(true);
+      setError(null);
 
-      const response =
-        await fetch(
-          `/api/analytics/question?testId=${encodeURIComponent(
-            testId
-          )}&questionId=${encodeURIComponent(
-            questionId
-          )}`,
-          {
-            cache: "no-store",
-          }
+      const params = new URLSearchParams();
+
+      params.set("testId", testId);
+
+      if (participantIds && participantIds.length > 0) {
+        params.set(
+          "participantIds",
+          participantIds.join(",")
         );
+      }
 
-      const data =
-        await response.json();
+      const response = await fetch(
+        `/api/analytics?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          signal,
+        }
+      );
 
       if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => null);
+
         throw new Error(
-          data.message ||
-            "Не вдалося завантажити питання."
+          data?.error ||
+            "Не вдалося завантажити аналітику."
         );
       }
 
-      setQuestionDetails(
-        (previous) => ({
-          ...previous,
-          [questionId]:
-            data.question,
-        })
-      );
+      const data =
+        (await response.json()) as AnalyticsData;
+
+      setAnalytics(data);
+
+      // -------------------------------------------------
+      // First load:
+      // select all participants
+      // -------------------------------------------------
+
+      if (
+        selectedParticipantIds.length === 0 &&
+        data.participants.length > 0
+      ) {
+        const ids = data.participants.map(
+          (participant) => participant.id
+        );
+
+        setSelectedParticipantIds(ids);
+
+        if (appliedParticipantIds.length === 0) {
+          setAppliedParticipantIds([]);
+        }
+      }
     } catch (err) {
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError"
+      ) {
+        return;
+      }
+
       console.error(err);
 
       setError(
         err instanceof Error
           ? err.message
-          : "Не вдалося завантажити питання."
+          : "Сталася помилка під час завантаження аналітики."
       );
     } finally {
-      setLoadingQuestion(null);
+      setLoading(false);
     }
   }
 
-  // =====================================================
-  // РОЗПОДІЛ СКЛАДНОСТІ
-  // =====================================================
+  // ===================================================
+  // INITIAL LOAD
+  // ===================================================
 
-  const difficultyCounts =
-    useMemo(() => {
-      const counts = {
-        "Дуже складне": 0,
-        Складне: 0,
-        Оптимальне: 0,
-        Легке: 0,
-        "Дуже легке": 0,
-      };
+  useEffect(() => {
+    const controller = new AbortController();
 
-      analytics?.questions.forEach(
-        (question) => {
-          const difficulty =
-            getDifficultyData(
-              question.difficulty,
-              question.difficultyColor
-            );
+    loadAnalytics(undefined, controller.signal);
 
-          if (
-            difficulty.label in
-            counts
-          ) {
-            counts[
-              difficulty.label as keyof typeof counts
-            ]++;
-          }
+    return () => {
+      controller.abort();
+    };
+
+    // Intentionally only on testId change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testId]);
+
+  // ===================================================
+  // PARTICIPANT FILTER HELPERS
+  // ===================================================
+
+  function toggleParticipant(participantId: number) {
+    setSelectedParticipantIds((current) => {
+      if (current.includes(participantId)) {
+        return current.filter(
+          (id) => id !== participantId
+        );
+      }
+
+      return [...current, participantId];
+    });
+  }
+
+  function selectAllParticipants() {
+    if (!analytics) return;
+
+    setSelectedParticipantIds(
+      analytics.participants.map(
+        (participant) => participant.id
+      )
+    );
+  }
+
+  function clearParticipants() {
+    setSelectedParticipantIds([]);
+  }
+
+  async function applyParticipantFilter() {
+    if (!analytics) return;
+
+    try {
+      setApplyingFilter(true);
+
+      if (participantMode === "all") {
+        setAppliedParticipantIds([]);
+
+        await loadAnalytics([]);
+      } else {
+        setAppliedParticipantIds(
+          selectedParticipantIds
+        );
+
+        await loadAnalytics(
+          selectedParticipantIds
+        );
+      }
+
+      setExpandedQuestion(null);
+      setQuestionDetails(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setApplyingFilter(false);
+    }
+  }
+
+  // ===================================================
+  // QUESTION DETAILS
+  // ===================================================
+
+  async function toggleQuestion(questionId: number) {
+    if (expandedQuestion === questionId) {
+      setExpandedQuestion(null);
+      setQuestionDetails(null);
+      return;
+    }
+
+    try {
+      setExpandedQuestion(questionId);
+      setQuestionDetails(null);
+      setLoadingQuestion(true);
+
+      const params = new URLSearchParams();
+
+      params.set("testId", testId);
+      params.set(
+        "questionId",
+        String(questionId)
+      );
+
+      const response = await fetch(
+        `/api/analytics/question?${params.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
         }
       );
 
+      if (!response.ok) {
+        const data = await response
+          .json()
+          .catch(() => null);
+
+        throw new Error(
+          data?.error ||
+            "Не вдалося завантажити інформацію про питання."
+        );
+      }
+
+      const data =
+        (await response.json()) as QuestionDetails;
+
+      setQuestionDetails(data);
+    } catch (err) {
+      console.error(err);
+      setQuestionDetails(null);
+    } finally {
+      setLoadingQuestion(false);
+    }
+  }
+
+  // ===================================================
+  // DIFFICULTY DISTRIBUTION
+  // ===================================================
+
+  const difficultyCounts = useMemo(() => {
+    const counts: Record<Difficulty, number> = {
+      VERY_EASY: 0,
+      EASY: 0,
+      OPTIMAL: 0,
+      DIFFICULT: 0,
+      VERY_DIFFICULT: 0,
+    };
+
+    if (!analytics) {
       return counts;
-    }, [analytics]);
+    }
 
-  // =====================================================
-  // LOADING
-  // =====================================================
+    for (const question of analytics.questions) {
+      if (
+        counts[question.difficulty] !== undefined
+      ) {
+        counts[question.difficulty] += 1;
+      }
+    }
 
-  if (loading) {
+    return counts;
+  }, [analytics]);
+
+  const totalQuestions =
+    analytics?.questions.length ?? 0;
+
+  // ===================================================
+  // RENDER: LOADING
+  // ===================================================
+
+  if (loading && !analytics) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
 
-          <p className="mt-5 text-lg text-gray-600">
-            Завантаження аналітики...
+          <p className="text-sm text-gray-500">
+            Завантаження аналітики…
           </p>
         </div>
       </div>
     );
   }
 
-  // =====================================================
-  // ERROR
-  // =====================================================
+  // ===================================================
+  // RENDER: ERROR
+  // ===================================================
 
-  if (
-    error ||
-    !analytics
-  ) {
+  if (error && !analytics) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-end">
-          <Link
-            href="/admin"
-            className="rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923]"
-          >
-            ← Повернутися до адміністративної панелі
-          </Link>
-        </div>
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+        <h2 className="text-lg font-semibold text-red-800">
+          Не вдалося завантажити аналітику
+        </h2>
 
-        <div className="rounded-xl border border-red-200 bg-red-50 p-8">
-          <h2 className="text-xl font-bold text-red-700">
-            Не вдалося завантажити
-            аналітику
-          </h2>
+        <p className="mt-2 text-sm text-red-700">
+          {error}
+        </p>
 
-          <p className="mt-2 text-red-600">
-            {error ||
-              "Невідома помилка."}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => loadAnalytics()}
+          className="mt-4 rounded-lg bg-[#7A1F2B] px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+        >
+          Спробувати ще раз
+        </button>
       </div>
     );
   }
 
-  // =====================================================
-  // PAGE
-  // =====================================================
+  if (!analytics) {
+    return null;
+  }
+
+  // ===================================================
+  // DATA
+  // ===================================================
+
+  const {
+    test,
+    summary,
+    participants,
+    questions,
+  } = analytics;
+
+  const selectedCount =
+    selectedParticipantIds.length;
+
+  const allSelected =
+    participants.length > 0 &&
+    selectedParticipantIds.length ===
+      participants.length;
+
+  // ===================================================
+  // RENDER
+  // ===================================================
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* =================================================
           HEADER
       ================================================= */}
 
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-4xl font-bold text-[#7A1F2B]">
-            Аналітика
-          </h2>
+          <div className="mb-2 flex items-center gap-2">
+            <Link
+              href="/admin/tests"
+              className="text-sm text-gray-500 transition hover:text-[#7A1F2B]"
+            >
+              ← Тести
+            </Link>
+          </div>
 
-          <p className="mt-2 text-lg text-gray-600">
-            {analytics.test.title}
+          <h1 className="text-2xl font-bold text-gray-900">
+            Аналітика тестування
+          </h1>
+
+          <p className="mt-1 text-sm text-gray-500">
+            {test.title}
           </p>
 
-          {analytics.test
-            .subject && (
-            <p className="mt-1 text-gray-500">
-              Предмет:{" "}
-              {
-                analytics.test
-                  .subject
-              }
+          {test.subject && (
+            <p className="mt-1 text-sm text-gray-400">
+              Предмет: {test.subject}
             </p>
           )}
         </div>
 
-        <Link
-          href="/admin"
-          className="inline-flex items-center justify-center rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923]"
-        >
-          ← Повернутися до адміністративної панелі
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/tests/${test.id}`}
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+          >
+            Редагувати тест
+          </Link>
+        </div>
       </div>
 
       {/* =================================================
-          ФІЛЬТР УЧАСНИКІВ
+          PARTICIPANT FILTER
       ================================================= */}
 
-      <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 bg-gray-50 px-6 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-gray-800">
-                Учасники для аналізу
-              </h3>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold text-gray-900">
+              Учасники
+            </h2>
 
-              <p className="mt-1 text-sm text-gray-500">
-                За замовчуванням враховуються всі
-                учасники.
-              </p>
-            </div>
-
-            <div className="rounded-full bg-[#F3E8EA] px-4 py-2 text-sm font-semibold text-[#7A1F2B]">
-              {participantMode ===
-              "all"
-                ? `Усі ${analytics.participants.length} учасників`
-                : `Вибрано ${selectedParticipantIds.length} із ${analytics.participants.length}`}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6">
-          {/* РАДІОКНОПКИ */}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label
-              className={`flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition ${
-                participantMode ===
-                "all"
-                  ? "border-[#7A1F2B] bg-[#F9F1F3]"
-                  : "border-gray-200 bg-white hover:bg-gray-50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="participantMode"
-                value="all"
-                checked={
-                  participantMode ===
-                  "all"
-                }
-                onChange={() => {
-                  setParticipantMode(
-                    "all"
-                  );
-                  setError("");
-                }}
-                className="mt-1 h-4 w-4 accent-[#7A1F2B]"
-              />
-
-              <div>
-                <p className="font-semibold text-gray-800">
-                  Усі учасники
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  В аналітиці враховуються всі
-                  доступні результати.
-                </p>
-              </div>
-            </label>
-
-            <label
-              className={`flex cursor-pointer items-start gap-4 rounded-xl border p-4 transition ${
-                participantMode ===
-                "selected"
-                  ? "border-[#7A1F2B] bg-[#F9F1F3]"
-                  : "border-gray-200 bg-white hover:bg-gray-50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="participantMode"
-                value="selected"
-                checked={
-                  participantMode ===
-                  "selected"
-                }
-                onChange={() => {
-                  setParticipantMode(
-                    "selected"
-                  );
-                  setError("");
-                }}
-                className="mt-1 h-4 w-4 accent-[#7A1F2B]"
-              />
-
-              <div>
-                <p className="font-semibold text-gray-800">
-                  Вибрані учасники
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Можна сформувати аналітику для
-                  конкретної групи учасників.
-                </p>
-              </div>
-            </label>
+            <p className="text-sm text-gray-500">
+              Оберіть учасників, результати яких потрібно
+              врахувати в аналітиці.
+            </p>
           </div>
 
-          {/* СПИСОК УЧАСНИКІВ */}
+          {/* MODE */}
 
-          {participantMode ===
-            "selected" && (
-            <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-5">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-semibold text-gray-800">
-                  Оберіть учасників
-                </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setParticipantMode("all")
+              }
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                participantMode === "all"
+                  ? "border-[#7A1F2B] bg-[#7A1F2B] text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Усі учасники
+            </button>
 
-                <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setParticipantMode("selected")
+              }
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition ${
+                participantMode === "selected"
+                  ? "border-[#7A1F2B] bg-[#7A1F2B] text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Обрані учасники
+            </button>
+          </div>
+
+          {/* PARTICIPANTS */}
+
+          {participantMode === "selected" && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-gray-600">
+                  Обрано:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {selectedCount}
+                  </span>{" "}
+                  із {participants.length}
+                </div>
+
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={
-                      selectAllParticipants
-                    }
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                    onClick={selectAllParticipants}
+                    disabled={allSelected}
+                    className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Вибрати всіх
+                    Обрати всіх
                   </button>
 
                   <button
                     type="button"
-                    onClick={
-                      clearParticipants
-                    }
-                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
+                    onClick={clearParticipants}
+                    disabled={selectedCount === 0}
+                    className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Зняти вибір
+                    Очистити
                   </button>
                 </div>
               </div>
 
-              <div className="grid max-h-80 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
-                {analytics.participants.map(
-                  (participant) => {
+              {participants.length > 0 ? (
+                <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
+                  {participants.map((participant) => {
                     const checked =
                       selectedParticipantIds.includes(
                         participant.id
@@ -1116,330 +835,226 @@ export default function AnalyticsClient({
 
                     return (
                       <label
-                        key={
-                          participant.id
-                        }
-                        className={`flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-3 transition ${
-                          checked
-                            ? "border-[#7A1F2B] bg-[#F9F1F3]"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
+                        key={participant.id}
+                        className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition hover:bg-white"
                       >
                         <input
                           type="checkbox"
-                          checked={
-                            checked
-                          }
+                          checked={checked}
                           onChange={() =>
                             toggleParticipant(
                               participant.id
                             )
                           }
-                          className="h-4 w-4 rounded accent-[#7A1F2B]"
+                          className="h-4 w-4 rounded border-gray-300 text-[#7A1F2B] focus:ring-[#7A1F2B]"
                         />
 
-                        <span className="min-w-0 truncate text-sm text-gray-700">
+                        <span className="min-w-0 flex-1 truncate text-sm text-gray-800">
                           {getParticipantName(
                             participant
                           )}
                         </span>
+
+                        <span className="text-xs text-gray-400">
+                          {formatNumber(
+                            participant.earnedPoints,
+                            2
+                          )}{" "}
+                          /{" "}
+                          {formatNumber(
+                            participant.maxPoints,
+                            2
+                          )}
+                        </span>
                       </label>
                     );
-                  }
-                )}
-              </div>
-
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-gray-500">
-                  Вибрано:{" "}
-                  <span className="font-semibold text-gray-800">
-                    {
-                      selectedParticipantIds.length
-                    }
-                  </span>{" "}
-                  з{" "}
-                  {
-                    analytics.participants
-                      .length
-                  }
+                  })}
+                </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-gray-500">
+                  Немає учасників.
                 </p>
-
-                <button
-                  type="button"
-                  onClick={
-                    applyParticipantFilter
-                  }
-                  disabled={
-                    applyingFilter ||
-                    selectedParticipantIds.length ===
-                      0
-                  }
-                  className="rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {applyingFilter
-                    ? "Оновлення..."
-                    : "Застосувати аналіз"}
-                </button>
-              </div>
+              )}
             </div>
           )}
 
-          {/* КНОПКА ДЛЯ ВСІХ */}
+          {/* APPLY */}
 
-          {participantMode ===
-            "all" && (
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-500">
-                Буде враховано{" "}
-                <span className="font-semibold text-gray-800">
-                  {
-                    analytics.participants
-                      .length
-                  }
-                </span>{" "}
-                учасників.
-              </p>
-
-              <button
-                type="button"
-                onClick={
-                  applyParticipantFilter
-                }
-                disabled={
-                  applyingFilter
-                }
-                className="rounded-lg bg-[#7A1F2B] px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-[#641923] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {applyingFilter
-                  ? "Оновлення..."
-                  : "Оновити аналіз"}
-              </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-gray-400">
+              {appliedParticipantIds.length > 0
+                ? `Застосовано вибір: ${appliedParticipantIds.length} учасників`
+                : "Аналітика побудована за всіма учасниками"}
             </div>
-          )}
 
-          {/* ПОТОЧНИЙ СТАН */}
-
-          <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            Аналіз зараз виконується для{" "}
-            <span className="font-bold">
-              {analytics.summary.participants}
-            </span>{" "}
-            учасників
-            {analytics.summary
-              .participants !==
-              analytics.participants
-                .length && (
-              <>
-                {" "}
-                із{" "}
-                <span className="font-bold">
-                  {
-                    analytics
-                      .participants
-                      .length
-                  }
-                </span>{" "}
-                загальних результатів.
-              </>
-            )}
+            <button
+              type="button"
+              onClick={applyParticipantFilter}
+              disabled={
+                applyingFilter ||
+                (participantMode === "selected" &&
+                  selectedParticipantIds.length === 0)
+              }
+              className="rounded-lg bg-[#7A1F2B] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {applyingFilter
+                ? "Застосування…"
+                : "Застосувати"}
+            </button>
           </div>
         </div>
       </section>
 
       {/* =================================================
-          SUMMARY
+          ERROR WHILE REFRESHING
       ================================================= */}
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">
-            Учасників
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .participants
-            }
-          </p>
+      {error && analytics && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">
-            Максимальний результат
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-green-700">
-            {
-              analytics.summary
-                .maxScore
-            }
-          </p>
-
-          <p className="mt-1 text-sm text-gray-500">
-            балів
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">
-            Мінімальний результат
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-red-600">
-            {
-              analytics.summary
-                .minScore
-            }
-          </p>
-
-          <p className="mt-1 text-sm text-gray-500">
-            балів
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">
-            Середній результат
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .averageScore
-            }
-          </p>
-
-          <p className="mt-1 text-sm text-gray-500">
-            балів
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-gray-500">
-            Середній відсоток
-          </p>
-
-          <p className="mt-2 text-3xl font-bold text-[#7A1F2B]">
-            {
-              analytics.summary
-                .averagePercent
-            }
-            %
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* =================================================
-          РОЗПОДІЛ СКЛАДНОСТІ
+          SUMMARY CARDS
       ================================================= */}
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-5">
-          <h3 className="text-2xl font-bold text-gray-800">
-            Розподіл складності завдань
-          </h3>
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {/* PARTICIPANTS */}
 
-          <p className="mt-1 text-gray-500">
-            Кількість завдань кожної категорії
-            складності для поточної вибірки учасників.
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Учасників
+          </div>
+
+          <div className="mt-2 text-3xl font-bold text-gray-900">
+            {summary.participants}
+          </div>
+        </div>
+
+        {/* MAX */}
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Максимальний результат
+          </div>
+
+          <div className="mt-2 text-3xl font-bold text-gray-900">
+            {formatNumber(summary.maxScore, 2)}
+          </div>
+
+          <div className="mt-1 text-xs text-gray-400">
+            із {formatNumber(test.maxPoints, 2)} балів
+          </div>
+        </div>
+
+        {/* MIN */}
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Мінімальний результат
+          </div>
+
+          <div className="mt-2 text-3xl font-bold text-gray-900">
+            {formatNumber(summary.minScore, 2)}
+          </div>
+
+          <div className="mt-1 text-xs text-gray-400">
+            із {formatNumber(test.maxPoints, 2)} балів
+          </div>
+        </div>
+
+        {/* AVERAGE */}
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Середній результат
+          </div>
+
+          <div className="mt-2 text-3xl font-bold text-gray-900">
+            {formatNumber(summary.averageScore, 2)}
+          </div>
+
+          <div className="mt-1 text-xs text-gray-400">
+            балів
+          </div>
+        </div>
+
+        {/* PERCENT */}
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="text-sm text-gray-500">
+            Середній відсоток
+          </div>
+
+          <div className="mt-2 text-3xl font-bold text-[#7A1F2B]">
+            {formatNumber(
+              summary.averagePercent,
+              1
+            )}
+            %
+          </div>
+        </div>
+      </section>
+
+      {/* =================================================
+          DIFFICULTY DISTRIBUTION
+      ================================================= */}
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Розподіл завдань за складністю
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Кількість завдань кожного рівня складності.
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            {
-              label: "Дуже складні",
-              value:
-                difficultyCounts[
-                  "Дуже складне"
-                ],
-              color: "red",
-              range: "0–20%",
-            },
-            {
-              label: "Складні",
-              value:
-                difficultyCounts[
-                  "Складне"
-                ],
-              color: "orange",
-              range: "20–40%",
-            },
-            {
-              label: "Оптимальні",
-              value:
-                difficultyCounts[
-                  "Оптимальне"
-                ],
-              color: "yellow",
-              range: "40–60%",
-            },
-            {
-              label: "Легкі",
-              value:
-                difficultyCounts[
-                  "Легке"
-                ],
-              color: "green",
-              range: "60–80%",
-            },
-            {
-              label: "Дуже легкі",
-              value:
-                difficultyCounts[
-                  "Дуже легке"
-                ],
-              color: "green",
-              range: "80–100%",
-            },
-          ].map(
-            (item) => {
-              const styles =
-                getDifficultyScaleClasses(
-                  item.color
-                );
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {(
+            [
+              "VERY_EASY",
+              "EASY",
+              "OPTIMAL",
+              "DIFFICULT",
+              "VERY_DIFFICULT",
+            ] as Difficulty[]
+          ).map((difficulty) => {
+            const data =
+              getDifficultyData(difficulty);
 
-              return (
-                <div
-                  key={item.label}
-                  className={`rounded-xl border p-5 ${styles.wrapper}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${styles.badge}`}
-                    >
-                      {item.range}
-                    </span>
-                  </div>
+            const count =
+              difficultyCounts[difficulty];
 
-                  <p
-                    className={`mt-4 text-sm font-semibold ${styles.percent}`}
-                  >
-                    {item.label}
-                  </p>
-
-                  <p
-                    className={`mt-1 text-4xl font-bold ${styles.percent}`}
-                  >
-                    {item.value}
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    {item.value ===
-                    1
-                      ? "завдання"
-                      : item.value >=
-                          2 &&
-                        item.value <=
-                          4
-                      ? "завдання"
-                      : "завдань"}
-                  </p>
+            return (
+              <div
+                key={difficulty}
+                className={`rounded-xl border p-4 ${getDifficultyClasses(
+                  difficulty
+                )}`}
+              >
+                <div className="text-sm font-medium">
+                  {data.label}
                 </div>
-              );
-            }
-          )}
+
+                <div className="mt-2 text-3xl font-bold">
+                  {count}
+                </div>
+
+                <div className="mt-1 text-xs opacity-75">
+                  {totalQuestions > 0
+                    ? `${formatNumber(
+                        (count / totalQuestions) *
+                          100,
+                        1
+                      )}% від усіх`
+                    : "0% від усіх"}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -1447,775 +1062,631 @@ export default function AnalyticsClient({
           QUESTIONS TABLE
       ================================================= */}
 
-      <section>
-        <div className="mb-5">
-          <h3 className="text-2xl font-bold text-gray-800">
-            Аналіз завдань
-          </h3>
+      <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Аналіз завдань
+            </h2>
 
-          <p className="mt-1 text-gray-500">
-            Натисніть на завдання, щоб переглянути
-            його умову та відповіді.
-          </p>
+            <p className="text-sm text-gray-500">
+              Статистичні показники виконання кожного завдання.
+            </p>
+          </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {questions.length === 0 ? (
+          <div className="p-8 text-center text-sm text-gray-500">
+            Немає завдань для відображення.
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] table-fixed">
-              <colgroup>
-                <col className="w-[7%]" />
-                <col className="w-[27%]" />
-                <col className="w-[16%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[6%]" />
-              </colgroup>
-
-              <thead className="bg-[#7A1F2B] text-white">
-                <tr>
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+            <table className="w-full min-w-[1050px] border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-3">
                     №
                   </th>
 
-                  <th className="px-4 py-4 text-left text-sm font-semibold">
+                  <th className="px-4 py-3">
                     Питання
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3">
                     Тип
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3 text-center">
                     Правильно
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3 text-center">
                     Неправильно
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3 text-center">
                     Пропущено
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3 text-center">
                     Складність
                   </th>
 
-                  <th className="px-4 py-4 text-center text-sm font-semibold">
+                  <th className="px-4 py-3 text-center">
                     Дія
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-gray-100">
-                {analytics.questions.map(
-                  (question) => {
-                    const details =
-                      questionDetails[
-                        question.id
-                      ];
+              <tbody>
+                {questions.map((question) => {
+                  const isExpanded =
+                    expandedQuestion ===
+                    question.id;
 
-                    const isExpanded =
-                      expandedQuestion ===
-                      question.id;
+                  const difficulty =
+                    getDifficultyData(
+                      question.difficulty
+                    );
 
-                    const isLoading =
-                      loadingQuestion ===
-                      question.id;
-
-                    const difficulty =
-                      getDifficultyData(
-                        question.difficulty,
-                        question.difficultyColor
-                      );
-
-                    return (
-                      <Fragment
-                        key={
-                          question.id
-                        }
+                  return (
+                    <Fragment key={question.id}>
+                      <tr
+                        className={`border-b border-gray-100 transition ${
+                          isExpanded
+                            ? "bg-gray-50"
+                            : "hover:bg-gray-50"
+                        }`}
                       >
-                        <tr
-                          onClick={() =>
-                            toggleQuestion(
-                              question.id
-                            )
-                          }
-                          className={`cursor-pointer transition hover:bg-gray-50 ${
-                            isExpanded
-                              ? "bg-gray-50"
-                              : ""
-                          }`}
-                        >
-                          <td className="px-4 py-4 text-center align-middle">
-                            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-[#F3E8EA] font-bold text-[#7A1F2B]">
-                              {
-                                question.order
-                              }
-                            </div>
-                          </td>
+                        {/* NUMBER */}
 
-                          <td className="px-4 py-4 align-middle">
-                            <div className="font-medium text-gray-800">
-                              Питання №
-                              {
-                                question.order
-                              }
-                            </div>
+                        <td className="px-4 py-4 align-top">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-sm font-semibold text-gray-700">
+                            {question.order}
+                          </div>
+                        </td>
 
-                            <div className="mt-1 text-xs text-gray-400">
-                              ID:{" "}
-                              {
-                                question.id
-                              }{" "}
-                              ·{" "}
-                              {
-                                question.points
-                              }{" "}
-                              бал.
-                            </div>
-                          </td>
+                        {/* QUESTION */}
 
-                          <td className="px-4 py-4 text-center align-middle text-sm text-gray-600">
+                        <td className="max-w-[430px] px-4 py-4 align-top">
+                          <div className="line-clamp-3 text-sm font-medium leading-5 text-gray-900">
+                            {cleanText(
+                              question.text
+                            )}
+                          </div>
+
+                          <div className="mt-1 text-xs text-gray-400">
+                            {question.points}{" "}
+                            {question.points === 1
+                              ? "бал"
+                              : "бали"}
+                          </div>
+                        </td>
+
+                        {/* TYPE */}
+
+                        <td className="px-4 py-4 align-top">
+                          <span className="text-sm text-gray-600">
                             {getQuestionTypeLabel(
                               question.type
                             )}
-                          </td>
+                          </span>
+                        </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
-                            <div className="font-bold text-green-600">
-                              {
-                                question.correctPercent
-                              }
-                              %
-                            </div>
+                        {/* CORRECT */}
 
-                            <div className="text-xs text-gray-500">
-                              {
-                                question.correct
-                              }
-                            </div>
-                          </td>
+                        <td className="px-4 py-4 text-center align-top">
+                          <div className="font-semibold text-green-700">
+                            {question.correct}
+                          </div>
 
-                          <td className="px-4 py-4 text-center align-middle">
-                            <div className="font-bold text-red-600">
-                              {
-                                question.incorrectPercent
-                              }
-                              %
-                            </div>
+                          <div className="mt-1 text-xs text-gray-400">
+                            {formatPercent(
+                              question.correctPercent
+                            )}
+                          </div>
+                        </td>
 
-                            <div className="text-xs text-gray-500">
-                              {
-                                question.incorrect
-                              }
-                            </div>
-                          </td>
+                        {/* INCORRECT */}
 
-                          <td className="px-4 py-4 text-center align-middle">
-                            <div className="font-bold text-gray-500">
-                              {
-                                question.skippedPercent
-                              }
-                              %
-                            </div>
+                        <td className="px-4 py-4 text-center align-top">
+                          <div className="font-semibold text-red-700">
+                            {question.incorrect}
+                          </div>
 
-                            <div className="text-xs text-gray-500">
-                              {
-                                question.skipped
-                              }
-                            </div>
-                          </td>
+                          <div className="mt-1 text-xs text-gray-400">
+                            {formatPercent(
+                              question.incorrectPercent
+                            )}
+                          </div>
+                        </td>
 
-                          <td className="px-4 py-4 text-center align-middle">
-                            <span
-                              className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
-                                difficulty.color
-                              )}`}
-                            >
-                              {
-                                difficulty.label
-                              }
-                            </span>
-                          </td>
+                        {/* SKIPPED */}
 
-                          <td className="px-4 py-4 text-center align-middle">
-                            <span className="text-xl text-gray-400">
-                              {isExpanded
-                                ? "⌃"
-                                : "⌄"}
-                            </span>
-                          </td>
-                        </tr>
+                        <td className="px-4 py-4 text-center align-top">
+                          <div className="font-semibold text-gray-700">
+                            {question.skipped}
+                          </div>
 
-                        {/* =================================================
-                            РОЗГОРНУТЕ ЗАВДАННЯ
-                        ================================================= */}
+                          <div className="mt-1 text-xs text-gray-400">
+                            {formatPercent(
+                              question.skippedPercent
+                            )}
+                          </div>
+                        </td>
 
-                        {isExpanded && (
-                          <tr>
-                            <td
-                              colSpan={
-                                8
-                              }
-                              className="border-t border-gray-200 bg-gray-50 p-6"
-                            >
-                              {isLoading && (
-                                <div className="flex items-center justify-center py-10">
-                                  <div className="text-center">
-                                    <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-gray-200 border-t-[#7A1F2B]" />
+                        {/* DIFFICULTY */}
 
-                                    <p className="mt-3 text-gray-500">
-                                      Завантаження завдання...
-                                    </p>
-                                  </div>
+                        <td className="px-4 py-4 text-center align-top">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getDifficultyClasses(
+                              question.difficulty
+                            )}`}
+                            title={
+                              difficulty.description
+                            }
+                          >
+                            {difficulty.shortLabel}
+                          </span>
+                        </td>
+
+                        {/* ACTION */}
+
+                        <td className="px-4 py-4 text-center align-top">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleQuestion(
+                                question.id
+                              )
+                            }
+                            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-700 transition hover:border-[#7A1F2B] hover:text-[#7A1F2B]"
+                          >
+                            {isExpanded
+                              ? "Згорнути"
+                              : "Деталі"}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* =================================================
+                          EXPANDED QUESTION
+                      ================================================= */}
+
+                      {isExpanded && (
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <td
+                            colSpan={8}
+                            className="px-5 py-5"
+                          >
+                            {loadingQuestion ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="flex items-center gap-3 text-sm text-gray-500">
+                                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-[#7A1F2B]" />
+
+                                  Завантаження…
                                 </div>
-                              )}
+                              </div>
+                            ) : !questionDetails ? (
+                              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                                Не вдалося завантажити деталі
+                                питання.
+                              </div>
+                            ) : (
+                              <div className="space-y-5">
+                                {/* QUESTION HEADER */}
 
-                              {!isLoading &&
-                                details && (
-                                  <div className="space-y-6">
-                                    {/* КАРТКА УМОВИ */}
+                                <div>
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full bg-[#7A1F2B] px-2.5 py-1 text-xs font-semibold text-white">
+                                      Завдання{" "}
+                                      {
+                                        questionDetails.order
+                                      }
+                                    </span>
 
-                                    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                                      <div className="flex flex-wrap items-center justify-between gap-4">
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-400">
-                                            Завдання №
-                                            {
-                                              question.order
-                                            }
-                                          </p>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                                      {getQuestionTypeLabel(
+                                        questionDetails.type
+                                      )}
+                                    </span>
 
-                                          <h4 className="mt-1 text-xl font-bold text-[#7A1F2B]">
-                                            Умова завдання
-                                          </h4>
-                                        </div>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                                      {
+                                        questionDetails.points
+                                      }{" "}
+                                      {questionDetails.points ===
+                                      1
+                                        ? "бал"
+                                        : "бали"}
+                                    </span>
+                                  </div>
 
-                                        <div className="flex flex-wrap gap-2">
-                                          <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600">
-                                            {getQuestionTypeLabel(
-                                              details.type
-                                            )}
-                                          </span>
-
-                                          <span className="rounded-full bg-[#F3E8EA] px-3 py-1 text-sm font-semibold text-[#7A1F2B]">
-                                            {
-                                              details.points
-                                            }{" "}
-                                            бал.
-                                          </span>
-
-                                          <span
-                                            className={`rounded-full px-3 py-1 text-sm font-semibold ${getDifficultyClasses(
-                                              difficulty.color
-                                            )}`}
-                                          >
-                                            {
-                                              difficulty.label
-                                            }
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
-                                        <div className="whitespace-pre-wrap break-words text-base leading-7 text-gray-800">
-                                          {cleanText(
-                                            details.text
-                                          )}
-                                        </div>
-                                      </div>
+                                  <div className="rounded-xl border border-gray-200 bg-white p-5">
+                                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                      Умова
                                     </div>
 
-                                    {/* SINGLE / MULTIPLE */}
-
-                                    {details.type !==
-                                      "matching" &&
-                                      details.type !==
-                                        "sequence" && (
-                                        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                                          <div className="mb-5 flex items-center justify-between">
-                                            <h4 className="text-lg font-bold text-gray-800">
-                                              Варіанти відповідей
-                                            </h4>
-
-                                            <span className="text-sm text-gray-400">
-                                              Правильна відповідь
-                                              виділена
-                                              зеленим
-                                            </span>
-                                          </div>
-
-                                          <div className="space-y-3">
-                                            {details.options
-                                              .filter(
-                                                (
-                                                  option
-                                                ) =>
-                                                  !option.text.startsWith(
-                                                    "L|"
-                                                  ) &&
-                                                  !option.text.startsWith(
-                                                    "R|"
-                                                  )
-                                              )
-                                              .map(
-                                                (
-                                                  option,
-                                                  index
-                                                ) => (
-                                                  <div
-                                                    key={
-                                                      option.id
-                                                    }
-                                                    className={`rounded-xl border p-4 transition ${
-                                                      option.isCorrect
-                                                        ? "border-green-300 bg-green-50 shadow-sm"
-                                                        : "border-gray-200 bg-white"
-                                                    }`}
-                                                  >
-                                                    <div className="flex items-start gap-4">
-                                                      <div
-                                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
-                                                          option.isCorrect
-                                                            ? "bg-green-600 text-white"
-                                                            : "bg-gray-100 text-gray-600"
-                                                        }`}
-                                                      >
-                                                        {String.fromCharCode(
-                                                          65 +
-                                                            index
-                                                        )}
-                                                      </div>
-
-                                                      <div className="min-w-0 flex-1">
-                                                        <p className="whitespace-pre-wrap break-words text-gray-800">
-                                                          {cleanText(
-                                                            option.text
-                                                          )}
-                                                        </p>
-
-                                                        {option.isCorrect && (
-                                                          <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-green-700">
-                                                            <span>
-                                                              ✓
-                                                            </span>
-
-                                                            <span>
-                                                              Правильна
-                                                              відповідь
-                                                            </span>
-                                                          </p>
-                                                        )}
-                                                      </div>
-                                                    </div>
-                                                  </div>
-                                                )
-                                              )}
-                                          </div>
-                                        </div>
+                                    <div className="whitespace-pre-wrap text-sm leading-6 text-gray-800">
+                                      {cleanText(
+                                        questionDetails.text
                                       )}
+                                    </div>
+                                  </div>
+                                </div>
 
-                                    {/* MATCHING */}
+                                {/* OPTIONS */}
 
-                                    {details.type ===
-                                      "matching" && (
-                                      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                                        <h4 className="mb-5 text-lg font-bold text-gray-800">
-                                          Встановлення відповідності
-                                        </h4>
+                                {questionDetails
+                                  .options.length >
+                                  0 && (
+                                  <div>
+                                    <div className="mb-3 text-sm font-semibold text-gray-900">
+                                      Варіанти відповідей
+                                    </div>
 
-                                        <div className="space-y-3">
-                                          {details.options
-                                            .filter(
-                                              (
-                                                option
-                                              ) =>
-                                                option.text.startsWith(
-                                                  "L|"
-                                                )
-                                            )
-                                            .map(
-                                              (
-                                                leftOption
-                                              ) => {
-                                                const left =
-                                                  getMatchingParts(
-                                                    leftOption.text
-                                                  );
+                                    <div className="space-y-2">
+                                      {questionDetails.options.map(
+                                        (
+                                          option,
+                                          index
+                                        ) => {
+                                          const letter =
+                                            String.fromCharCode(
+                                              65 + index
+                                            );
 
-                                                const rightOption =
-                                                  details.options.find(
-                                                    (
-                                                      option
-                                                    ) => {
-                                                      if (
-                                                        !option.text.startsWith(
-                                                          "R|"
-                                                        )
-                                                      ) {
-                                                        return false;
-                                                      }
+                                          const matching =
+                                            getMatchingParts(
+                                              option.text
+                                            );
 
-                                                      const right =
-                                                        getMatchingParts(
-                                                          option.text
-                                                        );
-
-                                                      return (
-                                                        right.id ===
-                                                        left.correctId
-                                                      );
-                                                    }
-                                                  );
-
-                                                return (
-                                                  <div
-                                                    key={
-                                                      leftOption.id
-                                                    }
-                                                    className="grid gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4 md:grid-cols-2"
-                                                  >
-                                                    <div className="rounded-lg bg-white p-4">
-                                                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                                                        Елемент
-                                                      </p>
-
-                                                      <p className="mt-2 break-words text-gray-800">
-                                                        {cleanText(
-                                                          left.text
-                                                        )}
-                                                      </p>
-                                                    </div>
-
-                                                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                                                      <p className="text-xs font-semibold uppercase tracking-wide text-green-600">
-                                                        Правильна
-                                                        відповідь
-                                                      </p>
-
-                                                      <p className="mt-2 break-words text-gray-800">
-                                                        {rightOption
-                                                          ? cleanText(
-                                                              getMatchingParts(
-                                                                rightOption.text
-                                                              ).text
-                                                            )
-                                                          : "Не визначено"}
-                                                      </p>
-                                                    </div>
-                                                  </div>
-                                                );
+                                          return (
+                                            <div
+                                              key={
+                                                option.id
                                               }
-                                            )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* SEQUENCE */}
-
-                                    {details.type ===
-                                      "sequence" && (
-                                      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-                                        <h4 className="mb-5 text-lg font-bold text-gray-800">
-                                          Встановлення послідовності
-                                        </h4>
-
-                                        <div className="space-y-3">
-                                          {details.options
-                                            .filter(
-                                              (
-                                                option
-                                              ) =>
-                                                !option.text.startsWith(
-                                                  "L|"
-                                                ) &&
-                                                !option.text.startsWith(
-                                                  "R|"
-                                                )
-                                            )
-                                            .map(
-                                              (
-                                                option,
-                                                index
-                                              ) => (
+                                              className={`rounded-lg border p-3 ${
+                                                option.isCorrect
+                                                  ? "border-green-200 bg-green-50"
+                                                  : "border-gray-200 bg-white"
+                                              }`}
+                                            >
+                                              <div className="flex items-start gap-3">
                                                 <div
-                                                  key={
-                                                    option.id
-                                                  }
-                                                  className={`flex items-start gap-4 rounded-xl border p-4 ${
+                                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-bold ${
                                                     option.isCorrect
-                                                      ? "border-green-300 bg-green-50"
-                                                      : "border-gray-200 bg-white"
+                                                      ? "bg-green-600 text-white"
+                                                      : "bg-gray-100 text-gray-700"
                                                   }`}
                                                 >
-                                                  <div
-                                                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold ${
-                                                      option.isCorrect
-                                                        ? "bg-green-600 text-white"
-                                                        : "bg-gray-100 text-gray-600"
-                                                    }`}
-                                                  >
-                                                    {index +
-                                                      1}
-                                                  </div>
+                                                  {
+                                                    letter
+                                                  }
+                                                </div>
 
-                                                  <div className="flex-1">
-                                                    <p className="break-words text-gray-800">
+                                                <div className="min-w-0 flex-1">
+                                                  {matching ? (
+                                                    <div>
+                                                      <div className="text-sm font-medium text-gray-900">
+                                                        {cleanText(
+                                                          matching.leftText
+                                                        )}
+                                                      </div>
+
+                                                      <div className="mt-1 text-xs text-gray-500">
+                                                        Правильна
+                                                        права
+                                                        частина:{" "}
+                                                        {
+                                                          matching.rightId
+                                                        }
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="whitespace-pre-wrap text-sm text-gray-800">
                                                       {cleanText(
                                                         option.text
                                                       )}
-                                                    </p>
-
-                                                    {option.isCorrect && (
-                                                      <p className="mt-2 text-sm font-semibold text-green-700">
-                                                        ✓ Елемент
-                                                        правильної
-                                                        послідовності
-                                                      </p>
-                                                    )}
-                                                  </div>
+                                                    </div>
+                                                  )}
                                                 </div>
-                                              )
-                                            )}
-                                        </div>
-                                      </div>
-                                    )}
 
-                                    {/* СТАТИСТИКА ПИТАННЯ */}
-
-                                    <div className="grid gap-4 sm:grid-cols-3">
-                                      <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-                                        <p className="text-sm font-medium text-green-700">
-                                          Правильно
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-green-700">
-                                          {
-                                            question.correct
-                                          }{" "}
-                                          (
-                                          {
-                                            question.correctPercent
-                                          }
-                                          %)
-                                        </p>
-                                      </div>
-
-                                      <div className="rounded-xl border border-red-200 bg-red-50 p-5">
-                                        <p className="text-sm font-medium text-red-700">
-                                          Неправильно
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-red-700">
-                                          {
-                                            question.incorrect
-                                          }{" "}
-                                          (
-                                          {
-                                            question.incorrectPercent
-                                          }
-                                          %)
-                                        </p>
-                                      </div>
-
-                                      <div className="rounded-xl border border-gray-200 bg-gray-100 p-5">
-                                        <p className="text-sm font-medium text-gray-600">
-                                          Пропущено
-                                        </p>
-
-                                        <p className="mt-1 text-2xl font-bold text-gray-700">
-                                          {
-                                            question.skipped
-                                          }{" "}
-                                          (
-                                          {
-                                            question.skippedPercent
-                                          }
-                                          %)
-                                        </p>
-                                      </div>
+                                                {option.isCorrect && (
+                                                  <span className="shrink-0 rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">
+                                                    Правильна
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                      )}
                                     </div>
                                   </div>
                                 )}
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  }
-                )}
+
+                                {/* QUESTION STATISTICS */}
+
+                                <div>
+                                  <div className="mb-3 text-sm font-semibold text-gray-900">
+                                    Статистика виконання
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                                      <div className="text-xs text-green-700">
+                                        Правильно
+                                      </div>
+
+                                      <div className="mt-1 text-xl font-bold text-green-800">
+                                        {
+                                          question.correct
+                                        }
+                                      </div>
+
+                                      <div className="mt-1 text-xs text-green-700">
+                                        {formatPercent(
+                                          question.correctPercent
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                                      <div className="text-xs text-red-700">
+                                        Неправильно
+                                      </div>
+
+                                      <div className="mt-1 text-xl font-bold text-red-800">
+                                        {
+                                          question.incorrect
+                                        }
+                                      </div>
+
+                                      <div className="mt-1 text-xs text-red-700">
+                                        {formatPercent(
+                                          question.incorrectPercent
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-lg border border-gray-200 bg-white p-4">
+                                      <div className="text-xs text-gray-500">
+                                        Пропущено
+                                      </div>
+
+                                      <div className="mt-1 text-xl font-bold text-gray-800">
+                                        {
+                                          question.skipped
+                                        }
+                                      </div>
+
+                                      <div className="mt-1 text-xs text-gray-500">
+                                        {formatPercent(
+                                          question.skippedPercent
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div
+                                      className={`rounded-lg border p-4 ${getDifficultyClasses(
+                                        question.difficulty
+                                      )}`}
+                                    >
+                                      <div className="text-xs opacity-80">
+                                        Складність
+                                      </div>
+
+                                      <div className="mt-1 text-lg font-bold">
+                                        {
+                                          difficulty.label
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* =================================================
+                                    PSYCHOMETRICS
+                                ================================================= */}
+
+                                {question.psychometrics && (
+                                  <div>
+                                    <div className="mb-3 text-sm font-semibold text-gray-900">
+                                      Психометричні показники
+                                    </div>
+
+                                    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+                                      <table className="w-full min-w-[760px] border-collapse">
+                                        <thead>
+                                          <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                            <th className="px-4 py-3">
+                                              Ключ
+                                            </th>
+
+                                            <th className="px-4 py-3">
+                                              Розподіл відповідей
+                                            </th>
+
+                                            <th className="px-4 py-3 text-center">
+                                              P-value
+                                            </th>
+
+                                            <th className="px-4 py-3 text-center">
+                                              D-index
+                                            </th>
+
+                                            <th className="px-4 py-3 text-center">
+                                              Rit
+                                            </th>
+                                          </tr>
+                                        </thead>
+
+                                        <tbody>
+                                          <tr>
+                                            <td className="px-4 py-4 align-top">
+                                              <span className="font-semibold text-gray-900">
+                                                {question
+                                                  .psychometrics
+                                                  .key ||
+                                                  "—"}
+                                              </span>
+                                            </td>
+
+                                            <td className="px-4 py-4 align-top">
+                                              {question
+                                                .psychometrics
+                                                .answerDistribution
+                                                .length >
+                                              0 ? (
+                                                <div className="flex flex-wrap gap-2">
+                                                  {question.psychometrics.answerDistribution.map(
+                                                    (
+                                                      item
+                                                    ) => (
+                                                      <span
+                                                        key={`${item.label}-${item.value}`}
+                                                        className="rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700"
+                                                      >
+                                                        <span className="font-semibold">
+                                                          {
+                                                            item.label
+                                                          }
+                                                        </span>{" "}
+                                                        {formatPercent(
+                                                          item.value
+                                                        )}
+                                                      </span>
+                                                    )
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <span className="text-sm text-gray-400">
+                                                  —
+                                                </span>
+                                              )}
+                                            </td>
+
+                                            <td className="px-4 py-4 text-center align-top font-medium text-gray-900">
+                                              {formatPercent(
+                                                question
+                                                  .psychometrics
+                                                  .pValue
+                                              )}
+                                            </td>
+
+                                            <td className="px-4 py-4 text-center align-top font-medium text-gray-900">
+                                              {formatPsychometricValue(
+                                                question
+                                                  .psychometrics
+                                                  .dIndex,
+                                                1
+                                              )}
+                                            </td>
+
+                                            <td className="px-4 py-4 text-center align-top font-medium text-gray-900">
+                                              {formatPsychometricValue(
+                                                question
+                                                  .psychometrics
+                                                  .rit,
+                                                2
+                                              )}
+                                            </td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+
+                                    {question
+                                      .psychometrics
+                                      .insufficientData && (
+                                      <p className="mt-2 text-xs text-gray-400">
+                                        Для частини психометричних
+                                        показників недостатньо
+                                        даних.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* CLOSE */}
+
+                                <div className="flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedQuestion(
+                                        null
+                                      );
+
+                                      setQuestionDetails(
+                                        null
+                                      );
+                                    }}
+                                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                                  >
+                                    Згорнути деталі
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
       </section>
 
       {/* =================================================
-          ШКАЛА СКЛАДНОСТІ
+          DIFFICULTY SCALE
       ================================================= */}
 
-      <section>
-        <div className="mb-5">
-          <h3 className="text-2xl font-bold text-gray-800">
-            Шкала визначення складності
-          </h3>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Шкала складності
+          </h2>
 
-          <p className="mt-1 text-gray-500">
-            Категорія визначається за часткою
-            учасників, які правильно виконали завдання.
+          <p className="mt-1 text-sm text-gray-500">
+            Класифікація завдань за часткою правильних
+            відповідей.
           </p>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-200 bg-gradient-to-r from-[#7A1F2B] to-[#9B3545] px-6 py-5 text-white">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h4 className="text-lg font-bold">
-                  Класифікація складності
-                </h4>
+        <div className="flex flex-col gap-2 md:flex-row">
+          {(
+            [
+              "VERY_EASY",
+              "EASY",
+              "OPTIMAL",
+              "DIFFICULT",
+              "VERY_DIFFICULT",
+            ] as Difficulty[]
+          ).map((difficulty) => {
+            const data =
+              getDifficultyData(difficulty);
 
-                <p className="mt-1 text-sm text-white/80">
-                  Чим менша частка правильних
-                  відповідей, тим складніше завдання.
-                </p>
+            return (
+              <div
+                key={difficulty}
+                className={getDifficultyScaleClasses(
+                  difficulty,
+                  true
+                )}
+              >
+                <div>{data.label}</div>
+
+                <div className="mt-1 text-[11px] opacity-75">
+                  {data.description}
+                </div>
               </div>
-
-              <div className="rounded-full bg-white/15 px-4 py-2 text-sm font-semibold backdrop-blur">
-                Частка правильних відповідей
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 p-6 md:grid-cols-5">
-            {[
-              {
-                range: "0–20%",
-                label: "Дуже складне",
-                color: "red",
-                description:
-                  "Правильно відповіли до 20% учасників.",
-              },
-              {
-                range: "20–40%",
-                label: "Складне",
-                color: "orange",
-                description:
-                  "Правильно відповіли 20–40% учасників.",
-              },
-              {
-                range: "40–60%",
-                label: "Оптимальне",
-                color: "yellow",
-                description:
-                  "Правильно відповіли 40–60% учасників.",
-              },
-              {
-                range: "60–80%",
-                label: "Легке",
-                color: "green",
-                description:
-                  "Правильно відповіли 60–80% учасників.",
-              },
-              {
-                range: "80–100%",
-                label: "Дуже легке",
-                color: "green",
-                description:
-                  "Правильно відповіли 80–100% учасників.",
-              },
-            ].map(
-              (item) => {
-                const styles =
-                  getDifficultyScaleClasses(
-                    item.color
-                  );
-
-                return (
-                  <div
-                    key={
-                      item.range
-                    }
-                    className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-md ${styles.wrapper}`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-sm font-bold ${styles.badge}`}
-                      >
-                        {
-                          item.range
-                        }
-                      </span>
-
-                      <span
-                        className={`text-lg font-bold ${styles.percent}`}
-                      >
-                        %
-                      </span>
-                    </div>
-
-                    <h5
-                      className={`mt-4 text-lg font-bold ${styles.percent}`}
-                    >
-                      {
-                        item.label
-                      }
-                    </h5>
-
-                    <p className="mt-2 text-sm leading-5 text-gray-600">
-                      {
-                        item.description
-                      }
-                    </p>
-                  </div>
-                );
-              }
-            )}
-          </div>
-
-          <div className="border-t border-gray-200 bg-gray-50 px-6 py-5">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="font-semibold text-gray-800">
-                  Як читати шкалу?
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Наприклад, якщо на завдання правильно
-                  відповіли 35% учасників — воно належить
-                  до категорії «Складне».
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
-                <span className="font-semibold text-[#7A1F2B]">
-                  0%
-                </span>
-
-                <span className="mx-2">
-                  →
-                </span>
-
-                дуже складне
-
-                <span className="mx-2">
-                  ·
-                </span>
-
-                <span className="font-semibold text-[#7A1F2B]">
-                  100%
-                </span>
-
-                <span className="mx-2">
-                  →
-                </span>
-
-                дуже легке
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </section>
     </div>

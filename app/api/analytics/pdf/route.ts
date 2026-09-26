@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import React from "react";
+import {
+  renderToBuffer,
+  type DocumentProps,
+} from "@react-pdf/renderer";
 
 import { prisma } from "@/app/lib/prisma";
+
+import AnalyticsPdfDocument from "@/app/components/pdf/AnalyticsPdfDocument";
 
 import {
   calculateQuestionPsychometrics,
@@ -9,14 +16,17 @@ import {
 } from "@/app/lib/analytics/psychometrics";
 
 // =====================================================
+// RUNTIME
+// =====================================================
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+// =====================================================
 // TYPES
 // =====================================================
 
-type MatchingLeftItem = {
-  leftId: number;
-  text: string;
-  correctRightId: number;
-};
+type PdfMode = "simple" | "advanced";
 
 type QuestionType =
   | "SINGLE"
@@ -24,6 +34,12 @@ type QuestionType =
   | "MATCHING"
   | "SEQUENCE"
   | string;
+
+type MatchingLeftItem = {
+  leftId: number;
+  text: string;
+  correctRightId: number;
+};
 
 // =====================================================
 // HELPERS
@@ -65,7 +81,7 @@ function getDifficulty(correctPercent: number) {
 }
 
 // =====================================================
-// JSON / ANSWERS
+// ANSWERS
 // =====================================================
 
 function getAnswersRecord(
@@ -110,7 +126,7 @@ function getAnswerIds(value: unknown): number[] {
     return [];
   }
 
-  let parsed: unknown = value;
+  let parsed = value;
 
   if (typeof value === "string") {
     try {
@@ -142,7 +158,8 @@ function getAnswerIds(value: unknown): number[] {
     })
     .filter(
       (item): item is number =>
-        Number.isFinite(item) && item > 0
+        Number.isFinite(item) &&
+        item > 0
     );
 }
 
@@ -156,14 +173,20 @@ function isSameAnswers(
 ): boolean {
   const userIds = getAnswerIds(userAnswer);
 
-  if (userIds.length !== correctAnswers.length) {
+  if (
+    userIds.length !==
+    correctAnswers.length
+  ) {
     return false;
   }
 
   const userSet = new Set(userIds);
   const correctSet = new Set(correctAnswers);
 
-  if (userSet.size !== correctSet.size) {
+  if (
+    userSet.size !==
+    correctSet.size
+  ) {
     return false;
   }
 
@@ -197,14 +220,12 @@ function getMatchingLeftItems(
       continue;
     }
 
-    const prefix = parts[0];
-
-    if (prefix !== "L") {
+    if (parts[0] !== "L") {
       continue;
     }
 
     const leftId = Number(parts[1]);
-    const text = parts[2];
+    const text = parts[2] ?? "";
     const correctRightId = Number(parts[3]);
 
     if (
@@ -232,7 +253,10 @@ function isMatchingCorrect(
 ): boolean {
   const userIds = getAnswerIds(userAnswer);
 
-  if (userIds.length !== leftItems.length) {
+  if (
+    userIds.length !==
+    leftItems.length
+  ) {
     return false;
   }
 
@@ -253,7 +277,60 @@ function isMatchingCorrect(
 }
 
 // =====================================================
-// MAIN
+// PARTICIPANT FILTER
+// =====================================================
+
+function parseParticipantIds(
+  value: string | null
+): number[] {
+  if (!value) {
+    return [];
+  }
+
+  let values: string[] = [];
+
+  try {
+    if (value.trim().startsWith("[")) {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        values = parsed.map(String);
+      }
+    } else {
+      values = value.split(",");
+    }
+  } catch {
+    values = value.split(",");
+  }
+
+  return values
+    .map((id) => Number(id.trim()))
+    .filter(
+      (id) =>
+        Number.isInteger(id) &&
+        id > 0
+    );
+}
+
+// =====================================================
+// FILENAME
+// =====================================================
+
+function sanitizeFileName(
+  value: string
+): string {
+  return value
+    .replace(
+      /[<>:"/\\|?*\u0000-\u001F]/g,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+// =====================================================
+// GET
 // =====================================================
 
 export async function GET(
@@ -264,16 +341,49 @@ export async function GET(
       request.nextUrl.searchParams;
 
     // =================================================
-    // TEST ID
+    // PARAMETERS
     // =================================================
 
     const testIdParam =
-      searchParams.get("testId");
+  searchParams.get("testId");
 
-    if (!testIdParam) {
+if (!testIdParam) {
+  return NextResponse.json(
+    {
+      error: "Не вказано testId.",
+    },
+    {
+      status: 400,
+    }
+  );
+}
+
+const testId = Number(testIdParam);
+
+if (!Number.isInteger(testId) || testId <= 0) {
+  return NextResponse.json(
+    {
+      error: "Некоректний testId.",
+    },
+    {
+      status: 400,
+    }
+  );
+}
+
+    const modeParam =
+      searchParams.get("mode");
+
+    const mode: PdfMode =
+      modeParam === "advanced"
+        ? "advanced"
+        : "simple";
+
+    if (!testId) {
       return NextResponse.json(
         {
-          error: "Не вказано testId",
+          error:
+            "Не вказано testId.",
         },
         {
           status: 400,
@@ -281,66 +391,12 @@ export async function GET(
       );
     }
 
-    const testId = Number(testIdParam);
-
-    if (
-      !Number.isInteger(testId) ||
-      testId <= 0
-    ) {
-      return NextResponse.json(
-        {
-          error: "Некоректний testId",
-        },
-        {
-          status: 400,
-        }
+    const participantIds =
+      parseParticipantIds(
+        searchParams.get(
+          "participantIds"
+        )
       );
-    }
-
-    // =================================================
-    // PARTICIPANT FILTER
-    // =================================================
-
-    const participantIdsParam =
-      searchParams.get(
-        "participantIds"
-      );
-
-    let participantIds: number[] = [];
-
-    if (participantIdsParam) {
-      let values: string[] = [];
-
-      try {
-        if (
-          participantIdsParam
-            .trim()
-            .startsWith("[")
-        ) {
-          const parsed = JSON.parse(
-            participantIdsParam
-          );
-
-          if (Array.isArray(parsed)) {
-            values = parsed.map(String);
-          }
-        } else {
-          values =
-            participantIdsParam.split(",");
-        }
-      } catch {
-        values =
-          participantIdsParam.split(",");
-      }
-
-      participantIds = values
-        .map((id) => Number(id.trim()))
-        .filter(
-          (id) =>
-            Number.isInteger(id) &&
-            id > 0
-        );
-    }
 
     // =================================================
     // TEST
@@ -396,7 +452,8 @@ export async function GET(
     if (!test) {
       return NextResponse.json(
         {
-          error: "Тест не знайдено",
+          error:
+            "Тест не знайдено.",
         },
         {
           status: 404,
@@ -428,21 +485,16 @@ export async function GET(
 
         select: {
           id: true,
-
           earnedPoints: true,
           maxPoints: true,
           percent: true,
-
           correct: true,
           incorrect: true,
           skipped: true,
-
           answers: true,
-
           firstName: true,
           lastName: true,
           middleName: true,
-
           createdAt: true,
 
           session: {
@@ -453,6 +505,19 @@ export async function GET(
           },
         },
       });
+
+    // =================================================
+    // PSYCHOMETRIC PARTICIPANTS
+    // =================================================
+
+    const psychometricParticipants: PsychometricParticipant[] =
+      results.map((result) => ({
+        id: result.id,
+        earnedPoints:
+          result.earnedPoints,
+        answers:
+          result.answers,
+      }));
 
     // =================================================
     // PARTICIPANTS
@@ -467,7 +532,8 @@ export async function GET(
           null,
 
         sessionId:
-          result.session?.id ?? null,
+          result.session?.id ??
+          null,
 
         firstName:
           result.firstName,
@@ -501,21 +567,6 @@ export async function GET(
       }));
 
     // =================================================
-    // PSYCHOMETRIC PARTICIPANTS
-    // =================================================
-
-    const psychometricParticipants: PsychometricParticipant[] =
-      results.map((result) => ({
-        id: result.id,
-
-        earnedPoints:
-          result.earnedPoints,
-
-        answers:
-          result.answers,
-      }));
-
-    // =================================================
     // QUESTIONS
     // =================================================
 
@@ -525,9 +576,9 @@ export async function GET(
           const question =
             testQuestion.question;
 
-          // ---------------------------------------------
+          // -------------------------------------------
           // BASIC STATISTICS
-          // ---------------------------------------------
+          // -------------------------------------------
 
           let correct = 0;
           let incorrect = 0;
@@ -550,18 +601,20 @@ export async function GET(
                   option.isCorrect
               )
               .map(
-                (option) => option.id
+                (option) =>
+                  option.id
               );
 
           const matchingLeftItems =
-            question.type ===
-            "MATCHING"
+            question.type === "MATCHING"
               ? getMatchingLeftItems(
                   question.answerOptions
                 )
               : [];
 
-          for (const item of answersRecord) {
+          for (
+            const item of answersRecord
+          ) {
             const rawAnswer =
               item.answers[
                 String(question.id)
@@ -575,10 +628,6 @@ export async function GET(
                 rawAnswer
               );
 
-            // -------------------------------------------
-            // SKIPPED
-            // -------------------------------------------
-
             if (
               answerIds.length === 0
             ) {
@@ -587,10 +636,6 @@ export async function GET(
             }
 
             let isCorrect = false;
-
-            // -------------------------------------------
-            // MATCHING
-            // -------------------------------------------
 
             if (
               question.type ===
@@ -601,13 +646,7 @@ export async function GET(
                   rawAnswer,
                   matchingLeftItems
                 );
-            }
-
-            // -------------------------------------------
-            // SINGLE / MULTIPLE
-            // -------------------------------------------
-
-            else if (
+            } else if (
               question.type ===
                 "SINGLE" ||
               question.type ===
@@ -618,13 +657,7 @@ export async function GET(
                   rawAnswer,
                   correctOptions
                 );
-            }
-
-            // -------------------------------------------
-            // SEQUENCE
-            // -------------------------------------------
-
-            else if (
+            } else if (
               question.type ===
               "SEQUENCE"
             ) {
@@ -638,13 +671,7 @@ export async function GET(
                       index
                     ]
                 );
-            }
-
-            // -------------------------------------------
-            // OTHER
-            // -------------------------------------------
-
-            else {
+            } else {
               isCorrect =
                 isSameAnswers(
                   rawAnswer,
@@ -659,37 +686,30 @@ export async function GET(
             }
           }
 
-          // ---------------------------------------------
-          // PERCENTAGES
-          // ---------------------------------------------
-
-          const totalParticipants =
+          const total =
             results.length;
 
           const correctPercent =
-            totalParticipants > 0
-              ? (correct /
-                  totalParticipants) *
+            total > 0
+              ? (correct / total) *
                 100
               : 0;
 
           const incorrectPercent =
-            totalParticipants > 0
-              ? (incorrect /
-                  totalParticipants) *
+            total > 0
+              ? (incorrect / total) *
                 100
               : 0;
 
           const skippedPercent =
-            totalParticipants > 0
-              ? (skipped /
-                  totalParticipants) *
+            total > 0
+              ? (skipped / total) *
                 100
               : 0;
 
-          // ---------------------------------------------
+          // -------------------------------------------
           // PSYCHOMETRICS
-          // ---------------------------------------------
+          // -------------------------------------------
 
           const psychometricQuestion: PsychometricQuestion =
             {
@@ -708,8 +728,10 @@ export async function GET(
                 question.answerOptions.map(
                   (option) => ({
                     id: option.id,
-                    order: option.order,
-                    text: option.text,
+                    order:
+                      option.order,
+                    text:
+                      option.text,
                     isCorrect:
                       option.isCorrect,
                   })
@@ -722,89 +744,55 @@ export async function GET(
               psychometricParticipants
             );
 
-          // ---------------------------------------------
-          // DIFFICULTY
-          // ---------------------------------------------
-
           const difficulty =
-  getDifficulty(
-    psychometrics.pValue ?? 0
-  );
-
-          // ---------------------------------------------
-          // QUESTION RESULT
-          // ---------------------------------------------
+            getDifficulty(
+              psychometrics.pValue ??
+                correctPercent
+            );
 
           return {
-            id: question.id,
+  id: question.id,
 
-            order:
-              testQuestion.order,
+  order:
+    testQuestion.order,
 
-            type:
-              question.type,
+  type:
+    question.type,
 
-            text:
-              question.text,
+  text:
+    question.text,
 
-            points:
-              question.points,
+  points:
+    question.points,
 
-            // -------------------------------------------
-            // ANSWER OPTIONS
-            // -------------------------------------------
+  answerOptions:
+    question.answerOptions.map(
+      (option) => ({
+        id: option.id,
+        order: option.order,
+        text: option.text,
+        isCorrect:
+          option.isCorrect,
+      })
+    ),
 
-            answerOptions:
-              question.answerOptions.map(
-                (option) => ({
-                  id: option.id,
+  correct,
+  incorrect,
+  skipped,
+  total,
 
-                  order:
-                    option.order,
+  correctPercent,
+  incorrectPercent,
+  skippedPercent,
 
-                  text:
-                    option.text,
+  difficulty:
+    difficulty.label,
 
-                  isCorrect:
-                    option.isCorrect,
-                })
-              ),
+  difficultyColor:
+    difficulty.color,
 
-            // -------------------------------------------
-            // BASIC STATISTICS
-            // -------------------------------------------
-
-            correct,
-
-            incorrect,
-
-            skipped,
-
-            total:
-              totalParticipants,
-
-            correctPercent,
-
-            incorrectPercent,
-
-            skippedPercent,
-
-            // -------------------------------------------
-            // DIFFICULTY
-            // -------------------------------------------
-
-            difficulty:
-              difficulty.label,
-
-            difficultyColor:
-              difficulty.color,
-
-            // -------------------------------------------
-            // PSYCHOMETRICS
-            // -------------------------------------------
-
-            psychometrics,
-          };
+  psychometrics,
+};
         }
       );
 
@@ -815,13 +803,17 @@ export async function GET(
     const scores =
       results.map(
         (result) =>
-          result.earnedPoints
+          Number(
+            result.earnedPoints
+          )
       );
 
     const percents =
       results.map(
         (result) =>
-          result.percent
+          Number(
+            result.percent
+          )
       );
 
     const participantsCount =
@@ -856,22 +848,16 @@ export async function GET(
         : 0;
 
     // =================================================
-    // RESPONSE
+    // ANALYTICS OBJECT
     // =================================================
 
-    return NextResponse.json({
+    const analytics = {
       test: {
         id: test.id,
-
-        title:
-          test.title,
-
-        subject:
-          test.subject,
-
+        title: test.title,
+        subject: test.subject,
         maxPoints:
           test.maxPoints,
-
         questionCount:
           test.questions.length,
       },
@@ -881,21 +867,100 @@ export async function GET(
           participantsCount,
 
         maxScore,
-
         minScore,
-
         averageScore,
-
         averagePercent,
       },
 
       participants,
 
       questions,
-    });
+    };
+
+    // =================================================
+    // PDF DOCUMENT
+    // =================================================
+    //
+    // route.ts не підтримує JSX,
+    // тому створюємо React-елемент через createElement.
+    //
+    // ВАЖЛИВО:
+    // новий AnalyticsPdfDocument отримує
+    // тільки analytics + mode.
+    // =================================================
+
+    const document =
+  React.createElement(
+    AnalyticsPdfDocument,
+    {
+      analytics,
+      mode,
+    }
+  ) as React.ReactElement<DocumentProps>;
+
+const pdfBuffer =
+  await renderToBuffer(
+    document
+  );
+
+    // =================================================
+    // FILE NAME
+    // =================================================
+
+    const safeTitle =
+      sanitizeFileName(
+        test.title ||
+          `test-${test.id}`
+      );
+
+    const reportName =
+      mode === "advanced"
+        ? "розширений-звіт"
+        : "простий-звіт";
+
+    const fileName =
+      `NMT-Platform-${safeTitle}-${reportName}.pdf`;
+
+    const encodedFileName =
+      encodeURIComponent(
+        fileName
+      );
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return new NextResponse(
+      new Uint8Array(pdfBuffer),
+      {
+        status: 200,
+
+        headers: {
+          "Content-Type":
+            "application/pdf",
+
+          "Content-Disposition":
+            `attachment; filename="analytics-${test.id}.pdf"; filename*=UTF-8''${encodedFileName}`,
+
+          "Content-Length":
+            String(
+              pdfBuffer.length
+            ),
+
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+
+          Pragma:
+            "no-cache",
+
+          Expires:
+            "0",
+        },
+      }
+    );
   } catch (error) {
     console.error(
-      "[GET /api/analytics] Error:",
+      "[GET /api/analytics/pdf] Error:",
       error
     );
 
@@ -904,7 +969,7 @@ export async function GET(
         error:
           error instanceof Error
             ? error.message
-            : "Помилка під час формування аналітики",
+            : "Не вдалося сформувати PDF-звіт.",
       },
       {
         status: 500,
