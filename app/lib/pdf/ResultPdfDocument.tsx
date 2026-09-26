@@ -96,19 +96,41 @@ const GOLD = "#B38B35";
 // FONT
 // =====================================================
 
-const fontRegularPath = path.join(
+const brandingPath = path.join(
   process.cwd(),
   "public",
-  "branding",
+  "branding"
+);
+
+const fontRegularPath = path.join(
+  brandingPath,
   "noto-sans-regular.woff"
 );
 
 const fontBoldPath = path.join(
-  process.cwd(),
-  "public",
-  "branding",
+  brandingPath,
   "noto-sans-bold.woff"
 );
+
+const fontItalicPath = path.join(
+  brandingPath,
+  "noto-sans-italic.woff"
+);
+
+/*
+ * Якщо окремого italic-файлу немає, використовуємо
+ * regular/bold як fallback.
+ *
+ * Головне — react-pdf отримує коректну пару
+ * fontWeight + fontStyle і більше не падає
+ * на:
+ *
+ * Could not resolve font for NotoSans,
+ * fontWeight 700, fontStyle italic
+ */
+const resolvedItalicPath = fs.existsSync(fontItalicPath)
+  ? fontItalicPath
+  : fontRegularPath;
 
 Font.register({
   family: "NotoSans",
@@ -122,6 +144,18 @@ Font.register({
       src: fontBoldPath,
       fontWeight: 700,
       fontStyle: "normal",
+    },
+    {
+      src: resolvedItalicPath,
+      fontWeight: 400,
+      fontStyle: "italic",
+    },
+    {
+      src: fs.existsSync(fontItalicPath)
+        ? fontItalicPath
+        : fontBoldPath,
+      fontWeight: 700,
+      fontStyle: "italic",
     },
   ],
 });
@@ -202,9 +236,7 @@ function formatDuration(seconds: number): string {
   )}:${String(secs).padStart(2, "0")}`;
 }
 
-function getParticipantName(
-  result: ResultData
-): string {
+function getParticipantName(result: ResultData): string {
   return [
     result.lastName,
     result.firstName,
@@ -215,9 +247,7 @@ function getParticipantName(
     .trim() || "Не вказано";
 }
 
-function getFinishReason(
-  reason: string
-): string {
+function getFinishReason(reason: string): string {
   switch (reason) {
     case "manual":
       return "Завершено учасником";
@@ -237,18 +267,12 @@ function getSavedAnswers(
   answers: unknown,
   questionId: number
 ): number[] {
-  if (
-    !answers ||
-    typeof answers !== "object"
-  ) {
+  if (!answers || typeof answers !== "object") {
     return [];
   }
 
-  const source =
-    answers as Record<string, unknown>;
-
-  const value =
-    source[String(questionId)];
+  const source = answers as Record<string, unknown>;
+  const value = source[String(questionId)];
 
   if (!Array.isArray(value)) {
     return [];
@@ -256,9 +280,7 @@ function getSavedAnswers(
 
   return value
     .map((item) => Number(item))
-    .filter((item) =>
-      Number.isFinite(item)
-    );
+    .filter((item) => Number.isFinite(item));
 }
 
 function getLetter(index: number): string {
@@ -276,10 +298,7 @@ function getLetter(index: number): string {
     "І",
   ];
 
-  return (
-    letters[index] ??
-    String(index + 1)
-  );
+  return letters[index] ?? String(index + 1);
 }
 
 function isSelected(
@@ -293,28 +312,21 @@ function isQuestionCorrect(
   question: QuestionData,
   selectedAnswers: number[]
 ): boolean {
-  const correctIds =
-    question.answerOptions
-      .filter(
-        (option) => option.isCorrect
-      )
-      .map((option) => option.id)
-      .sort((a, b) => a - b);
+  const correctIds = question.answerOptions
+    .filter((option) => option.isCorrect)
+    .map((option) => option.id)
+    .sort((a, b) => a - b);
 
-  const selectedIds = [
-    ...selectedAnswers,
-  ].sort((a, b) => a - b);
+  const selectedIds = [...selectedAnswers].sort(
+    (a, b) => a - b
+  );
 
-  if (
-    correctIds.length !==
-    selectedIds.length
-  ) {
+  if (correctIds.length !== selectedIds.length) {
     return false;
   }
 
   return correctIds.every(
-    (id, index) =>
-      id === selectedIds[index]
+    (id, index) => id === selectedIds[index]
   );
 }
 
@@ -333,9 +345,7 @@ type MatchingRight = {
   text: string;
 };
 
-function getMatchingData(
-  question: QuestionData
-): {
+function getMatchingData(question: QuestionData): {
   left: MatchingLeft[];
   right: MatchingRight[];
 } {
@@ -351,9 +361,7 @@ function getMatchingData(
       left.push({
         id: Number(parts[1]),
         text: parts[2] ?? "",
-        correctRightId: Number(
-          parts[3]
-        ),
+        correctRightId: Number(parts[3]),
       });
     }
 
@@ -362,9 +370,7 @@ function getMatchingData(
 
       right.push({
         id: Number(parts[1]),
-        text: parts
-          .slice(2)
-          .join("|"),
+        text: parts.slice(2).join("|"),
       });
     }
   }
@@ -382,24 +388,16 @@ function getMatchingStatus(
   total: number;
   correct: number;
 } {
-  const { left } =
-    getMatchingData(question);
+  const { left } = getMatchingData(question);
 
   let correct = 0;
 
-  for (
-    let index = 0;
-    index < left.length;
-    index++
-  ) {
-    const selectedRightId =
-      selectedAnswers[index];
+  for (let index = 0; index < left.length; index++) {
+    const selectedRightId = selectedAnswers[index];
 
     if (
-      selectedRightId !==
-        undefined &&
-      selectedRightId ===
-        left[index].correctRightId
+      selectedRightId !== undefined &&
+      selectedRightId === left[index].correctRightId
     ) {
       correct++;
     }
@@ -414,18 +412,15 @@ function getMatchingStatus(
 function isMatchingQuestion(
   question: QuestionData
 ): boolean {
-  const normalizedType =
-    String(question.type ?? "")
-      .toLowerCase()
-      .trim();
+  const normalizedType = String(
+    question.type ?? ""
+  )
+    .toLowerCase()
+    .trim();
 
   return (
-    normalizedType.includes(
-      "matching"
-    ) ||
-    normalizedType.includes(
-      "відповідність"
-    )
+    normalizedType.includes("matching") ||
+    normalizedType.includes("відповідність")
   );
 }
 
@@ -439,10 +434,7 @@ function getOrdinaryAnswerLetters(
 ): string {
   return question.answerOptions
     .map((option, index) =>
-      isSelected(
-        selectedAnswers,
-        option.id
-      )
+      isSelected(selectedAnswers, option.id)
         ? getLetter(index)
         : null
     )
@@ -455,31 +447,12 @@ function getCorrectOrdinaryAnswerLetters(
 ): string {
   return question.answerOptions
     .map((option, index) =>
-      option.isCorrect
-        ? getLetter(index)
-        : null
+      option.isCorrect ? getLetter(index) : null
     )
     .filter(Boolean)
     .join("");
 }
 
-/**
- * Для matching:
- *
- * Якщо праві варіанти:
- * А — ...
- * Б — ...
- * В — ...
- * Г — ...
- *
- * а учасник для лівих елементів
- * обрав [В, А, Б, Д],
- * отримаємо:
- *
- * ВАБД
- *
- * без розділювачів.
- */
 function getMatchingAnswerLetters(
   question: QuestionData,
   selectedAnswers: number[]
@@ -489,22 +462,15 @@ function getMatchingAnswerLetters(
 
   return left
     .map((_, index) => {
-      const selectedRightId =
-        selectedAnswers[index];
+      const selectedRightId = selectedAnswers[index];
 
-      if (
-        selectedRightId ===
-        undefined
-      ) {
+      if (selectedRightId === undefined) {
         return "—";
       }
 
-      const rightIndex =
-        right.findIndex(
-          (item) =>
-            item.id ===
-            selectedRightId
-        );
+      const rightIndex = right.findIndex(
+        (item) => item.id === selectedRightId
+      );
 
       return rightIndex >= 0
         ? getLetter(rightIndex)
@@ -521,12 +487,10 @@ function getMatchingCorrectAnswerLetters(
 
   return left
     .map((item) => {
-      const rightIndex =
-        right.findIndex(
-          (rightItem) =>
-            rightItem.id ===
-            item.correctRightId
-        );
+      const rightIndex = right.findIndex(
+        (rightItem) =>
+          rightItem.id === item.correctRightId
+      );
 
       return rightIndex >= 0
         ? getLetter(rightIndex)
@@ -543,35 +507,19 @@ function getEarnedPoints(
   question: QuestionData,
   selectedAnswers: number[]
 ): number {
-  if (
-    isMatchingQuestion(question)
-  ) {
-    const status =
-      getMatchingStatus(
-        question,
-        selectedAnswers
-      );
+  if (isMatchingQuestion(question)) {
+    const status = getMatchingStatus(
+      question,
+      selectedAnswers
+    );
 
     if (status.total === 0) {
       return 0;
     }
 
-    /*
-     * Для завдань на відповідність
-     * кожна правильна пара дає
-     * відповідну частину балів.
-     *
-     * Наприклад:
-     * 4 пари, 4 бали,
-     * 3 правильні → 3 бали.
-     */
-    return Math.min(
-      question.points,
-      Math.round(
-        (question.points *
-          status.correct) /
-          status.total
-      )
+    return Math.round(
+      (question.points * status.correct) /
+        status.total
     );
   }
 
@@ -584,197 +532,123 @@ function getEarnedPoints(
 }
 
 // =====================================================
-// RICH HTML → PDF
+// HTML PARSER
 // =====================================================
 
-type HtmlNode = {
-  type: "element" | "text";
-  tag?: string;
-  attrs?: Record<
-    string,
-    string
-  >;
-  text?: string;
-  children?: HtmlNode[];
-};
-
-type PdfInlineStyle = {
+type InlineStyle = {
   fontWeight?: 400 | 700;
-  fontStyle?:
-    | "normal"
-    | "italic";
+  fontStyle?: "normal" | "italic";
   textDecoration?:
     | "none"
     | "underline"
     | "line-through";
   backgroundColor?: string;
   color?: string;
-  fontSize?: number;
-  textAlign?:
-    | "left"
-    | "center"
-    | "right"
-    | "justify";
 };
 
-/**
- * React-PDF не має browser fallback
- * для відсутнього font face.
- *
- * У нас зареєстровано:
- * 400 normal
- * 700 normal
- *
- * Тому 700 italic автоматично
- * перетворюємо на 400 italic.
- *
- * Це не дає renderToBuffer()
- * падати з:
- *
- * Could not resolve font for
- * NotoSans, fontWeight 700,
- * fontStyle italic
- */
-function normalizeFontStyle(
-  style: any
-): any {
-  if (
-    style &&
-    typeof style === "object" &&
-    style.fontStyle === "italic" &&
-    Number(style.fontWeight) === 700
-  ) {
-    return {
-      ...style,
-      fontWeight: 400,
+type HtmlNode =
+  | {
+      type: "root";
+      children: HtmlNode[];
+    }
+  | {
+      type: "element";
+      tag: string;
+      attrs: Record<string, string>;
+      children: HtmlNode[];
+    }
+  | {
+      type: "text";
+      text: string;
     };
-  }
-
-  return style;
-}
 
 function parseAttributes(
   source: string
 ): Record<string, string> {
-  const attrs: Record<
-    string,
-    string
-  > = {};
+  const attrs: Record<string, string> = {};
 
-  const attrRegex =
-    /([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+  const regex =
+    /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
 
   let match: RegExpExecArray | null;
 
-  while (
-    (match =
-      attrRegex.exec(source)) !== null
-  ) {
-    attrs[
-      match[1].toLowerCase()
-    ] =
+  while ((match = regex.exec(source)) !== null) {
+    const name = match[1].toLowerCase();
+    const value =
       match[2] ??
       match[3] ??
       match[4] ??
       "";
+
+    attrs[name] = decodeHtml(value);
   }
 
   return attrs;
 }
 
 function parseHtml(
-  html: string
+  html: string | null | undefined
 ): HtmlNode {
   const root: HtmlNode = {
-    type: "element",
-    tag: "root",
-    attrs: {},
+    type: "root",
     children: [],
   };
 
-  const stack: HtmlNode[] = [root];
+  if (!html) {
+    return root;
+  }
 
-  const tokens =
-    html
-      .replace(
-        /<!--[\s\S]*?-->/g,
-        ""
-      )
-      .match(
-        /<[^>]+>|[^<]+/g
-      ) ?? [];
+  const stack: Array<
+    Extract<HtmlNode, { type: "element" }>
+  > = [];
 
-  const voidTags = new Set([
-    "br",
-    "img",
-    "hr",
-    "meta",
-    "input",
-    "source",
-    "area",
-    "base",
-    "col",
-    "embed",
-    "link",
-    "param",
-    "track",
-    "wbr",
-  ]);
+  const getCurrentChildren = () => {
+    if (stack.length > 0) {
+      return stack[stack.length - 1].children;
+    }
 
-  for (const token of tokens) {
-    if (
-      token.startsWith("<")
-    ) {
-      if (
-        /^<\s*\//.test(token)
-      ) {
-        const match =
-          token.match(
-            /^<\s*\/\s*([a-zA-Z0-9:-]+)/
-          );
+    return root.children;
+  };
 
-        if (!match) {
-          continue;
-        }
+  const tokenRegex =
+    /<!--[\s\S]*?-->|<\/?[a-zA-Z][^>]*>|[^<]+/g;
 
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenRegex.exec(html)) !== null) {
+    const token = match[0];
+
+    if (token.startsWith("<!--")) {
+      continue;
+    }
+
+    if (token.startsWith("<")) {
+      const closingMatch =
+        token.match(/^<\s*\/\s*([a-zA-Z0-9]+)\s*>$/);
+
+      if (closingMatch) {
         const closingTag =
-          match[1].toLowerCase();
-
-        let foundIndex = -1;
+          closingMatch[1].toLowerCase();
 
         for (
-          let i =
-            stack.length - 1;
+          let i = stack.length - 1;
           i >= 0;
           i--
         ) {
           if (
-            stack[i].tag ===
-            closingTag
+            stack[i].tag === closingTag
           ) {
-            foundIndex = i;
+            stack.length = i;
             break;
           }
         }
 
-        if (foundIndex >= 0) {
-          stack.length =
-            foundIndex;
-        }
-
-        continue;
-      }
-
-      if (
-        /^<\s*!/.test(token) ||
-        /^<\s*\?/.test(token)
-      ) {
         continue;
       }
 
       const openingMatch =
         token.match(
-          /^<\s*([a-zA-Z0-9:-]+)/
+          /^<\s*([a-zA-Z0-9]+)([\s\S]*?)\/?\s*>$/
         );
 
       if (!openingMatch) {
@@ -784,27 +658,32 @@ function parseHtml(
       const tag =
         openingMatch[1].toLowerCase();
 
-      const attrs =
-        parseAttributes(token);
+      const attrs = parseAttributes(
+        openingMatch[2] ?? ""
+      );
 
-      const node: HtmlNode = {
+      const node: Extract<
+        HtmlNode,
+        { type: "element" }
+      > = {
         type: "element",
         tag,
         attrs,
         children: [],
       };
 
-      const parent =
-        stack[stack.length - 1];
-
-      parent.children =
-        parent.children ?? [];
-
-      parent.children.push(node);
+      getCurrentChildren().push(node);
 
       const selfClosing =
         /\/\s*>$/.test(token) ||
-        voidTags.has(tag);
+        [
+          "br",
+          "img",
+          "hr",
+          "meta",
+          "link",
+          "input",
+        ].includes(tag);
 
       if (!selfClosing) {
         stack.push(node);
@@ -813,593 +692,583 @@ function parseHtml(
       continue;
     }
 
-    const text =
-      decodeHtml(token);
+    const text = decodeHtml(token);
 
-    if (!text) {
-      continue;
+    if (text) {
+      getCurrentChildren().push({
+        type: "text",
+        text,
+      });
     }
-
-    const parent =
-      stack[stack.length - 1];
-
-    parent.children =
-      parent.children ?? [];
-
-    parent.children.push({
-      type: "text",
-      text,
-    });
   }
 
   return root;
 }
 
-function parseCssStyle(
-  styleText?: string
-): PdfInlineStyle {
-  const result: PdfInlineStyle = {};
+// =====================================================
+// HTML STYLES
+// =====================================================
 
-  if (!styleText) {
+function parseCss(
+  css: string | undefined
+): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  if (!css) {
     return result;
   }
 
-  const declarations =
-    styleText.split(";");
-
-  for (const declaration of declarations) {
+  css.split(";").forEach((declaration) => {
     const separator =
       declaration.indexOf(":");
 
-    if (separator < 0) {
-      continue;
+    if (separator === -1) {
+      return;
     }
 
-    const property =
-      declaration
-        .slice(0, separator)
-        .trim()
-        .toLowerCase();
+    const property = declaration
+      .slice(0, separator)
+      .trim()
+      .toLowerCase();
 
-    const value =
-      declaration
-        .slice(separator + 1)
-        .trim();
+    const value = declaration
+      .slice(separator + 1)
+      .trim();
 
-    if (!value) {
-      continue;
+    if (property && value) {
+      result[property] = value;
     }
-
-    switch (property) {
-      case "font-weight":
-        if (
-          value === "bold" ||
-          Number(value) >= 600
-        ) {
-          result.fontWeight = 700;
-        } else if (
-          value === "normal" ||
-          Number(value) <= 500
-        ) {
-          result.fontWeight = 400;
-        }
-        break;
-
-      case "font-style":
-        if (
-          value.toLowerCase() ===
-          "italic"
-        ) {
-          result.fontStyle =
-            "italic";
-        }
-        break;
-
-      case "text-decoration":
-      case "text-decoration-line":
-        if (
-          value.includes(
-            "underline"
-          )
-        ) {
-          result.textDecoration =
-            "underline";
-        } else if (
-          value.includes(
-            "line-through"
-          )
-        ) {
-          result.textDecoration =
-            "line-through";
-        }
-        break;
-
-      case "background":
-      case "background-color":
-        if (
-          value !== "transparent"
-        ) {
-          result.backgroundColor =
-            value;
-        }
-        break;
-
-      case "color":
-        result.color = value;
-        break;
-
-      case "font-size": {
-        const size =
-          parseFloat(value);
-
-        if (
-          Number.isFinite(size)
-        ) {
-          result.fontSize =
-            size * 0.75;
-        }
-        break;
-      }
-
-      case "text-align":
-        if (
-          value === "left" ||
-          value === "center" ||
-          value === "right" ||
-          value === "justify"
-        ) {
-          result.textAlign =
-            value;
-        }
-        break;
-    }
-  }
+  });
 
   return result;
 }
 
-function getNodeStyle(
-  node: HtmlNode,
-  inherited: PdfInlineStyle
-): PdfInlineStyle {
-  const next = {
-    ...inherited,
+function normalizeColor(
+  value: string | undefined
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+
+  if (
+    /^#[0-9a-f]{3,8}$/i.test(trimmed)
+  ) {
+    return trimmed;
+  }
+
+  const rgbMatch = trimmed.match(
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)$/i
+  );
+
+  if (rgbMatch) {
+    const r = Number(rgbMatch[1])
+      .toString(16)
+      .padStart(2, "0");
+
+    const g = Number(rgbMatch[2])
+      .toString(16)
+      .padStart(2, "0");
+
+    const b = Number(rgbMatch[3])
+      .toString(16)
+      .padStart(2, "0");
+
+    return `#${r}${g}${b}`;
+  }
+
+  const named: Record<string, string> = {
+    yellow: "#FFF2A8",
+    gold: "#FFD700",
+    red: "#FF0000",
+    blue: "#0000FF",
+    green: "#008000",
+    black: "#000000",
+    white: "#FFFFFF",
   };
 
-  const tag =
-    node.tag?.toLowerCase() ?? "";
+  return named[trimmed.toLowerCase()];
+}
 
-  switch (tag) {
-    case "strong":
-    case "b":
-      next.fontWeight = 700;
-      break;
+function getNodeInlineStyle(
+  node: Extract<
+    HtmlNode,
+    { type: "element" }
+  >,
+  parent: InlineStyle
+): InlineStyle {
+  const style: InlineStyle = {
+    ...parent,
+  };
 
-    case "em":
-    case "i":
-      next.fontStyle = "italic";
-      break;
+  const tag = node.tag;
+  const css = parseCss(node.attrs.style);
 
-    case "u":
-      next.textDecoration =
+  if (
+    tag === "strong" ||
+    tag === "b"
+  ) {
+    style.fontWeight = 700;
+  }
+
+  if (
+    tag === "em" ||
+    tag === "i"
+  ) {
+    style.fontStyle = "italic";
+  }
+
+  if (tag === "u") {
+    style.textDecoration = "underline";
+  }
+
+  if (
+    tag === "s" ||
+    tag === "strike" ||
+    tag === "del"
+  ) {
+    style.textDecoration =
+      "line-through";
+  }
+
+  if (tag === "mark") {
+    style.backgroundColor =
+      normalizeColor(
+        css["background-color"]
+      ) ?? "#FFF2A8";
+  }
+
+  const fontWeight =
+    css["font-weight"];
+
+  if (
+    fontWeight === "bold" ||
+    fontWeight === "700" ||
+    fontWeight === "800" ||
+    fontWeight === "900"
+  ) {
+    style.fontWeight = 700;
+  }
+
+  const fontStyle =
+    css["font-style"];
+
+  if (
+    fontStyle === "italic" ||
+    fontStyle === "oblique"
+  ) {
+    style.fontStyle = "italic";
+  }
+
+  const textDecoration =
+    css["text-decoration"] ??
+    css["text-decoration-line"];
+
+  if (textDecoration) {
+    if (
+      textDecoration.includes("underline")
+    ) {
+      style.textDecoration =
         "underline";
-      break;
-
-    case "s":
-    case "strike":
-    case "del":
-      next.textDecoration =
+    } else if (
+      textDecoration.includes(
+        "line-through"
+      )
+    ) {
+      style.textDecoration =
         "line-through";
-      break;
-
-    case "mark":
-      next.backgroundColor =
-        "#FFF2A8";
-      break;
-
-    case "a":
-      next.textDecoration =
-        "underline";
-      break;
-
-    case "sup":
-      next.fontSize = 6;
-      break;
-
-    case "sub":
-      next.fontSize = 6;
-      break;
+    }
   }
 
-  const cssStyle =
-    parseCssStyle(
-      node.attrs?.style
-    );
+  const background =
+    css["background-color"] ??
+    css["background"];
 
-  Object.assign(
-    next,
-    cssStyle
-  );
-
-  return normalizeFontStyle(
-    next
-  );
-}
-
-function isImageNode(
-  node: HtmlNode
-): boolean {
-  return (
-    node.type === "element" &&
-    node.tag === "img"
-  );
-}
-
-function getBaseUrl(): string {
-  const explicit =
-    process.env.NEXT_PUBLIC_APP_URL;
-
-  if (explicit) {
-    return explicit.replace(
-      /\/$/,
-      ""
-    );
+  if (background) {
+    style.backgroundColor =
+      normalizeColor(background);
   }
 
-  const vercel =
-    process.env.VERCEL_URL;
+  const color = normalizeColor(
+    css["color"]
+  );
 
-  if (vercel) {
-    return `https://${vercel}`;
+  if (color) {
+    style.color = color;
   }
 
-  return "http://localhost:3000";
+  return style;
 }
+
+// =====================================================
+// IMAGE HELPERS
+// =====================================================
 
 function resolveImageSrc(
   src: string
-): string {
-  const trimmed =
-    src.trim();
-
-  if (!trimmed) {
-    return "";
-  }
-
-  if (
-    trimmed.startsWith(
-      "data:"
-    )
-  ) {
-    return trimmed;
-  }
-
-  if (
-    /^https?:\/\//i.test(
-      trimmed
-    )
-  ) {
-    return trimmed;
-  }
-
-  if (
-    trimmed.startsWith("//")
-  ) {
-    return `https:${trimmed}`;
-  }
-
-  if (
-    trimmed.startsWith("/")
-  ) {
-    return `${getBaseUrl()}${trimmed}`;
-  }
-
-  return trimmed;
-}
-
-function getImageDimensions(
-  node: HtmlNode
-): {
-  width: number;
-  height: number;
-} {
-  const attrs =
-    node.attrs ?? {};
-
-  const style =
-    attrs.style ?? "";
-
-  const widthMatch =
-    style.match(
-      /width\s*:\s*([\d.]+)px/i
-    );
-
-  const heightMatch =
-    style.match(
-      /height\s*:\s*([\d.]+)px/i
-    );
-
-  const attrWidth =
-    attrs.width
-      ? parseFloat(attrs.width)
-      : NaN;
-
-  const attrHeight =
-    attrs.height
-      ? parseFloat(attrs.height)
-      : NaN;
-
-  const width =
-    Number.isFinite(
-      attrWidth
-    )
-      ? attrWidth
-      : widthMatch
-      ? Number(widthMatch[1])
-      : 260;
-
-  const height =
-    Number.isFinite(
-      attrHeight
-    )
-      ? attrHeight
-      : heightMatch
-      ? Number(heightMatch[1])
-      : 160;
-
-  return {
-    width: Math.min(
-      Math.max(width, 30),
-      470
-    ),
-    height: Math.min(
-      Math.max(height, 20),
-      400
-    ),
-  };
-}
-
-function PdfImage({
-  node,
-}: {
-  node: HtmlNode;
-}) {
-  const src =
-    node.attrs?.src;
-
+): string | null {
   if (!src) {
     return null;
   }
 
-  const resolved =
-    resolveImageSrc(src);
+  const normalized = src.trim();
 
-  if (!resolved) {
-    return null;
+  if (
+    normalized.startsWith("data:image/")
+  ) {
+    return normalized;
   }
 
-  const dimensions =
-    getImageDimensions(node);
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://")
+  ) {
+    return normalized;
+  }
 
-  return (
-    <Image
-      src={resolved}
-      style={{
-        width: dimensions.width,
-        height: dimensions.height,
-        objectFit: "contain",
-        marginVertical: 5,
-        alignSelf: "flex-start",
-      }}
-    />
-  );
+  if (normalized.startsWith("/")) {
+    const filePath = path.join(
+      process.cwd(),
+      "public",
+      normalized.replace(/^\/+/, "")
+    );
+
+    if (!fs.existsSync(filePath)) {
+      return normalized;
+    }
+
+    try {
+      const buffer =
+        fs.readFileSync(filePath);
+
+      const extension =
+        path.extname(filePath).toLowerCase();
+
+      const mime =
+        extension === ".png"
+          ? "image/png"
+          : extension === ".webp"
+          ? "image/webp"
+          : extension === ".gif"
+          ? "image/gif"
+          : "image/jpeg";
+
+      return `data:${mime};base64,${buffer.toString(
+        "base64"
+      )}`;
+    } catch {
+      return normalized;
+    }
+  }
+
+  return normalized;
 }
+
+function parseDimension(
+  value: string | undefined
+): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const match = value.match(
+    /([\d.]+)\s*(px|pt|%)?/i
+  );
+
+  if (!match) {
+    return undefined;
+  }
+
+  const number = Number(match[1]);
+
+  if (!Number.isFinite(number)) {
+    return undefined;
+  }
+
+  if (match[2] === "%") {
+    return undefined;
+  }
+
+  return number;
+}
+
+function getImageDimensions(
+  node: Extract<
+    HtmlNode,
+    { type: "element" }
+  >
+): {
+  width: number;
+  height: number;
+} {
+  const css = parseCss(
+    node.attrs.style
+  );
+
+  const width =
+    parseDimension(
+      node.attrs.width
+    ) ??
+    parseDimension(css.width);
+
+  const height =
+    parseDimension(
+      node.attrs.height
+    ) ??
+    parseDimension(css.height);
+
+  /*
+   * Для зображень без заданого розміру
+   * використовуємо безпечний розмір.
+   */
+  if (width && height) {
+    return {
+      width: Math.min(width, 470),
+      height: Math.min(height, 320),
+    };
+  }
+
+  if (width) {
+    return {
+      width: Math.min(width, 470),
+      height: Math.min(
+        Math.max(width * 0.6, 40),
+        320
+      ),
+    };
+  }
+
+  if (height) {
+    return {
+      width: Math.min(
+        Math.max(height * 1.6, 40),
+        470
+      ),
+      height: Math.min(height, 320),
+    };
+  }
+
+  return {
+    width: 240,
+    height: 120,
+  };
+}
+
+// =====================================================
+// HTML → PDF RENDERING
+// =====================================================
 
 function renderInlineNodes(
   nodes: HtmlNode[],
-  inheritedStyle: PdfInlineStyle = {}
+  parentStyle: InlineStyle = {}
 ): React.ReactNode[] {
-  return nodes.map(
-    (node, index) => {
-      const key =
-        `${node.tag ?? "text"}-${index}`;
+  const result: React.ReactNode[] = [];
 
-      if (
-        node.type === "text"
-      ) {
-        return node.text ?? "";
+  nodes.forEach((node, index) => {
+    if (node.type === "text") {
+      if (!node.text) {
+        return;
       }
 
-      const tag =
-        node.tag?.toLowerCase() ?? "";
-
-      if (tag === "br") {
-        return (
-          <Text key={key}>
-            {"\n"}
-          </Text>
-        );
-      }
-
-      if (tag === "img") {
-        return null;
-      }
-
-      const style =
-        getNodeStyle(
-          node,
-          inheritedStyle
-        );
-
-      return (
+      result.push(
         <Text
-          key={key}
-          style={normalizeFontStyle(
-            style
-          )}
+          key={`text-${index}`}
+          style={parentStyle}
         >
-          {renderInlineNodes(
-            node.children ?? [],
-            style
-          )}
+          {node.text}
         </Text>
       );
+
+      return;
     }
-  );
-}
 
-function renderParagraph(
-  node: HtmlNode,
-  key: string
-) {
-  const children =
-    node.children ?? [];
+    if (node.type !== "element") {
+      return;
+    }
 
-  const hasDirectImage =
-    children.some(isImageNode);
+    const tag = node.tag;
 
-  const blockStyle =
-    parseCssStyle(
-      node.attrs?.style
-    );
+    if (tag === "br") {
+      result.push(
+        <Text
+          key={`br-${index}`}
+        >
+          {"\n"}
+        </Text>
+      );
 
-  if (!hasDirectImage) {
-    return (
+      return;
+    }
+
+    if (tag === "img") {
+      const src = resolveImageSrc(
+        node.attrs.src ?? ""
+      );
+
+      if (!src) {
+        return;
+      }
+
+      const dimensions =
+        getImageDimensions(node);
+
+      /*
+       * Image НЕ вкладається всередину Text.
+       * Це була одна з причин падіння full-режиму.
+       *
+       * Тут повертаємо View, який може бути
+       * дочірнім елементом загального View.
+       */
+      result.push(
+        <View
+          key={`image-${index}`}
+          style={{
+            marginVertical: 4,
+            alignItems: "flex-start",
+          }}
+        >
+          <Image
+            src={src}
+            style={{
+              width: dimensions.width,
+              height: dimensions.height,
+              objectFit: "contain",
+            }}
+          />
+        </View>
+      );
+
+      return;
+    }
+
+    const nextStyle =
+      getNodeInlineStyle(
+        node,
+        parentStyle
+      );
+
+    result.push(
       <Text
-        key={key}
-        style={normalizeFontStyle(
-          blockStyle
-        )}
+        key={`inline-${index}`}
+        style={nextStyle}
       >
         {renderInlineNodes(
-          children,
-          blockStyle
+          node.children,
+          nextStyle
         )}
       </Text>
     );
-  }
+  });
 
-  return (
-    <View key={key}>
-      {children.map(
-        (child, index) => {
-          if (
-            isImageNode(child)
-          ) {
-            return (
-              <PdfImage
-                key={`img-${index}`}
-                node={child}
-              />
-            );
-          }
-
-          return (
-            <Text
-              key={`text-${index}`}
-              style={normalizeFontStyle(
-                blockStyle
-              )}
-            >
-              {renderInlineNodes(
-                [child],
-                blockStyle
-              )}
-            </Text>
-          );
-        }
-      )}
-    </View>
-  );
+  return result;
 }
 
-function renderHtmlBlock(
+function renderHtmlNode(
   node: HtmlNode,
-  index: number
-): React.ReactNode {
-  if (
-    node.type === "text"
-  ) {
-    if (
-      !node.text?.trim()
-    ) {
-      return null;
-    }
-
-    return (
-      <Text
-        key={`text-${index}`}
-      >
+  parentStyle: InlineStyle = {}
+): React.ReactNode[] {
+  if (node.type === "text") {
+    return [
+      <Text style={parentStyle}>
         {node.text}
-      </Text>
-    );
+      </Text>,
+    ];
   }
 
-  const tag =
-    node.tag?.toLowerCase() ?? "";
+  if (node.type === "root") {
+    const result: React.ReactNode[] = [];
 
-  const key =
-    `${tag}-${index}`;
+    node.children.forEach(
+      (child, index) => {
+        result.push(
+          <React.Fragment
+            key={`root-${index}`}
+          >
+            {renderHtmlNode(
+              child,
+              parentStyle
+            )}
+          </React.Fragment>
+        );
+      }
+    );
+
+    return result;
+  }
+
+  const tag = node.tag;
 
   if (tag === "img") {
-    return (
-      <PdfImage
-        key={key}
-        node={node}
-      />
+    const src = resolveImageSrc(
+      node.attrs.src ?? ""
     );
-  }
 
-  if (
-    tag === "p" ||
-    tag === "div" ||
-    tag === "section" ||
-    tag === "article"
-  ) {
-    return renderParagraph(
-      node,
-      key
-    );
-  }
+    if (!src) {
+      return [];
+    }
 
-  if (
-    /^h[1-6]$/.test(tag)
-  ) {
-    const headingSize =
-      tag === "h1"
-        ? 15
-        : tag === "h2"
-        ? 13
-        : tag === "h3"
-        ? 11
-        : 9.5;
+    const dimensions =
+      getImageDimensions(node);
 
-    return (
-      <Text
-        key={key}
-        style={[
-          {
-            fontSize:
-              headingSize,
-            fontWeight: 700,
-            marginBottom: 5,
-            marginTop: 3,
-            color: DARK,
-          },
-          normalizeFontStyle(
-            parseCssStyle(
-              node.attrs?.style
-            )
-          ),
-        ]}
+    return [
+      <View
+        key={`image-${node.attrs.src}-${Math.random()}`}
+        style={{
+          marginVertical: 5,
+          alignItems: "flex-start",
+        }}
       >
-        {renderInlineNodes(
-          node.children ?? [],
-          {
-            fontWeight: 700,
-          }
-        )}
-      </Text>
+        <Image
+          src={src}
+          style={{
+            width: dimensions.width,
+            height: dimensions.height,
+            objectFit: "contain",
+          }}
+        />
+      </View>,
+    ];
+  }
+
+  if (tag === "br") {
+    return [
+      <Text key="break">
+        {"\n"}
+      </Text>,
+    ];
+  }
+
+  const nextStyle =
+    getNodeInlineStyle(
+      node,
+      parentStyle
+    );
+
+  const blockTags = new Set([
+    "p",
+    "div",
+    "section",
+    "article",
+    "figure",
+    "figcaption",
+    "blockquote",
+    "ul",
+    "ol",
+    "li",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "pre",
+  ]);
+
+  if (!blockTags.has(tag)) {
+    return renderInlineNodes(
+      node.children,
+      nextStyle
     );
   }
 
@@ -1407,159 +1276,212 @@ function renderHtmlBlock(
     tag === "ul" ||
     tag === "ol"
   ) {
-    return (
+    return [
       <View
-        key={key}
+        key={`list-${tag}`}
         style={{
           marginVertical: 3,
         }}
       >
-        {(node.children ?? []).map(
-          (child, childIndex) =>
-            renderListItem(
-              child,
-              childIndex,
-              tag === "ol"
-            )
+        {node.children.map(
+          (child, index) => (
+            <View
+              key={`li-${index}`}
+              style={{
+                flexDirection: "row",
+                marginBottom: 2,
+              }}
+            >
+              <Text
+                style={{
+                  width: 15,
+                  fontSize: 8,
+                }}
+              >
+                {tag === "ol"
+                  ? `${index + 1}.`
+                  : "•"}
+              </Text>
+
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                {renderHtmlNode(
+                  child,
+                  nextStyle
+                )}
+              </View>
+            </View>
+          )
         )}
-      </View>
-    );
+      </View>,
+    ];
   }
 
-  if (tag === "li") {
-    return renderListItem(
-      node,
-      index,
-      false
-    );
-  }
-
-  if (
-    tag === "figure"
-  ) {
-    return (
+  if (tag === "figure") {
+    return [
       <View
-        key={key}
+        key="figure"
         style={{
           marginVertical: 5,
         }}
       >
-        {(node.children ?? []).map(
-          (child, childIndex) =>
-            renderHtmlBlock(
-              child,
-              childIndex
-            )
+        {node.children.map(
+          (child, index) => (
+            <React.Fragment
+              key={`figure-${index}`}
+            >
+              {renderHtmlNode(
+                child,
+                nextStyle
+              )}
+            </React.Fragment>
+          )
         )}
-      </View>
-    );
+      </View>,
+    ];
   }
 
-  if (
-    tag === "figcaption"
-  ) {
-    return (
+  if (tag === "figcaption") {
+    return [
       <Text
-        key={key}
+        key="figcaption"
         style={{
+          ...nextStyle,
           fontSize: 7,
           color: GRAY,
           marginTop: 2,
         }}
       >
         {renderInlineNodes(
-          node.children ?? []
+          node.children,
+          nextStyle
         )}
-      </Text>
-    );
+      </Text>,
+    ];
   }
 
-  if (
-    tag === "blockquote"
-  ) {
-    return (
+  if (tag === "blockquote") {
+    return [
       <View
-        key={key}
+        key="blockquote"
         style={{
           borderLeftWidth: 2,
-          borderLeftColor:
-            BURGUNDY,
+          borderLeftColor: BURGUNDY,
           paddingLeft: 7,
           marginVertical: 4,
         }}
       >
-        <Text>
-          {renderInlineNodes(
-            node.children ?? []
-          )}
-        </Text>
-      </View>
-    );
+        {node.children.map(
+          (child, index) => (
+            <React.Fragment
+              key={`blockquote-${index}`}
+            >
+              {renderHtmlNode(
+                child,
+                nextStyle
+              )}
+            </React.Fragment>
+          )
+        )}
+      </View>,
+    ];
   }
 
-  if (tag === "hr") {
-    return (
-      <View
-        key={key}
-        style={{
-          borderTopWidth: 0.6,
-          borderTopColor:
-            LIGHT_GRAY,
-          marginVertical: 5,
-        }}
-      />
-    );
-  }
+  const headingSizes: Record<
+    string,
+    number
+  > = {
+    h1: 15,
+    h2: 13,
+    h3: 11,
+    h4: 10,
+    h5: 9,
+    h6: 8,
+  };
 
-  return (
-    <View key={key}>
-      {renderInlineNodes(
-        node.children ?? []
-      )}
-    </View>
-  );
-}
-
-function renderListItem(
-  node: HtmlNode,
-  index: number,
-  ordered: boolean
-) {
-  const marker = ordered
-    ? `${index + 1}.`
-    : "•";
-
-  return (
-    <View
-      key={`li-${index}`}
-      style={{
-        flexDirection: "row",
-        marginBottom: 3,
-      }}
-    >
+  if (headingSizes[tag]) {
+    return [
       <Text
+        key={`heading-${tag}`}
         style={{
-          width: 15,
-          fontSize: 8,
+          ...nextStyle,
+          fontSize:
+            headingSizes[tag],
           fontWeight: 700,
-        }}
-      >
-        {marker}
-      </Text>
-
-      <Text
-        style={{
-          flex: 1,
-          fontSize: 8,
-          lineHeight: 1.35,
+          marginVertical: 3,
         }}
       >
         {renderInlineNodes(
-          node.children ?? []
+          node.children,
+          nextStyle
         )}
-      </Text>
-    </View>
-  );
+      </Text>,
+    ];
+  }
+
+  if (tag === "li") {
+    return [
+      <View
+        key="li"
+        style={{
+          flexDirection: "row",
+          marginBottom: 2,
+        }}
+      >
+        <Text
+          style={{
+            width: 15,
+            fontSize: 8,
+          }}
+        >
+          •
+        </Text>
+
+        <Text
+          style={{
+            flex: 1,
+            ...nextStyle,
+          }}
+        >
+          {renderInlineNodes(
+            node.children,
+            nextStyle
+          )}
+        </Text>
+      </View>,
+    ];
+  }
+
+  /*
+   * Для p/div та інших block-елементів
+   * окремий View дозволяє безпечно вставляти
+   * зображення між текстовими частинами.
+   */
+  return [
+    <View
+      key={`block-${tag}-${Math.random()}`}
+      style={{
+        marginBottom:
+          tag === "p" ? 4 : 2,
+      }}
+    >
+      {node.children.map(
+        (child, index) => (
+          <React.Fragment
+            key={`${tag}-${index}`}
+          >
+            {renderHtmlNode(
+              child,
+              nextStyle
+            )}
+          </React.Fragment>
+        )
+      )}
+    </View>,
+  ];
 }
 
 function HtmlContentPdf({
@@ -1569,42 +1491,31 @@ function HtmlContentPdf({
   html: string;
   style?: any;
 }) {
-  if (!html) {
+  const tree = parseHtml(html);
+
+  if (
+    tree.type === "root" &&
+    tree.children.length === 0
+  ) {
     return null;
   }
 
-  const root =
-    parseHtml(html);
-
-  const children =
-    root.children ?? [];
-
-  if (
-    children.length === 0
-  ) {
-    const fallback =
-      stripHtml(html);
-
-    if (!fallback) {
-      return null;
-    }
-
-    return (
-      <Text style={style}>
-        {fallback}
-      </Text>
-    );
-  }
+  const result =
+    tree.type === "root"
+      ? tree.children.map(
+          (child, index) => (
+            <React.Fragment
+              key={`html-${index}`}
+            >
+              {renderHtmlNode(child)}
+            </React.Fragment>
+          )
+        )
+      : renderHtmlNode(tree);
 
   return (
     <View style={style}>
-      {children.map(
-        (node, index) =>
-          renderHtmlBlock(
-            node,
-            index
-          )
-      )}
+      {result}
     </View>
   );
 }
@@ -1614,48 +1525,38 @@ function HtmlContentPdf({
 // =====================================================
 
 function getSignatureData(): string | null {
-  const brandingDir =
-    path.join(
-      process.cwd(),
-      "public",
-      "branding"
-    );
-
-  const candidates = [
+  const possibleFiles = [
     "signature.jpg",
     "signature.png",
     "signature.png.jpg",
   ];
 
-  for (const filename of candidates) {
-    const signaturePath =
-      path.join(
-        brandingDir,
-        filename
-      );
+  for (const fileName of possibleFiles) {
+    const signaturePath = path.join(
+      brandingPath,
+      fileName
+    );
 
-    if (
-      !fs.existsSync(
-        signaturePath
-      )
-    ) {
+    if (!fs.existsSync(signaturePath)) {
       continue;
     }
 
     try {
       const buffer =
-        fs.readFileSync(
-          signaturePath
-        );
+        fs.readFileSync(signaturePath);
 
-      let mime =
-        "image/jpeg";
+      const extension =
+        path.extname(signaturePath).toLowerCase();
+
+      let mime = "image/jpeg";
+
+      if (extension === ".png") {
+        mime = "image/png";
+      }
 
       /*
-       * Визначаємо PNG за сигнатурою,
-       * навіть якщо файл має дивне
-       * розширення на кшталт
-       * signature.png.jpg.
+       * signature.png.jpg може фактично бути PNG.
+       * Перевіряємо сигнатуру файлу.
        */
       if (
         buffer.length >= 8 &&
@@ -1664,8 +1565,7 @@ function getSignatureData(): string | null {
         buffer[2] === 0x4e &&
         buffer[3] === 0x47
       ) {
-        mime =
-          "image/png";
+        mime = "image/png";
       }
 
       return `data:${mime};base64,${buffer.toString(
@@ -1686,7 +1586,7 @@ function getSignatureData(): string | null {
 const styles = StyleSheet.create({
   page: {
     paddingTop: 96,
-    paddingBottom: 100,
+    paddingBottom: 92,
     paddingHorizontal: 42,
     fontFamily: "NotoSans",
     fontSize: 9,
@@ -1694,9 +1594,9 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // HEADER
-  // ===================================================
+  // ---------------------------------------------------
 
   header: {
     position: "absolute",
@@ -1706,7 +1606,7 @@ const styles = StyleSheet.create({
     height: 74,
     backgroundColor: BURGUNDY,
     paddingHorizontal: 42,
-    paddingVertical: 16,
+    paddingVertical: 17,
     overflow: "hidden",
   },
 
@@ -1757,13 +1657,13 @@ const styles = StyleSheet.create({
     opacity: 0.12,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // FOOTER
-  // ===================================================
+  // ---------------------------------------------------
 
   footer: {
     position: "absolute",
-    bottom: 22,
+    bottom: 24,
     left: 42,
     right: 42,
     borderTopWidth: 0.7,
@@ -1771,8 +1671,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
 
+  footerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
   footerAuthorBlock: {
-    width: 330,
+    width: 315,
   },
 
   footerMain: {
@@ -1783,26 +1688,24 @@ const styles = StyleSheet.create({
   },
 
   footerRole: {
-    width: 320,
     fontSize: 5.9,
-    lineHeight: 1.3,
+    lineHeight: 1.25,
     color: "#777777",
+    width: 300,
     marginBottom: 3,
   },
 
-  footerBottomRow: {
-    flexDirection: "row",
-    justifyContent:
-      "space-between",
-    alignItems: "flex-end",
+  signatureBlock: {
+    width: 90,
+    alignItems: "center",
+    justifyContent: "flex-start",
   },
 
   signatureRow: {
+    flexDirection: "row",
+    alignItems: "center",
     height: 29,
-    width: 100,
-    alignItems: "flex-start",
-    justifyContent:
-      "center",
+    marginBottom: 1,
   },
 
   signature: {
@@ -1814,7 +1717,7 @@ const styles = StyleSheet.create({
   footerContact: {
     fontSize: 6.1,
     color: "#777777",
-    marginTop: 2,
+    marginTop: 1,
   },
 
   pageNumber: {
@@ -1825,9 +1728,9 @@ const styles = StyleSheet.create({
     color: "#888888",
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // HEADINGS
-  // ===================================================
+  // ---------------------------------------------------
 
   mainHeading: {
     fontSize: 15,
@@ -1844,9 +1747,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // GENERAL INFO
-  // ===================================================
+  // ---------------------------------------------------
 
   infoBox: {
     borderWidth: 0.7,
@@ -1877,9 +1780,9 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // STATS
-  // ===================================================
+  // ---------------------------------------------------
 
   statsContainer: {
     flexDirection: "row",
@@ -1909,9 +1812,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // ANSWER TABLE
-  // ===================================================
+  // ---------------------------------------------------
 
   table: {
     width: "100%",
@@ -1929,9 +1832,9 @@ const styles = StyleSheet.create({
 
   tableHeaderCell: {
     color: WHITE,
-    fontSize: 7.1,
+    fontSize: 7.3,
     fontWeight: 700,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 5,
   },
 
@@ -1954,26 +1857,25 @@ const styles = StyleSheet.create({
 
   tableCell: {
     fontSize: 7.5,
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 4,
   },
 
   colNumber: {
-    width: 52,
+    width: 48,
     textAlign: "center",
   },
 
   colAnswer: {
-    flex: 1,
+    width: 140,
     textAlign: "center",
   },
 
   /*
-   * Саме третя колонка:
-   * Завдання | Відповідь | Нараховані бали | Правильна
+   * Нараховані бали тепер третя колонка.
    */
   colPoints: {
-    width: 82,
+    width: 75,
     textAlign: "center",
   },
 
@@ -2001,9 +1903,9 @@ const styles = StyleSheet.create({
     color: GRAY,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // QUESTIONS
-  // ===================================================
+  // ---------------------------------------------------
 
   questionBlock: {
     borderWidth: 0.7,
@@ -2015,8 +1917,7 @@ const styles = StyleSheet.create({
 
   questionHeader: {
     flexDirection: "row",
-    justifyContent:
-      "space-between",
+    justifyContent: "space-between",
     marginBottom: 7,
   },
 
@@ -2098,9 +1999,9 @@ const styles = StyleSheet.create({
     fontWeight: 700,
   },
 
-  // ===================================================
+  // ---------------------------------------------------
   // MATCHING
-  // ===================================================
+  // ---------------------------------------------------
 
   matchingTable: {
     width: "100%",
@@ -2127,24 +2028,25 @@ const styles = StyleSheet.create({
     borderTopColor: LIGHT_GRAY,
   },
 
-  matchingCellView: {
+  matchingCell: {
     width: "50%",
     padding: 5,
-  },
-
-  matchingCellText: {
-    fontSize: 7.5,
     lineHeight: 1.3,
   },
 
   matchingCellCorrect: {
     width: "50%",
     padding: 5,
+    lineHeight: 1.3,
+    color: GREEN,
+    fontWeight: 700,
   },
 
   matchingCellIncorrect: {
     width: "50%",
     padding: 5,
+    lineHeight: 1.3,
+    color: RED,
   },
 
   matchingResult: {
@@ -2186,39 +2088,25 @@ const styles = StyleSheet.create({
 
 function Header() {
   return (
-    <View
-      style={styles.header}
-      fixed
-    >
+    <View style={styles.header} fixed>
       <View
-        style={
-          styles.decorativeCircleLeft
-        }
+        style={styles.decorativeCircleLeft}
       />
 
       <View
-        style={
-          styles.decorativeCircleRight
-        }
+        style={styles.decorativeCircleRight}
       />
 
       <View
-        style={
-          styles.decorativeCircleSmall
-        }
+        style={styles.decorativeCircleSmall}
       />
 
-      <Text
-        style={styles.headerBrand}
-      >
+      <Text style={styles.headerBrand}>
         NMT Platform
       </Text>
 
-      <Text
-        style={styles.headerTitle}
-      >
-        ПЛАТФОРМА КОМП&apos;ЮТЕРНОГО
-        ТЕСТУВАННЯ
+      <Text style={styles.headerTitle}>
+        ПЛАТФОРМА КОМП&apos;ЮТЕРНОГО ТЕСТУВАННЯ
       </Text>
     </View>
   );
@@ -2229,50 +2117,27 @@ function Header() {
 // =====================================================
 
 function Footer() {
-  const signature =
-    getSignatureData();
+  const signature = getSignatureData();
 
   return (
-    <View
-      style={styles.footer}
-      fixed
-    >
-      <View
-        style={styles.footerAuthorBlock}
-      >
-        <Text
-          style={styles.footerMain}
-        >
-          Автор &quot;NMT Platform&quot;
-          {" "}
-          Хорунжий Андрій
-          Володимирович
-        </Text>
+    <View style={styles.footer} fixed>
+      <View style={styles.footerContent}>
+        <View style={styles.footerAuthorBlock}>
+          <Text style={styles.footerMain}>
+            Автор &quot;NMT Platform&quot; Хорунжий
+            Андрій Володимирович
+          </Text>
 
-        <Text
-          style={styles.footerRole}
-        >
-          Учитель української мови
-          та літератури Комунального
-          закладу «Харківський ліцей
-          № 5 Харківської міської
-          ради», методист
-          Комунального закладу
-          «Харківська обласна Мала
-          академія наук»
-        </Text>
-      </View>
+          <Text style={styles.footerRole}>
+            Учитель української мови та літератури
+            Комунального закладу «Харківський ліцей
+            № 5 Харківської міської ради», методист
+            Комунального закладу «Харківська
+            обласна Мала академія наук»
+          </Text>
+        </View>
 
-      <View
-        style={
-          styles.footerBottomRow
-        }
-      >
-        <View
-          style={
-            styles.signatureRow
-          }
-        >
+        <View style={styles.signatureBlock}>
           {signature ? (
             <Image
               src={signature}
@@ -2282,12 +2147,9 @@ function Footer() {
         </View>
       </View>
 
-      <Text
-        style={styles.footerContact}
-      >
-        У разі виникнення технічних
-        проблем звертайтеся на
-        ahorunzij81@gmail.com
+      <Text style={styles.footerContact}>
+        У разі виникнення технічних проблем звертайтеся
+        на ahorunzij81@gmail.com
       </Text>
 
       <Text
@@ -2314,18 +2176,12 @@ function GeneralInfo({
 }) {
   return (
     <>
-      <Text
-        style={styles.mainHeading}
-      >
+      <Text style={styles.mainHeading}>
         {result.test.title}
       </Text>
 
-      <View
-        style={styles.infoBox}
-      >
-        <Text
-          style={styles.sectionTitle}
-        >
+      <View style={styles.infoBox}>
+        <Text style={styles.sectionTitle}>
           Загальна інформація
         </Text>
 
@@ -2335,9 +2191,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {getParticipantName(
-              result
-            )}
+            {getParticipantName(result)}
           </Text>
         </View>
 
@@ -2357,8 +2211,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {result.test.subject ||
-              "—"}
+            {result.test.subject || "—"}
           </Text>
         </View>
 
@@ -2368,8 +2221,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {result.test
-              .schoolYear || "—"}
+            {result.test.schoolYear || "—"}
           </Text>
         </View>
 
@@ -2379,9 +2231,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {formatDate(
-              result.startedAt
-            )}
+            {formatDate(result.startedAt)}
           </Text>
         </View>
 
@@ -2391,9 +2241,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {formatDate(
-              result.finishedAt
-            )}
+            {formatDate(result.finishedAt)}
           </Text>
         </View>
 
@@ -2403,9 +2251,7 @@ function GeneralInfo({
           </Text>
 
           <Text style={styles.infoValue}>
-            {formatDuration(
-              result.timeSpent
-            )}
+            {formatDuration(result.timeSpent)}
           </Text>
         </View>
 
@@ -2421,106 +2267,69 @@ function GeneralInfo({
           </Text>
         </View>
 
-        <View
-          style={styles.infoRowLast}
-        >
+        <View style={styles.infoRowLast}>
           <Text style={styles.infoLabel}>
             Код учасника
           </Text>
 
           <Text style={styles.infoValue}>
-            {result.accessCode ||
-              "—"}
+            {result.accessCode || "—"}
           </Text>
         </View>
       </View>
 
-      <Text
-        style={styles.sectionTitle}
-      >
+      <Text style={styles.sectionTitle}>
         Результат
       </Text>
 
-      <View
-        style={styles.statsContainer}
-      >
-        <View
-          style={styles.statBox}
-        >
-          <Text
-            style={styles.statValue}
-          >
+      <View style={styles.statsContainer}>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
             {result.earnedPoints} /{" "}
             {result.maxPoints}
           </Text>
 
-          <Text
-            style={styles.statLabel}
-          >
+          <Text style={styles.statLabel}>
             Набрані бали
           </Text>
         </View>
 
-        <View
-          style={styles.statBox}
-        >
-          <Text
-            style={styles.statValue}
-          >
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
             {result.percent}%
           </Text>
 
-          <Text
-            style={styles.statLabel}
-          >
+          <Text style={styles.statLabel}>
             Результативність
           </Text>
         </View>
 
-        <View
-          style={styles.statBox}
-        >
-          <Text
-            style={styles.statValue}
-          >
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
             {result.correct}
           </Text>
 
-          <Text
-            style={styles.statLabel}
-          >
+          <Text style={styles.statLabel}>
             Правильних
           </Text>
         </View>
 
-        <View
-          style={styles.statBox}
-        >
-          <Text
-            style={styles.statValue}
-          >
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
             {result.incorrect}
           </Text>
 
-          <Text
-            style={styles.statLabel}
-          >
+          <Text style={styles.statLabel}>
             Неправильних
           </Text>
         </View>
 
-        <View
-          style={styles.statBox}
-        >
-          <Text
-            style={styles.statValue}
-          >
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
             {result.skipped}
           </Text>
 
-          <Text
-            style={styles.statLabel}
-          >
+          <Text style={styles.statLabel}>
             Пропущених
           </Text>
         </View>
@@ -2540,16 +2349,12 @@ function AnswersTable({
 }) {
   return (
     <>
-      <Text
-        style={styles.sectionTitle}
-      >
+      <Text style={styles.sectionTitle}>
         Журнал відповідей
       </Text>
 
       <View style={styles.table}>
-        <View
-          style={styles.tableHeader}
-        >
+        <View style={styles.tableHeader}>
           <Text
             style={[
               styles.tableHeaderCell,
@@ -2588,10 +2393,7 @@ function AnswersTable({
         </View>
 
         {result.test.questions.map(
-          (
-            testQuestion,
-            index
-          ) => {
+          (testQuestion, index) => {
             const question =
               testQuestion.question;
 
@@ -2606,12 +2408,8 @@ function AnswersTable({
                 question
               );
 
-            let participantAnswer =
-              "—";
-
-            let correctAnswer =
-              "—";
-
+            let participantAnswer = "—";
+            let correctAnswer = "—";
             let correct = false;
 
             if (matching) {
@@ -2686,8 +2484,7 @@ function AnswersTable({
                     styles.colAnswer,
                     correct
                       ? styles.correctText
-                      : participantAnswer ===
-                        "—"
+                      : participantAnswer === "—"
                       ? styles.skippedText
                       : styles.incorrectText,
                   ]}
@@ -2738,49 +2535,30 @@ function OrdinaryQuestion({
   number: number;
   selectedAnswers: number[];
 }) {
-  const correct =
-    isQuestionCorrect(
-      question,
-      selectedAnswers
-    );
-
-  const earnedPoints =
-    getEarnedPoints(
-      question,
-      selectedAnswers
-    );
+  const correct = isQuestionCorrect(
+    question,
+    selectedAnswers
+  );
 
   return (
-    <View
-      style={styles.questionBlock}
-    >
-      <View
-        style={styles.questionHeader}
-      >
-        <Text
-          style={styles.questionNumber}
-        >
+    <View style={styles.questionBlock}>
+      <View style={styles.questionHeader}>
+        <Text style={styles.questionNumber}>
           Завдання {number}
         </Text>
 
-        <Text
-          style={styles.questionPoints}
-        >
+        <Text style={styles.questionPoints}>
           {question.points} б.
         </Text>
       </View>
 
-      <Text
-        style={styles.conditionLabel}
-      >
+      <Text style={styles.conditionLabel}>
         Умова
       </Text>
 
       <HtmlContentPdf
         html={question.text}
-        style={
-          styles.conditionText
-        }
+        style={styles.conditionText}
       />
 
       {question.answerOptions.map(
@@ -2797,9 +2575,7 @@ function OrdinaryQuestion({
               style={styles.optionRow}
             >
               <Text
-                style={
-                  styles.optionLetter
-                }
+                style={styles.optionLetter}
               >
                 {getLetter(index)}.
               </Text>
@@ -2811,27 +2587,21 @@ function OrdinaryQuestion({
               >
                 <HtmlContentPdf
                   html={option.text}
-                  style={
-                    styles.optionText
-                  }
+                  style={styles.optionText}
                 />
               </View>
 
               {optionSelected ? (
                 <Text
-                  style={
-                    styles.selectedTag
-                  }
+                  style={styles.selectedTag}
                 >
-                  Відповідь
+                  Відповідь учасника
                 </Text>
               ) : null}
 
               {option.isCorrect ? (
                 <Text
-                  style={
-                    styles.correctTag
-                  }
+                  style={styles.correctTag}
                 >
                   Правильна
                 </Text>
@@ -2841,18 +2611,12 @@ function OrdinaryQuestion({
         }
       )}
 
-      <View
-        style={styles.answerLine}
-      >
-        <Text
-          style={styles.answerLabel}
-        >
+      <View style={styles.answerLine}>
+        <Text style={styles.answerLabel}>
           Обрано:
         </Text>
 
-        <Text
-          style={styles.answerValue}
-        >
+        <Text style={styles.answerValue}>
           {getOrdinaryAnswerLetters(
             question,
             selectedAnswers
@@ -2860,12 +2624,8 @@ function OrdinaryQuestion({
         </Text>
       </View>
 
-      <View
-        style={styles.answerLine}
-      >
-        <Text
-          style={styles.answerLabel}
-        >
+      <View style={styles.answerLine}>
+        <Text style={styles.answerLabel}>
           Правильна відповідь:
         </Text>
 
@@ -2881,34 +2641,32 @@ function OrdinaryQuestion({
         </Text>
       </View>
 
-      <View
-        style={styles.answerLine}
-      >
-        <Text
-          style={styles.answerLabel}
-        >
+      <View style={styles.answerLine}>
+        <Text style={styles.answerLabel}>
           Нараховані бали:
         </Text>
 
         <Text
           style={[
             styles.answerValue,
-            earnedPoints > 0
+            getEarnedPoints(
+              question,
+              selectedAnswers
+            ) > 0
               ? styles.correctText
               : styles.incorrectText,
           ]}
         >
-          {earnedPoints} /{" "}
-          {question.points}
+          {getEarnedPoints(
+            question,
+            selectedAnswers
+          )}{" "}
+          / {question.points}
         </Text>
       </View>
 
-      <View
-        style={styles.answerLine}
-      >
-        <Text
-          style={styles.answerLabel}
-        >
+      <View style={styles.answerLine}>
+        <Text style={styles.answerLabel}>
           Результат:
         </Text>
 
@@ -2922,8 +2680,7 @@ function OrdinaryQuestion({
         >
           {correct
             ? "Правильно"
-            : selectedAnswers.length ===
-              0
+            : selectedAnswers.length === 0
             ? "Не виконано"
             : "Неправильно"}
         </Text>
@@ -2961,44 +2718,28 @@ function MatchingQuestion({
     );
 
   return (
-    <View
-      style={styles.questionBlock}
-    >
-      <View
-        style={styles.questionHeader}
-      >
-        <Text
-          style={styles.questionNumber}
-        >
+    <View style={styles.questionBlock}>
+      <View style={styles.questionHeader}>
+        <Text style={styles.questionNumber}>
           Завдання {number}
         </Text>
 
-        <Text
-          style={styles.questionPoints}
-        >
+        <Text style={styles.questionPoints}>
           {question.points} б.
         </Text>
       </View>
 
-      <Text
-        style={styles.conditionLabel}
-      >
+      <Text style={styles.conditionLabel}>
         Умова
       </Text>
 
       <HtmlContentPdf
         html={question.text}
-        style={
-          styles.conditionText
-        }
+        style={styles.conditionText}
       />
 
-      <View
-        style={styles.matchingTable}
-      >
-        <View
-          style={styles.matchingHeader}
-        >
+      <View style={styles.matchingTable}>
+        <View style={styles.matchingHeader}>
           <Text
             style={[
               styles.matchingHeaderCell,
@@ -3018,99 +2759,86 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        {left.map(
-          (item, index) => {
-            const selectedRightId =
-              selectedAnswers[index];
+        {left.map((item, index) => {
+          const selectedRightId =
+            selectedAnswers[index];
 
-            const selectedRight =
-              right.find(
-                (rightItem) =>
-                  rightItem.id ===
-                  selectedRightId
-              );
+          const selectedRight =
+            right.find(
+              (rightItem) =>
+                rightItem.id ===
+                selectedRightId
+            );
 
-            const pairCorrect =
-              selectedRightId !==
-                undefined &&
-              selectedRightId ===
-                item.correctRightId;
+          const pairCorrect =
+            selectedRightId !== undefined &&
+            selectedRightId ===
+              item.correctRightId;
 
-            return (
+          return (
+            <View
+              key={item.id}
+              style={styles.matchingRow}
+            >
               <View
-                key={item.id}
+                style={styles.matchingCell}
+              >
+                <Text
+                  style={{
+                    fontSize: 7.5,
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {getLetter(index)}.{" "}
+                </Text>
+
+                <HtmlContentPdf
+                  html={item.text}
+                  style={{
+                    flex: 1,
+                  }}
+                />
+              </View>
+
+              <View
                 style={
-                  styles.matchingRow
+                  pairCorrect
+                    ? styles.matchingCellCorrect
+                    : styles.matchingCellIncorrect
                 }
               >
-                <View
-                  style={
-                    styles.matchingCellView
-                  }
-                >
-                  <Text
-                    style={
-                      styles.matchingCellText
-                    }
-                  >
-                    {getLetter(index)}.
-                  </Text>
-
+                {selectedRight ? (
                   <HtmlContentPdf
-                    html={item.text}
+                    html={selectedRight.text}
+                    style={{
+                      flex: 1,
+                    }}
                   />
-                </View>
-
-                <View
-                  style={
-                    pairCorrect
-                      ? styles.matchingCellCorrect
-                      : styles.matchingCellIncorrect
-                  }
-                >
-                  {selectedRight ? (
-                    <HtmlContentPdf
-                      html={
-                        selectedRight.text
-                      }
-                    />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.matchingCellText,
-                        styles.muted,
-                      ]}
-                    >
-                      —
-                    </Text>
-                  )}
-                </View>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 7.5,
+                    }}
+                  >
+                    —
+                  </Text>
+                )}
               </View>
-            );
-          }
-        )}
+            </View>
+          );
+        })}
       </View>
 
-      <View
-        style={styles.matchingResult}
-      >
-        <View
-          style={
-            styles.matchingResultRow
-          }
-        >
+      <View style={styles.matchingResult}>
+        <View style={styles.matchingResultRow}>
           <Text
-            style={
-              styles.matchingResultLabel
-            }
+            style={styles.matchingResultLabel}
           >
             Відповідь учасника:
           </Text>
 
           <Text
-            style={
-              styles.matchingResultValue
-            }
+            style={styles.matchingResultValue}
           >
             {getMatchingAnswerLetters(
               question,
@@ -3119,15 +2847,9 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        <View
-          style={
-            styles.matchingResultRow
-          }
-        >
+        <View style={styles.matchingResultRow}>
           <Text
-            style={
-              styles.matchingResultLabel
-            }
+            style={styles.matchingResultLabel}
           >
             Правильна відповідь:
           </Text>
@@ -3144,38 +2866,24 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        <View
-          style={
-            styles.matchingResultRow
-          }
-        >
+        <View style={styles.matchingResultRow}>
           <Text
-            style={
-              styles.matchingResultLabel
-            }
+            style={styles.matchingResultLabel}
           >
             Правильних пар:
           </Text>
 
           <Text
-            style={
-              styles.matchingResultValue
-            }
+            style={styles.matchingResultValue}
           >
             {status.correct} /{" "}
             {status.total}
           </Text>
         </View>
 
-        <View
-          style={
-            styles.matchingResultRow
-          }
-        >
+        <View style={styles.matchingResultRow}>
           <Text
-            style={
-              styles.matchingResultLabel
-            }
+            style={styles.matchingResultLabel}
           >
             Нараховані бали:
           </Text>
@@ -3208,17 +2916,12 @@ function FullQuestions({
 }) {
   return (
     <>
-      <Text
-        style={styles.sectionTitle}
-      >
+      <Text style={styles.sectionTitle}>
         Завдання та відповіді
       </Text>
 
       {result.test.questions.map(
-        (
-          testQuestion,
-          index
-        ) => {
+        (testQuestion, index) => {
           const question =
             testQuestion.question;
 
@@ -3229,15 +2932,11 @@ function FullQuestions({
             );
 
           if (
-            isMatchingQuestion(
-              question
-            )
+            isMatchingQuestion(question)
           ) {
             return (
               <MatchingQuestion
-                key={
-                  testQuestion.id
-                }
+                key={testQuestion.id}
                 question={question}
                 number={index + 1}
                 selectedAnswers={
@@ -3290,11 +2989,7 @@ export default function ResultPdfDocument({
 
         {mode === "summary" ? (
           <>
-            <Text
-              style={
-                styles.mainHeading
-              }
-            >
+            <Text style={styles.mainHeading}>
               РЕЗУЛЬТАТ ТЕСТУВАННЯ
             </Text>
 
@@ -3306,11 +3001,7 @@ export default function ResultPdfDocument({
 
         {mode === "answers" ? (
           <>
-            <Text
-              style={
-                styles.mainHeading
-              }
-            >
+            <Text style={styles.mainHeading}>
               ЖУРНАЛ ВІДПОВІДЕЙ
             </Text>
 
@@ -3326,11 +3017,7 @@ export default function ResultPdfDocument({
 
         {mode === "full" ? (
           <>
-            <Text
-              style={
-                styles.mainHeading
-              }
-            >
+            <Text style={styles.mainHeading}>
               ПОВНИЙ РЕЗУЛЬТАТ
             </Text>
 
