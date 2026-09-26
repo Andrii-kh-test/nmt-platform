@@ -82,13 +82,15 @@ type Props = {
 // =====================================================
 
 const BURGUNDY = "#7A1F2B";
+const BURGUNDY_DARK = "#641923";
 const DARK = "#202020";
 const GRAY = "#666666";
 const LIGHT_GRAY = "#E5E5E5";
-const VERY_LIGHT_GRAY = "#F6F6F6";
+const VERY_LIGHT_GRAY = "#F7F7F7";
 const WHITE = "#FFFFFF";
 const GREEN = "#287A45";
 const RED = "#A83232";
+const GOLD = "#B38B35";
 
 // =====================================================
 // FONT
@@ -126,21 +128,36 @@ Font.register({
 // HELPERS
 // =====================================================
 
-function stripHtml(value: string | null | undefined): string {
-  if (!value) {
-    return "";
-  }
-
+function decodeHtml(value: string): string {
   return value
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) =>
+      String.fromCharCode(Number(code))
+    )
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
+      String.fromCharCode(parseInt(code, 16))
+    );
+}
+
+function stripHtml(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  return decodeHtml(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  )
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -193,13 +210,10 @@ function getFinishReason(reason: string): string {
   switch (reason) {
     case "manual":
       return "Завершено учасником";
-
     case "timeout":
       return "Час вичерпано";
-
     case "security":
       return "Завершено через порушення умов тестування";
-
     default:
       return reason || "Не визначено";
   }
@@ -259,7 +273,9 @@ function isQuestionCorrect(
     .map((option) => option.id)
     .sort((a, b) => a - b);
 
-  const selectedIds = [...selectedAnswers].sort((a, b) => a - b);
+  const selectedIds = [...selectedAnswers].sort(
+    (a, b) => a - b
+  );
 
   if (correctIds.length !== selectedIds.length) {
     return false;
@@ -356,8 +372,357 @@ function isMatchingQuestion(question: QuestionData): boolean {
 
   return (
     normalizedType.includes("matching") ||
-    (normalizedType.includes("відповід") &&
-      normalizedType.includes("відповідність"))
+    normalizedType.includes("відповідність")
+  );
+}
+
+// =====================================================
+// ANSWER LETTERS
+// =====================================================
+
+function getOrdinaryAnswerLetters(
+  question: QuestionData,
+  selectedAnswers: number[]
+): string {
+  return question.answerOptions
+    .map((option, index) =>
+      isSelected(selectedAnswers, option.id)
+        ? getLetter(index)
+        : null
+    )
+    .filter(Boolean)
+    .join("");
+}
+
+function getCorrectOrdinaryAnswerLetters(
+  question: QuestionData
+): string {
+  return question.answerOptions
+    .map((option, index) =>
+      option.isCorrect ? getLetter(index) : null
+    )
+    .filter(Boolean)
+    .join("");
+}
+
+function getMatchingAnswerLetters(
+  question: QuestionData,
+  selectedAnswers: number[]
+): string {
+  const { left, right } = getMatchingData(question);
+
+  return left
+    .map((_, index) => {
+      const selectedRightId = selectedAnswers[index];
+
+      if (selectedRightId === undefined) {
+        return "—";
+      }
+
+      const rightIndex = right.findIndex(
+        (item) => item.id === selectedRightId
+      );
+
+      return rightIndex >= 0
+        ? getLetter(rightIndex)
+        : "—";
+    })
+    .join("");
+}
+
+function getMatchingCorrectAnswerLetters(
+  question: QuestionData
+): string {
+  const { left, right } = getMatchingData(question);
+
+  return left
+    .map((item) => {
+      const rightIndex = right.findIndex(
+        (rightItem) =>
+          rightItem.id === item.correctRightId
+      );
+
+      return rightIndex >= 0
+        ? getLetter(rightIndex)
+        : "—";
+    })
+    .join("");
+}
+
+// =====================================================
+// EARNED POINTS
+// =====================================================
+
+function getEarnedPoints(
+  question: QuestionData,
+  selectedAnswers: number[]
+): number {
+  if (isMatchingQuestion(question)) {
+    const status = getMatchingStatus(
+      question,
+      selectedAnswers
+    );
+
+    if (status.total === 0) {
+      return 0;
+    }
+
+    return Math.round(
+      (question.points * status.correct) /
+        status.total
+    );
+  }
+
+  return isQuestionCorrect(
+    question,
+    selectedAnswers
+  )
+    ? question.points
+    : 0;
+}
+
+// =====================================================
+// SIMPLE HTML → PDF RENDERER
+// =====================================================
+
+type InlineStyle = {
+  fontWeight?: 400 | 700;
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline" | "line-through";
+  backgroundColor?: string;
+  color?: string;
+};
+
+type HtmlPart =
+  | {
+      type: "text";
+      text: string;
+      style: InlineStyle;
+    }
+  | {
+      type: "image";
+      src: string;
+      width?: number;
+      height?: number;
+    }
+  | {
+      type: "break";
+    };
+
+function getInlineStyle(
+  tag: string,
+  current: InlineStyle
+): InlineStyle {
+  const next = { ...current };
+
+  switch (tag) {
+    case "strong":
+    case "b":
+      next.fontWeight = 700;
+      break;
+
+    case "em":
+    case "i":
+      next.fontStyle = "italic";
+      break;
+
+    case "u":
+      next.textDecoration = "underline";
+      break;
+
+    case "s":
+    case "strike":
+    case "del":
+      next.textDecoration = "line-through";
+      break;
+
+    case "mark":
+      next.backgroundColor = "#FFF2A8";
+      break;
+  }
+
+  return next;
+}
+
+function parseHtmlParts(
+  html: string | null | undefined
+): HtmlPart[] {
+  if (!html) {
+    return [];
+  }
+
+  const parts: HtmlPart[] = [];
+  const tokenRegex =
+    /(<img\b[^>]*>|<br\s*\/?>|<\/?strong>|<\/?b>|<\/?em>|<\/?i>|<\/?u>|<\/?s>|<\/?strike>|<\/?del>|<\/?mark>|<\/?p>|<\/?div>|<\/?li>|<[^>]+>)/gi;
+
+  let currentStyle: InlineStyle = {};
+  let lastIndex = 0;
+
+  const pushText = (text: string) => {
+    if (!text) {
+      return;
+    }
+
+    const decoded = decodeHtml(text);
+
+    if (!decoded) {
+      return;
+    }
+
+    parts.push({
+      type: "text",
+      text: decoded,
+      style: { ...currentStyle },
+    });
+  };
+
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenRegex.exec(html)) !== null) {
+    pushText(html.slice(lastIndex, match.index));
+
+    const token = match[0];
+
+    if (/^<img\b/i.test(token)) {
+      const srcMatch =
+        token.match(
+          /\bsrc\s*=\s*["']([^"']+)["']/i
+        );
+
+      if (srcMatch?.[1]) {
+        const widthMatch =
+          token.match(
+            /\bwidth\s*=\s*["']?([\d.]+)/i
+          );
+
+        const heightMatch =
+          token.match(
+            /\bheight\s*=\s*["']?([\d.]+)/i
+          );
+
+        parts.push({
+          type: "image",
+          src: srcMatch[1],
+          width: widthMatch
+            ? Number(widthMatch[1])
+            : undefined,
+          height: heightMatch
+            ? Number(heightMatch[1])
+            : undefined,
+        });
+      }
+    } else if (/^<br/i.test(token)) {
+      parts.push({ type: "break" });
+    } else if (/^<\/?(strong|b|em|i|u|s|strike|del|mark)>$/i.test(token)) {
+      const closing = /^<\//.test(token);
+      const tag = token
+        .replace(/[<\/>]/g, "")
+        .toLowerCase();
+
+      if (closing) {
+        if (
+          tag === "strong" ||
+          tag === "b"
+        ) {
+          currentStyle.fontWeight = 400;
+        }
+
+        if (
+          tag === "em" ||
+          tag === "i"
+        ) {
+          currentStyle.fontStyle = "normal";
+        }
+
+        if (tag === "u") {
+          currentStyle.textDecoration = "none";
+        }
+
+        if (
+          tag === "s" ||
+          tag === "strike" ||
+          tag === "del"
+        ) {
+          currentStyle.textDecoration = "none";
+        }
+
+        if (tag === "mark") {
+          currentStyle.backgroundColor =
+            undefined;
+        }
+      } else {
+        currentStyle = getInlineStyle(
+          tag,
+          currentStyle
+        );
+      }
+    } else if (
+      /^<\/?(p|div|li)>$/i.test(token)
+    ) {
+      parts.push({ type: "break" });
+    }
+
+    lastIndex = tokenRegex.lastIndex;
+  }
+
+  pushText(html.slice(lastIndex));
+
+  return parts;
+}
+
+function HtmlContentPdf({
+  html,
+  style,
+}: {
+  html: string;
+  style?: any;
+}) {
+  const parts = parseHtmlParts(html);
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={style}>
+      <Text>
+        {parts.map((part, index) => {
+          if (part.type === "break") {
+            return (
+              <Text key={index}>
+                {"\n"}
+              </Text>
+            );
+          }
+
+          if (part.type === "image") {
+            return (
+              <Image
+                key={index}
+                src={part.src}
+                style={{
+                  width:
+                    part.width || 240,
+                  height:
+                    part.height || 120,
+                  objectFit: "contain",
+                  marginVertical: 4,
+                }}
+              />
+            );
+          }
+
+          return (
+            <Text
+              key={index}
+              style={part.style}
+            >
+              {part.text}
+            </Text>
+          );
+        })}
+      </Text>
+    </View>
   );
 }
 
@@ -367,11 +732,11 @@ function isMatchingQuestion(question: QuestionData): boolean {
 
 function getSignatureData(): string | null {
   const signaturePath = path.join(
-  process.cwd(),
-  "public",
-  "branding",
-  "signature.jpg"
-);
+    process.cwd(),
+    "public",
+    "branding",
+    "signature.jpg"
+  );
 
   if (!fs.existsSync(signaturePath)) {
     return null;
@@ -379,7 +744,10 @@ function getSignatureData(): string | null {
 
   try {
     const buffer = fs.readFileSync(signaturePath);
-    return `data:image/png;base64,${buffer.toString("base64")}`;
+
+    return `data:image/jpeg;base64,${buffer.toString(
+      "base64"
+    )}`;
   } catch {
     return null;
   }
@@ -391,8 +759,8 @@ function getSignatureData(): string | null {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 78,
+    paddingTop: 96,
+    paddingBottom: 92,
     paddingHorizontal: 42,
     fontFamily: "NotoSans",
     fontSize: 9,
@@ -400,34 +768,76 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  header: {
-    marginBottom: 22,
-  },
+  // ---------------------------------------------------
+  // HEADER
+  // ---------------------------------------------------
 
-  headerLine: {
-    height: 4,
+  header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 74,
     backgroundColor: BURGUNDY,
-    marginBottom: 10,
-    borderRadius: 2,
+    paddingHorizontal: 42,
+    paddingVertical: 17,
+    overflow: "hidden",
   },
 
   headerBrand: {
     fontSize: 17,
     fontWeight: 700,
-    color: BURGUNDY,
+    color: WHITE,
     marginBottom: 3,
   },
 
   headerTitle: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: 700,
-    color: DARK,
-    letterSpacing: 0.3,
+    color: WHITE,
+    letterSpacing: 0.35,
   },
+
+  decorativeCircleLeft: {
+    position: "absolute",
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    right: -35,
+    top: -39,
+    backgroundColor: WHITE,
+    opacity: 0.12,
+  },
+
+  decorativeCircleRight: {
+    position: "absolute",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    right: -60,
+    bottom: -72,
+    backgroundColor: WHITE,
+    opacity: 0.09,
+  },
+
+  decorativeCircleSmall: {
+    position: "absolute",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    left: -18,
+    bottom: -17,
+    backgroundColor: WHITE,
+    opacity: 0.12,
+  },
+
+  // ---------------------------------------------------
+  // FOOTER
+  // ---------------------------------------------------
 
   footer: {
     position: "absolute",
-    bottom: 25,
+    bottom: 24,
     left: 42,
     right: 42,
     borderTopWidth: 0.7,
@@ -439,47 +849,53 @@ const styles = StyleSheet.create({
     fontSize: 7.8,
     fontWeight: 700,
     color: BURGUNDY,
-    marginBottom: 3,
+    marginBottom: 2,
   },
 
   footerRole: {
-    fontSize: 6.1,
+    fontSize: 5.9,
     lineHeight: 1.25,
     color: "#777777",
-    marginBottom: 5,
+    width: 390,
+    marginBottom: 3,
   },
 
   signatureRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 3,
+    height: 29,
+    marginBottom: 1,
   },
 
   signature: {
-    width: 95,
-    height: 32,
+    width: 88,
+    height: 29,
     objectFit: "contain",
   },
 
   footerContact: {
-    fontSize: 6.2,
+    fontSize: 6.1,
     color: "#777777",
     marginTop: 1,
   },
 
   pageNumber: {
     position: "absolute",
-    right: 42,
-    bottom: 10,
+    right: 0,
+    bottom: 0,
     fontSize: 7,
     color: "#888888",
   },
+
+  // ---------------------------------------------------
+  // HEADINGS
+  // ---------------------------------------------------
 
   mainHeading: {
     fontSize: 15,
     fontWeight: 700,
     color: BURGUNDY,
-    marginBottom: 16,
+    marginBottom: 15,
   },
 
   sectionTitle: {
@@ -490,10 +906,14 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
+  // ---------------------------------------------------
+  // GENERAL INFO
+  // ---------------------------------------------------
+
   infoBox: {
     borderWidth: 0.7,
     borderColor: LIGHT_GRAY,
-    borderRadius: 5,
+    borderRadius: 6,
     padding: 10,
     marginBottom: 12,
   },
@@ -519,6 +939,10 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
   },
 
+  // ---------------------------------------------------
+  // STATS
+  // ---------------------------------------------------
+
   statsContainer: {
     flexDirection: "row",
     gap: 6,
@@ -529,7 +953,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 0.7,
     borderColor: LIGHT_GRAY,
-    borderRadius: 5,
+    borderRadius: 6,
     padding: 8,
     alignItems: "center",
   },
@@ -547,6 +971,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  // ---------------------------------------------------
+  // ANSWER TABLE
+  // ---------------------------------------------------
+
   table: {
     width: "100%",
     borderWidth: 0.7,
@@ -557,14 +985,13 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: "row",
     backgroundColor: BURGUNDY,
-    color: WHITE,
-    minHeight: 24,
+    minHeight: 27,
     alignItems: "center",
   },
 
   tableHeaderCell: {
     color: WHITE,
-    fontSize: 7.5,
+    fontSize: 7.3,
     fontWeight: 700,
     paddingHorizontal: 5,
     paddingVertical: 5,
@@ -572,7 +999,7 @@ const styles = StyleSheet.create({
 
   tableRow: {
     flexDirection: "row",
-    minHeight: 24,
+    minHeight: 25,
     borderTopWidth: 0.5,
     borderTopColor: LIGHT_GRAY,
     alignItems: "center",
@@ -580,7 +1007,7 @@ const styles = StyleSheet.create({
 
   tableRowAlt: {
     flexDirection: "row",
-    minHeight: 24,
+    minHeight: 25,
     borderTopWidth: 0.5,
     borderTopColor: LIGHT_GRAY,
     alignItems: "center",
@@ -594,15 +1021,28 @@ const styles = StyleSheet.create({
   },
 
   colNumber: {
-    width: 38,
+    width: 48,
+    textAlign: "center",
   },
 
   colAnswer: {
-    flex: 1,
+    width: 145,
+    textAlign: "center",
   },
 
   colCorrect: {
+    width: 145,
+    textAlign: "center",
+  },
+
+  colPoints: {
     flex: 1,
+    textAlign: "center",
+  },
+
+  pointsCell: {
+    fontWeight: 700,
+    color: BURGUNDY,
   },
 
   correctText: {
@@ -619,10 +1059,14 @@ const styles = StyleSheet.create({
     color: GRAY,
   },
 
+  // ---------------------------------------------------
+  // QUESTIONS
+  // ---------------------------------------------------
+
   questionBlock: {
     borderWidth: 0.7,
     borderColor: LIGHT_GRAY,
-    borderRadius: 5,
+    borderRadius: 6,
     marginBottom: 10,
     padding: 10,
   },
@@ -644,8 +1088,15 @@ const styles = StyleSheet.create({
     color: GRAY,
   },
 
-  questionText: {
-    fontSize: 8.5,
+  conditionLabel: {
+    fontSize: 7,
+    fontWeight: 700,
+    color: GRAY,
+    marginBottom: 3,
+  },
+
+  conditionText: {
+    fontSize: 8,
     lineHeight: 1.4,
     marginBottom: 8,
   },
@@ -671,14 +1122,14 @@ const styles = StyleSheet.create({
   },
 
   selectedTag: {
-    fontSize: 6.5,
+    fontSize: 6.3,
     color: BURGUNDY,
     fontWeight: 700,
     marginLeft: 5,
   },
 
   correctTag: {
-    fontSize: 6.5,
+    fontSize: 6.3,
     color: GREEN,
     fontWeight: 700,
     marginLeft: 5,
@@ -703,6 +1154,10 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     fontWeight: 700,
   },
+
+  // ---------------------------------------------------
+  // MATCHING
+  // ---------------------------------------------------
 
   matchingTable: {
     width: "100%",
@@ -753,17 +1208,28 @@ const styles = StyleSheet.create({
     color: RED,
   },
 
-  conditionLabel: {
-    fontSize: 7,
-    fontWeight: 700,
-    color: GRAY,
+  matchingResult: {
+    marginTop: 7,
+    paddingTop: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: LIGHT_GRAY,
+  },
+
+  matchingResultRow: {
+    flexDirection: "row",
     marginBottom: 3,
   },
 
-  conditionText: {
-    fontSize: 8,
-    lineHeight: 1.4,
-    marginBottom: 8,
+  matchingResultLabel: {
+    width: 125,
+    fontSize: 7.5,
+    color: GRAY,
+  },
+
+  matchingResultValue: {
+    flex: 1,
+    fontSize: 7.5,
+    fontWeight: 700,
   },
 
   muted: {
@@ -781,8 +1247,10 @@ const styles = StyleSheet.create({
 
 function Header() {
   return (
-    <View style={styles.header}>
-      <View style={styles.headerLine} />
+    <View style={styles.header} fixed>
+      <View style={styles.decorativeCircleLeft} />
+      <View style={styles.decorativeCircleRight} />
+      <View style={styles.decorativeCircleSmall} />
 
       <Text style={styles.headerBrand}>
         NMT Platform
@@ -805,13 +1273,16 @@ function Footer() {
   return (
     <View style={styles.footer} fixed>
       <Text style={styles.footerMain}>
-        Автор &quot;NMT Platform&quot; Хорунжий Андрій Володимирович
+        Автор &quot;NMT Platform&quot; Хорунжий Андрій
+        Володимирович
       </Text>
 
       <Text style={styles.footerRole}>
-        Учитель української мови та літератури Комунального закладу
-        «Харківський ліцей № 5 Харківської міської ради», методист
-        Комунального закладу «Харківська обласна Мала академія наук»
+        Учитель української мови та літератури
+        Комунального закладу «Харківський ліцей № 5
+        Харківської міської ради», методист
+        Комунального закладу «Харківська обласна
+        Мала академія наук»
       </Text>
 
       <View style={styles.signatureRow}>
@@ -824,8 +1295,8 @@ function Footer() {
       </View>
 
       <Text style={styles.footerContact}>
-        У разі виникнення технічних проблем звертайтеся на
-        ahorunzij81@gmail.com
+        У разі виникнення технічних проблем звертайтеся
+        на ahorunzij81@gmail.com
       </Text>
 
       <Text
@@ -862,7 +1333,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Учасник
           </Text>
-
           <Text style={styles.infoValue}>
             {getParticipantName(result)}
           </Text>
@@ -872,7 +1342,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Тест
           </Text>
-
           <Text style={styles.infoValue}>
             {result.test.title}
           </Text>
@@ -882,7 +1351,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Предмет
           </Text>
-
           <Text style={styles.infoValue}>
             {result.test.subject || "—"}
           </Text>
@@ -892,7 +1360,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Навчальний рік
           </Text>
-
           <Text style={styles.infoValue}>
             {result.test.schoolYear || "—"}
           </Text>
@@ -902,7 +1369,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Дата початку
           </Text>
-
           <Text style={styles.infoValue}>
             {formatDate(result.startedAt)}
           </Text>
@@ -912,7 +1378,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Дата завершення
           </Text>
-
           <Text style={styles.infoValue}>
             {formatDate(result.finishedAt)}
           </Text>
@@ -922,7 +1387,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Час виконання
           </Text>
-
           <Text style={styles.infoValue}>
             {formatDuration(result.timeSpent)}
           </Text>
@@ -932,7 +1396,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Причина завершення
           </Text>
-
           <Text style={styles.infoValue}>
             {getFinishReason(result.finishReason)}
           </Text>
@@ -942,7 +1405,6 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Код учасника
           </Text>
-
           <Text style={styles.infoValue}>
             {result.accessCode || "—"}
           </Text>
@@ -958,7 +1420,6 @@ function GeneralInfo({
           <Text style={styles.statValue}>
             {result.earnedPoints} / {result.maxPoints}
           </Text>
-
           <Text style={styles.statLabel}>
             Набрані бали
           </Text>
@@ -968,7 +1429,6 @@ function GeneralInfo({
           <Text style={styles.statValue}>
             {result.percent}%
           </Text>
-
           <Text style={styles.statLabel}>
             Результативність
           </Text>
@@ -978,7 +1438,6 @@ function GeneralInfo({
           <Text style={styles.statValue}>
             {result.correct}
           </Text>
-
           <Text style={styles.statLabel}>
             Правильних
           </Text>
@@ -988,7 +1447,6 @@ function GeneralInfo({
           <Text style={styles.statValue}>
             {result.incorrect}
           </Text>
-
           <Text style={styles.statLabel}>
             Неправильних
           </Text>
@@ -998,7 +1456,6 @@ function GeneralInfo({
           <Text style={styles.statValue}>
             {result.skipped}
           </Text>
-
           <Text style={styles.statLabel}>
             Пропущених
           </Text>
@@ -1051,147 +1508,138 @@ function AnswersTable({
           >
             Правильна відповідь
           </Text>
+
+          <Text
+            style={[
+              styles.tableHeaderCell,
+              styles.colPoints,
+            ]}
+          >
+            Нараховані бали
+          </Text>
         </View>
 
-        {result.test.questions.map((testQuestion, index) => {
-          const question = testQuestion.question;
-          const selectedAnswers = getSavedAnswers(
-            result.answers,
-            question.id
-          );
+        {result.test.questions.map(
+          (testQuestion, index) => {
+            const question = testQuestion.question;
 
-          const matching = isMatchingQuestion(question);
+            const selectedAnswers =
+              getSavedAnswers(
+                result.answers,
+                question.id
+              );
 
-          let participantAnswer = "—";
-          let correctAnswer = "—";
-          let correct = false;
+            const matching =
+              isMatchingQuestion(question);
 
-          if (matching) {
-            const { left, right } =
-              getMatchingData(question);
+            let participantAnswer = "—";
+            let correctAnswer = "—";
+            let correct = false;
 
-            participantAnswer = left
-              .map((item, leftIndex) => {
-                const selectedRightId =
-                  selectedAnswers[leftIndex];
-
-                const selectedRight = right.find(
-                  (itemRight) =>
-                    itemRight.id === selectedRightId
+            if (matching) {
+              participantAnswer =
+                getMatchingAnswerLetters(
+                  question,
+                  selectedAnswers
                 );
 
-                return selectedRight
-                  ? `${getLetter(leftIndex)} → ${selectedRight.text}`
-                  : `${getLetter(leftIndex)} → —`;
-              })
-              .join("; ");
-
-            correctAnswer = left
-              .map((item, leftIndex) => {
-                const correctRight = right.find(
-                  (itemRight) =>
-                    itemRight.id === item.correctRightId
+              correctAnswer =
+                getMatchingCorrectAnswerLetters(
+                  question
                 );
 
-                return correctRight
-                  ? `${getLetter(leftIndex)} → ${correctRight.text}`
-                  : `${getLetter(leftIndex)} → —`;
-              })
-              .join("; ");
+              const status =
+                getMatchingStatus(
+                  question,
+                  selectedAnswers
+                );
 
-            const matchingStatus =
-              getMatchingStatus(
+              correct =
+                status.total > 0 &&
+                status.correct === status.total;
+            } else {
+              participantAnswer =
+                getOrdinaryAnswerLetters(
+                  question,
+                  selectedAnswers
+                ) || "—";
+
+              correctAnswer =
+                getCorrectOrdinaryAnswerLetters(
+                  question
+                ) || "—";
+
+              correct =
+                isQuestionCorrect(
+                  question,
+                  selectedAnswers
+                );
+            }
+
+            const earnedPoints =
+              getEarnedPoints(
                 question,
                 selectedAnswers
               );
 
-            correct =
-              matchingStatus.total > 0 &&
-              matchingStatus.correct ===
-                matchingStatus.total;
-          } else {
-            const selectedOptions =
-              question.answerOptions.filter(
-                (option) =>
-                  selectedAnswers.includes(option.id)
-              );
+            const rowStyle =
+              index % 2 === 0
+                ? styles.tableRow
+                : styles.tableRowAlt;
 
-            const correctOptions =
-              question.answerOptions.filter(
-                (option) => option.isCorrect
-              );
+            return (
+              <View
+                key={testQuestion.id}
+                style={rowStyle}
+              >
+                <Text
+                  style={[
+                    styles.tableCell,
+                    styles.colNumber,
+                  ]}
+                >
+                  {index + 1}
+                </Text>
 
-            participantAnswer =
-              selectedOptions.length > 0
-                ? selectedOptions
-                    .map(
-                      (option) =>
-                        `${getLetter(option.order - 1)}`
-                    )
-                    .join(", ")
-                : "—";
+                <Text
+                  style={[
+                    styles.tableCell,
+                    styles.colAnswer,
+                    correct
+                      ? styles.correctText
+                      : participantAnswer === "—"
+                      ? styles.skippedText
+                      : styles.incorrectText,
+                  ]}
+                >
+                  {participantAnswer}
+                </Text>
 
-            correctAnswer =
-              correctOptions.length > 0
-                ? correctOptions
-                    .map(
-                      (option) =>
-                        `${getLetter(option.order - 1)}`
-                    )
-                    .join(", ")
-                : "—";
+                <Text
+                  style={[
+                    styles.tableCell,
+                    styles.colCorrect,
+                    styles.correctText,
+                  ]}
+                >
+                  {correctAnswer}
+                </Text>
 
-            correct = isQuestionCorrect(
-              question,
-              selectedAnswers
+                <Text
+                  style={[
+                    styles.tableCell,
+                    styles.colPoints,
+                    earnedPoints > 0
+                      ? styles.pointsCell
+                      : styles.skippedText,
+                  ]}
+                >
+                  {earnedPoints}
+                </Text>
+              </View>
             );
           }
-
-          const rowStyle =
-            index % 2 === 0
-              ? styles.tableRow
-              : styles.tableRowAlt;
-
-          return (
-            <View
-              key={testQuestion.id}
-              style={rowStyle}
-            >
-              <Text
-                style={[
-                  styles.tableCell,
-                  styles.colNumber,
-                ]}
-              >
-                {index + 1}
-              </Text>
-
-              <Text
-                style={[
-                  styles.tableCell,
-                  styles.colAnswer,
-                  correct
-                    ? styles.correctText
-                    : participantAnswer === "—"
-                    ? styles.skippedText
-                    : styles.incorrectText,
-                ]}
-              >
-                {participantAnswer}
-              </Text>
-
-              <Text
-                style={[
-                  styles.tableCell,
-                  styles.colCorrect,
-                  styles.correctText,
-                ]}
-              >
-                {correctAnswer}
-              </Text>
-            </View>
-          );
-        })}
+        )}
       </View>
     </>
   );
@@ -1216,7 +1664,7 @@ function OrdinaryQuestion({
   );
 
   return (
-    <View style={styles.questionBlock} wrap={false}>
+    <View style={styles.questionBlock}>
       <View style={styles.questionHeader}>
         <Text style={styles.questionNumber}>
           Завдання {number}
@@ -1231,9 +1679,10 @@ function OrdinaryQuestion({
         Умова
       </Text>
 
-      <Text style={styles.conditionText}>
-        {stripHtml(question.text)}
-      </Text>
+      <HtmlContentPdf
+        html={question.text}
+        style={styles.conditionText}
+      />
 
       {question.answerOptions.map(
         (option, index) => {
@@ -1252,26 +1701,19 @@ function OrdinaryQuestion({
                 {getLetter(index)}.
               </Text>
 
-              <Text style={styles.optionText}>
-                {stripHtml(option.text)}
-              </Text>
+              <HtmlContentPdf
+                html={option.text}
+                style={styles.optionText}
+              />
 
               {optionSelected ? (
-                <Text
-                  style={
-                    styles.selectedTag
-                  }
-                >
+                <Text style={styles.selectedTag}>
                   Відповідь учасника
                 </Text>
               ) : null}
 
               {option.isCorrect ? (
-                <Text
-                  style={
-                    styles.correctTag
-                  }
-                >
+                <Text style={styles.correctTag}>
                   Правильна
                 </Text>
               ) : null}
@@ -1286,20 +1728,10 @@ function OrdinaryQuestion({
         </Text>
 
         <Text style={styles.answerValue}>
-          {selectedAnswers.length > 0
-            ? question.answerOptions
-                .map(
-                  (option, index) =>
-                    isSelected(
-                      selectedAnswers,
-                      option.id
-                    )
-                      ? getLetter(index)
-                      : null
-                )
-                .filter(Boolean)
-                .join(", ")
-            : "—"}
+          {getOrdinaryAnswerLetters(
+            question,
+            selectedAnswers
+          ) || "—"}
         </Text>
       </View>
 
@@ -1314,15 +1746,32 @@ function OrdinaryQuestion({
             styles.correctText,
           ]}
         >
-          {question.answerOptions
-            .map(
-              (option, index) =>
-                option.isCorrect
-                  ? getLetter(index)
-                  : null
-            )
-            .filter(Boolean)
-            .join(", ") || "—"}
+          {getCorrectOrdinaryAnswerLetters(
+            question
+          ) || "—"}
+        </Text>
+      </View>
+
+      <View style={styles.answerLine}>
+        <Text style={styles.answerLabel}>
+          Нараховані бали:
+        </Text>
+
+        <Text
+          style={[
+            styles.answerValue,
+            getEarnedPoints(
+              question,
+              selectedAnswers
+            ) > 0
+              ? styles.correctText
+              : styles.incorrectText,
+          ]}
+        >
+          {getEarnedPoints(
+            question,
+            selectedAnswers
+          )} / {question.points}
         </Text>
       </View>
 
@@ -1366,13 +1815,20 @@ function MatchingQuestion({
   const { left, right } =
     getMatchingData(question);
 
-  const status = getMatchingStatus(
-    question,
-    selectedAnswers
-  );
+  const status =
+    getMatchingStatus(
+      question,
+      selectedAnswers
+    );
+
+  const earnedPoints =
+    getEarnedPoints(
+      question,
+      selectedAnswers
+    );
 
   return (
-    <View style={styles.questionBlock} wrap={false}>
+    <View style={styles.questionBlock}>
       <View style={styles.questionHeader}>
         <Text style={styles.questionNumber}>
           Завдання {number}
@@ -1387,18 +1843,17 @@ function MatchingQuestion({
         Умова
       </Text>
 
-      <Text style={styles.conditionText}>
-        {stripHtml(question.text)}
-      </Text>
+      <HtmlContentPdf
+        html={question.text}
+        style={styles.conditionText}
+      />
 
       <View style={styles.matchingTable}>
         <View style={styles.matchingHeader}>
           <Text
             style={[
               styles.matchingHeaderCell,
-              {
-                width: "50%",
-              },
+              { width: "50%" },
             ]}
           >
             Елемент
@@ -1407,9 +1862,7 @@ function MatchingQuestion({
           <Text
             style={[
               styles.matchingHeaderCell,
-              {
-                width: "50%",
-              },
+              { width: "50%" },
             ]}
           >
             Відповідь учасника
@@ -1464,38 +1917,70 @@ function MatchingQuestion({
                     )
                   : "—"}
               </Text>
-
-              <Text
-                style={{
-                  position: "absolute",
-                  right: 5,
-                  top: 5,
-                  fontSize: 6,
-                  color: GRAY,
-                }}
-              >
-                {pairCorrect
-                  ? "✓"
-                  : "Правильно: " +
-                    (correctRight
-                      ? stripHtml(
-                          correctRight.text
-                        )
-                      : "—")}
-              </Text>
             </View>
           );
         })}
       </View>
 
-      <View style={styles.answerLine}>
-        <Text style={styles.answerLabel}>
-          Правильних пар:
-        </Text>
+      <View style={styles.matchingResult}>
+        <View style={styles.matchingResultRow}>
+          <Text style={styles.matchingResultLabel}>
+            Відповідь учасника:
+          </Text>
 
-        <Text style={styles.answerValue}>
-          {status.correct} / {status.total}
-        </Text>
+          <Text
+            style={styles.matchingResultValue}
+          >
+            {getMatchingAnswerLetters(
+              question,
+              selectedAnswers
+            )}
+          </Text>
+        </View>
+
+        <View style={styles.matchingResultRow}>
+          <Text style={styles.matchingResultLabel}>
+            Правильна відповідь:
+          </Text>
+
+          <Text
+            style={[
+              styles.matchingResultValue,
+              styles.correctText,
+            ]}
+          >
+            {getMatchingCorrectAnswerLetters(
+              question
+            )}
+          </Text>
+        </View>
+
+        <View style={styles.matchingResultRow}>
+          <Text style={styles.matchingResultLabel}>
+            Правильних пар:
+          </Text>
+
+          <Text style={styles.matchingResultValue}>
+            {status.correct} / {status.total}
+          </Text>
+        </View>
+
+        <View style={styles.matchingResultRow}>
+          <Text style={styles.matchingResultLabel}>
+            Нараховані бали:
+          </Text>
+
+          <Text
+            style={[
+              styles.matchingResultValue,
+              earnedPoints > 0
+                ? styles.correctText
+                : styles.incorrectText,
+            ]}
+          >
+            {earnedPoints} / {question.points}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -1571,7 +2056,7 @@ export default function ResultPdfDocument({
       title={`Результат тестування — ${getParticipantName(
         result
       )}`}
-      author='NMT Platform'
+      author="NMT Platform"
       subject={result.test.title}
       creator="NMT Platform"
       producer="NMT Platform"
