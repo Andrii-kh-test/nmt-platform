@@ -98,14 +98,14 @@ const fontRegularPath = path.join(
   process.cwd(),
   "public",
   "branding",
-  "noto-sans-regular.ttf"
+  "noto-sans-regular.woff"
 );
 
 const fontBoldPath = path.join(
   process.cwd(),
   "public",
   "branding",
-  "noto-sans-bold.ttf"
+  "noto-sans-bold.woff"
 );
 
 Font.register({
@@ -367,11 +367,11 @@ function isMatchingQuestion(question: QuestionData): boolean {
 
 function getSignatureData(): string | null {
   const signaturePath = path.join(
-    process.cwd(),
-    "public",
-    "branding",
-    "signature.png"
-  );
+  process.cwd(),
+  "public",
+  "branding",
+  "signature.jpg"
+);
 
   if (!fs.existsSync(signaturePath)) {
     return null;
