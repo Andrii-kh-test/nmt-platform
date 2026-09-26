@@ -116,10 +116,12 @@ Font.register({
     {
       src: fontRegularPath,
       fontWeight: 400,
+      fontStyle: "normal",
     },
     {
       src: fontBoldPath,
       fontWeight: 700,
+      fontStyle: "normal",
     },
   ],
 });
@@ -145,7 +147,9 @@ function decodeHtml(value: string): string {
     );
 }
 
-function stripHtml(value: string | null | undefined): string {
+function stripHtml(
+  value: string | null | undefined
+): string {
   if (!value) {
     return "";
   }
@@ -183,19 +187,24 @@ function formatDuration(seconds: number): string {
   const secs = seconds % 60;
 
   if (hours > 0) {
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+    return `${String(hours).padStart(
+      2,
+      "0"
+    )}:${String(minutes).padStart(
       2,
       "0"
     )}:${String(secs).padStart(2, "0")}`;
   }
 
-  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(
+  return `${String(minutes).padStart(
     2,
     "0"
-  )}`;
+  )}:${String(secs).padStart(2, "0")}`;
 }
 
-function getParticipantName(result: ResultData): string {
+function getParticipantName(
+  result: ResultData
+): string {
   return [
     result.lastName,
     result.firstName,
@@ -206,14 +215,19 @@ function getParticipantName(result: ResultData): string {
     .trim() || "Не вказано";
 }
 
-function getFinishReason(reason: string): string {
+function getFinishReason(
+  reason: string
+): string {
   switch (reason) {
     case "manual":
       return "Завершено учасником";
+
     case "timeout":
       return "Час вичерпано";
+
     case "security":
       return "Завершено через порушення умов тестування";
+
     default:
       return reason || "Не визначено";
   }
@@ -223,12 +237,18 @@ function getSavedAnswers(
   answers: unknown,
   questionId: number
 ): number[] {
-  if (!answers || typeof answers !== "object") {
+  if (
+    !answers ||
+    typeof answers !== "object"
+  ) {
     return [];
   }
 
-  const source = answers as Record<string, unknown>;
-  const value = source[String(questionId)];
+  const source =
+    answers as Record<string, unknown>;
+
+  const value =
+    source[String(questionId)];
 
   if (!Array.isArray(value)) {
     return [];
@@ -236,7 +256,9 @@ function getSavedAnswers(
 
   return value
     .map((item) => Number(item))
-    .filter((item) => Number.isFinite(item));
+    .filter((item) =>
+      Number.isFinite(item)
+    );
 }
 
 function getLetter(index: number): string {
@@ -254,7 +276,10 @@ function getLetter(index: number): string {
     "І",
   ];
 
-  return letters[index] ?? String(index + 1);
+  return (
+    letters[index] ??
+    String(index + 1)
+  );
 }
 
 function isSelected(
@@ -268,21 +293,28 @@ function isQuestionCorrect(
   question: QuestionData,
   selectedAnswers: number[]
 ): boolean {
-  const correctIds = question.answerOptions
-    .filter((option) => option.isCorrect)
-    .map((option) => option.id)
-    .sort((a, b) => a - b);
+  const correctIds =
+    question.answerOptions
+      .filter(
+        (option) => option.isCorrect
+      )
+      .map((option) => option.id)
+      .sort((a, b) => a - b);
 
-  const selectedIds = [...selectedAnswers].sort(
-    (a, b) => a - b
-  );
+  const selectedIds = [
+    ...selectedAnswers,
+  ].sort((a, b) => a - b);
 
-  if (correctIds.length !== selectedIds.length) {
+  if (
+    correctIds.length !==
+    selectedIds.length
+  ) {
     return false;
   }
 
   return correctIds.every(
-    (id, index) => id === selectedIds[index]
+    (id, index) =>
+      id === selectedIds[index]
   );
 }
 
@@ -301,7 +333,9 @@ type MatchingRight = {
   text: string;
 };
 
-function getMatchingData(question: QuestionData): {
+function getMatchingData(
+  question: QuestionData
+): {
   left: MatchingLeft[];
   right: MatchingRight[];
 } {
@@ -317,7 +351,9 @@ function getMatchingData(question: QuestionData): {
       left.push({
         id: Number(parts[1]),
         text: parts[2] ?? "",
-        correctRightId: Number(parts[3]),
+        correctRightId: Number(
+          parts[3]
+        ),
       });
     }
 
@@ -326,7 +362,9 @@ function getMatchingData(question: QuestionData): {
 
       right.push({
         id: Number(parts[1]),
-        text: parts.slice(2).join("|"),
+        text: parts
+          .slice(2)
+          .join("|"),
       });
     }
   }
@@ -344,16 +382,24 @@ function getMatchingStatus(
   total: number;
   correct: number;
 } {
-  const { left } = getMatchingData(question);
+  const { left } =
+    getMatchingData(question);
 
   let correct = 0;
 
-  for (let index = 0; index < left.length; index++) {
-    const selectedRightId = selectedAnswers[index];
+  for (
+    let index = 0;
+    index < left.length;
+    index++
+  ) {
+    const selectedRightId =
+      selectedAnswers[index];
 
     if (
-      selectedRightId !== undefined &&
-      selectedRightId === left[index].correctRightId
+      selectedRightId !==
+        undefined &&
+      selectedRightId ===
+        left[index].correctRightId
     ) {
       correct++;
     }
@@ -365,14 +411,21 @@ function getMatchingStatus(
   };
 }
 
-function isMatchingQuestion(question: QuestionData): boolean {
-  const normalizedType = String(question.type ?? "")
-    .toLowerCase()
-    .trim();
+function isMatchingQuestion(
+  question: QuestionData
+): boolean {
+  const normalizedType =
+    String(question.type ?? "")
+      .toLowerCase()
+      .trim();
 
   return (
-    normalizedType.includes("matching") ||
-    normalizedType.includes("відповідність")
+    normalizedType.includes(
+      "matching"
+    ) ||
+    normalizedType.includes(
+      "відповідність"
+    )
   );
 }
 
@@ -386,7 +439,10 @@ function getOrdinaryAnswerLetters(
 ): string {
   return question.answerOptions
     .map((option, index) =>
-      isSelected(selectedAnswers, option.id)
+      isSelected(
+        selectedAnswers,
+        option.id
+      )
         ? getLetter(index)
         : null
     )
@@ -399,29 +455,56 @@ function getCorrectOrdinaryAnswerLetters(
 ): string {
   return question.answerOptions
     .map((option, index) =>
-      option.isCorrect ? getLetter(index) : null
+      option.isCorrect
+        ? getLetter(index)
+        : null
     )
     .filter(Boolean)
     .join("");
 }
 
+/**
+ * Для matching:
+ *
+ * Якщо праві варіанти:
+ * А — ...
+ * Б — ...
+ * В — ...
+ * Г — ...
+ *
+ * а учасник для лівих елементів
+ * обрав [В, А, Б, Д],
+ * отримаємо:
+ *
+ * ВАБД
+ *
+ * без розділювачів.
+ */
 function getMatchingAnswerLetters(
   question: QuestionData,
   selectedAnswers: number[]
 ): string {
-  const { left, right } = getMatchingData(question);
+  const { left, right } =
+    getMatchingData(question);
 
   return left
     .map((_, index) => {
-      const selectedRightId = selectedAnswers[index];
+      const selectedRightId =
+        selectedAnswers[index];
 
-      if (selectedRightId === undefined) {
+      if (
+        selectedRightId ===
+        undefined
+      ) {
         return "—";
       }
 
-      const rightIndex = right.findIndex(
-        (item) => item.id === selectedRightId
-      );
+      const rightIndex =
+        right.findIndex(
+          (item) =>
+            item.id ===
+            selectedRightId
+        );
 
       return rightIndex >= 0
         ? getLetter(rightIndex)
@@ -433,14 +516,17 @@ function getMatchingAnswerLetters(
 function getMatchingCorrectAnswerLetters(
   question: QuestionData
 ): string {
-  const { left, right } = getMatchingData(question);
+  const { left, right } =
+    getMatchingData(question);
 
   return left
     .map((item) => {
-      const rightIndex = right.findIndex(
-        (rightItem) =>
-          rightItem.id === item.correctRightId
-      );
+      const rightIndex =
+        right.findIndex(
+          (rightItem) =>
+            rightItem.id ===
+            item.correctRightId
+        );
 
       return rightIndex >= 0
         ? getLetter(rightIndex)
@@ -457,19 +543,35 @@ function getEarnedPoints(
   question: QuestionData,
   selectedAnswers: number[]
 ): number {
-  if (isMatchingQuestion(question)) {
-    const status = getMatchingStatus(
-      question,
-      selectedAnswers
-    );
+  if (
+    isMatchingQuestion(question)
+  ) {
+    const status =
+      getMatchingStatus(
+        question,
+        selectedAnswers
+      );
 
     if (status.total === 0) {
       return 0;
     }
 
-    return Math.round(
-      (question.points * status.correct) /
-        status.total
+    /*
+     * Для завдань на відповідність
+     * кожна правильна пара дає
+     * відповідну частину балів.
+     *
+     * Наприклад:
+     * 4 пари, 4 бали,
+     * 3 правильні → 3 бали.
+     */
+    return Math.min(
+      question.points,
+      Math.round(
+        (question.points *
+          status.correct) /
+          status.total
+      )
     );
   }
 
@@ -482,38 +584,390 @@ function getEarnedPoints(
 }
 
 // =====================================================
-// SIMPLE HTML → PDF RENDERER
+// RICH HTML → PDF
 // =====================================================
 
-type InlineStyle = {
-  fontWeight?: 400 | 700;
-  fontStyle?: "normal" | "italic";
-  textDecoration?: "none" | "underline" | "line-through";
-  backgroundColor?: string;
-  color?: string;
+type HtmlNode = {
+  type: "element" | "text";
+  tag?: string;
+  attrs?: Record<
+    string,
+    string
+  >;
+  text?: string;
+  children?: HtmlNode[];
 };
 
-type HtmlPart =
-  | {
-      type: "text";
-      text: string;
-      style: InlineStyle;
-    }
-  | {
-      type: "image";
-      src: string;
-      width?: number;
-      height?: number;
-    }
-  | {
-      type: "break";
-    };
+type PdfInlineStyle = {
+  fontWeight?: 400 | 700;
+  fontStyle?:
+    | "normal"
+    | "italic";
+  textDecoration?:
+    | "none"
+    | "underline"
+    | "line-through";
+  backgroundColor?: string;
+  color?: string;
+  fontSize?: number;
+  textAlign?:
+    | "left"
+    | "center"
+    | "right"
+    | "justify";
+};
 
-function getInlineStyle(
-  tag: string,
-  current: InlineStyle
-): InlineStyle {
-  const next = { ...current };
+/**
+ * React-PDF не має browser fallback
+ * для відсутнього font face.
+ *
+ * У нас зареєстровано:
+ * 400 normal
+ * 700 normal
+ *
+ * Тому 700 italic автоматично
+ * перетворюємо на 400 italic.
+ *
+ * Це не дає renderToBuffer()
+ * падати з:
+ *
+ * Could not resolve font for
+ * NotoSans, fontWeight 700,
+ * fontStyle italic
+ */
+function normalizeFontStyle(
+  style: any
+): any {
+  if (
+    style &&
+    typeof style === "object" &&
+    style.fontStyle === "italic" &&
+    Number(style.fontWeight) === 700
+  ) {
+    return {
+      ...style,
+      fontWeight: 400,
+    };
+  }
+
+  return style;
+}
+
+function parseAttributes(
+  source: string
+): Record<string, string> {
+  const attrs: Record<
+    string,
+    string
+  > = {};
+
+  const attrRegex =
+    /([:\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+
+  let match: RegExpExecArray | null;
+
+  while (
+    (match =
+      attrRegex.exec(source)) !== null
+  ) {
+    attrs[
+      match[1].toLowerCase()
+    ] =
+      match[2] ??
+      match[3] ??
+      match[4] ??
+      "";
+  }
+
+  return attrs;
+}
+
+function parseHtml(
+  html: string
+): HtmlNode {
+  const root: HtmlNode = {
+    type: "element",
+    tag: "root",
+    attrs: {},
+    children: [],
+  };
+
+  const stack: HtmlNode[] = [root];
+
+  const tokens =
+    html
+      .replace(
+        /<!--[\s\S]*?-->/g,
+        ""
+      )
+      .match(
+        /<[^>]+>|[^<]+/g
+      ) ?? [];
+
+  const voidTags = new Set([
+    "br",
+    "img",
+    "hr",
+    "meta",
+    "input",
+    "source",
+    "area",
+    "base",
+    "col",
+    "embed",
+    "link",
+    "param",
+    "track",
+    "wbr",
+  ]);
+
+  for (const token of tokens) {
+    if (
+      token.startsWith("<")
+    ) {
+      if (
+        /^<\s*\//.test(token)
+      ) {
+        const match =
+          token.match(
+            /^<\s*\/\s*([a-zA-Z0-9:-]+)/
+          );
+
+        if (!match) {
+          continue;
+        }
+
+        const closingTag =
+          match[1].toLowerCase();
+
+        let foundIndex = -1;
+
+        for (
+          let i =
+            stack.length - 1;
+          i >= 0;
+          i--
+        ) {
+          if (
+            stack[i].tag ===
+            closingTag
+          ) {
+            foundIndex = i;
+            break;
+          }
+        }
+
+        if (foundIndex >= 0) {
+          stack.length =
+            foundIndex;
+        }
+
+        continue;
+      }
+
+      if (
+        /^<\s*!/.test(token) ||
+        /^<\s*\?/.test(token)
+      ) {
+        continue;
+      }
+
+      const openingMatch =
+        token.match(
+          /^<\s*([a-zA-Z0-9:-]+)/
+        );
+
+      if (!openingMatch) {
+        continue;
+      }
+
+      const tag =
+        openingMatch[1].toLowerCase();
+
+      const attrs =
+        parseAttributes(token);
+
+      const node: HtmlNode = {
+        type: "element",
+        tag,
+        attrs,
+        children: [],
+      };
+
+      const parent =
+        stack[stack.length - 1];
+
+      parent.children =
+        parent.children ?? [];
+
+      parent.children.push(node);
+
+      const selfClosing =
+        /\/\s*>$/.test(token) ||
+        voidTags.has(tag);
+
+      if (!selfClosing) {
+        stack.push(node);
+      }
+
+      continue;
+    }
+
+    const text =
+      decodeHtml(token);
+
+    if (!text) {
+      continue;
+    }
+
+    const parent =
+      stack[stack.length - 1];
+
+    parent.children =
+      parent.children ?? [];
+
+    parent.children.push({
+      type: "text",
+      text,
+    });
+  }
+
+  return root;
+}
+
+function parseCssStyle(
+  styleText?: string
+): PdfInlineStyle {
+  const result: PdfInlineStyle = {};
+
+  if (!styleText) {
+    return result;
+  }
+
+  const declarations =
+    styleText.split(";");
+
+  for (const declaration of declarations) {
+    const separator =
+      declaration.indexOf(":");
+
+    if (separator < 0) {
+      continue;
+    }
+
+    const property =
+      declaration
+        .slice(0, separator)
+        .trim()
+        .toLowerCase();
+
+    const value =
+      declaration
+        .slice(separator + 1)
+        .trim();
+
+    if (!value) {
+      continue;
+    }
+
+    switch (property) {
+      case "font-weight":
+        if (
+          value === "bold" ||
+          Number(value) >= 600
+        ) {
+          result.fontWeight = 700;
+        } else if (
+          value === "normal" ||
+          Number(value) <= 500
+        ) {
+          result.fontWeight = 400;
+        }
+        break;
+
+      case "font-style":
+        if (
+          value.toLowerCase() ===
+          "italic"
+        ) {
+          result.fontStyle =
+            "italic";
+        }
+        break;
+
+      case "text-decoration":
+      case "text-decoration-line":
+        if (
+          value.includes(
+            "underline"
+          )
+        ) {
+          result.textDecoration =
+            "underline";
+        } else if (
+          value.includes(
+            "line-through"
+          )
+        ) {
+          result.textDecoration =
+            "line-through";
+        }
+        break;
+
+      case "background":
+      case "background-color":
+        if (
+          value !== "transparent"
+        ) {
+          result.backgroundColor =
+            value;
+        }
+        break;
+
+      case "color":
+        result.color = value;
+        break;
+
+      case "font-size": {
+        const size =
+          parseFloat(value);
+
+        if (
+          Number.isFinite(size)
+        ) {
+          result.fontSize =
+            size * 0.75;
+        }
+        break;
+      }
+
+      case "text-align":
+        if (
+          value === "left" ||
+          value === "center" ||
+          value === "right" ||
+          value === "justify"
+        ) {
+          result.textAlign =
+            value;
+        }
+        break;
+    }
+  }
+
+  return result;
+}
+
+function getNodeStyle(
+  node: HtmlNode,
+  inherited: PdfInlineStyle
+): PdfInlineStyle {
+  const next = {
+    ...inherited,
+  };
+
+  const tag =
+    node.tag?.toLowerCase() ?? "";
 
   switch (tag) {
     case "strong":
@@ -527,147 +981,585 @@ function getInlineStyle(
       break;
 
     case "u":
-      next.textDecoration = "underline";
+      next.textDecoration =
+        "underline";
       break;
 
     case "s":
     case "strike":
     case "del":
-      next.textDecoration = "line-through";
+      next.textDecoration =
+        "line-through";
       break;
 
     case "mark":
-      next.backgroundColor = "#FFF2A8";
+      next.backgroundColor =
+        "#FFF2A8";
+      break;
+
+    case "a":
+      next.textDecoration =
+        "underline";
+      break;
+
+    case "sup":
+      next.fontSize = 6;
+      break;
+
+    case "sub":
+      next.fontSize = 6;
       break;
   }
 
-  return next;
+  const cssStyle =
+    parseCssStyle(
+      node.attrs?.style
+    );
+
+  Object.assign(
+    next,
+    cssStyle
+  );
+
+  return normalizeFontStyle(
+    next
+  );
 }
 
-function parseHtmlParts(
-  html: string | null | undefined
-): HtmlPart[] {
-  if (!html) {
-    return [];
+function isImageNode(
+  node: HtmlNode
+): boolean {
+  return (
+    node.type === "element" &&
+    node.tag === "img"
+  );
+}
+
+function getBaseUrl(): string {
+  const explicit =
+    process.env.NEXT_PUBLIC_APP_URL;
+
+  if (explicit) {
+    return explicit.replace(
+      /\/$/,
+      ""
+    );
   }
 
-  const parts: HtmlPart[] = [];
-  const tokenRegex =
-    /(<img\b[^>]*>|<br\s*\/?>|<\/?strong>|<\/?b>|<\/?em>|<\/?i>|<\/?u>|<\/?s>|<\/?strike>|<\/?del>|<\/?mark>|<\/?p>|<\/?div>|<\/?li>|<[^>]+>)/gi;
+  const vercel =
+    process.env.VERCEL_URL;
 
-  let currentStyle: InlineStyle = {};
-  let lastIndex = 0;
+  if (vercel) {
+    return `https://${vercel}`;
+  }
 
-  const pushText = (text: string) => {
-    if (!text) {
-      return;
-    }
+  return "http://localhost:3000";
+}
 
-    const decoded = decodeHtml(text);
+function resolveImageSrc(
+  src: string
+): string {
+  const trimmed =
+    src.trim();
 
-    if (!decoded) {
-      return;
-    }
+  if (!trimmed) {
+    return "";
+  }
 
-    parts.push({
-      type: "text",
-      text: decoded,
-      style: { ...currentStyle },
-    });
+  if (
+    trimmed.startsWith(
+      "data:"
+    )
+  ) {
+    return trimmed;
+  }
+
+  if (
+    /^https?:\/\//i.test(
+      trimmed
+    )
+  ) {
+    return trimmed;
+  }
+
+  if (
+    trimmed.startsWith("//")
+  ) {
+    return `https:${trimmed}`;
+  }
+
+  if (
+    trimmed.startsWith("/")
+  ) {
+    return `${getBaseUrl()}${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+function getImageDimensions(
+  node: HtmlNode
+): {
+  width: number;
+  height: number;
+} {
+  const attrs =
+    node.attrs ?? {};
+
+  const style =
+    attrs.style ?? "";
+
+  const widthMatch =
+    style.match(
+      /width\s*:\s*([\d.]+)px/i
+    );
+
+  const heightMatch =
+    style.match(
+      /height\s*:\s*([\d.]+)px/i
+    );
+
+  const attrWidth =
+    attrs.width
+      ? parseFloat(attrs.width)
+      : NaN;
+
+  const attrHeight =
+    attrs.height
+      ? parseFloat(attrs.height)
+      : NaN;
+
+  const width =
+    Number.isFinite(
+      attrWidth
+    )
+      ? attrWidth
+      : widthMatch
+      ? Number(widthMatch[1])
+      : 260;
+
+  const height =
+    Number.isFinite(
+      attrHeight
+    )
+      ? attrHeight
+      : heightMatch
+      ? Number(heightMatch[1])
+      : 160;
+
+  return {
+    width: Math.min(
+      Math.max(width, 30),
+      470
+    ),
+    height: Math.min(
+      Math.max(height, 20),
+      400
+    ),
   };
+}
 
-  let match: RegExpExecArray | null;
+function PdfImage({
+  node,
+}: {
+  node: HtmlNode;
+}) {
+  const src =
+    node.attrs?.src;
 
-  while ((match = tokenRegex.exec(html)) !== null) {
-    pushText(html.slice(lastIndex, match.index));
-
-    const token = match[0];
-
-    if (/^<img\b/i.test(token)) {
-      const srcMatch =
-        token.match(
-          /\bsrc\s*=\s*["']([^"']+)["']/i
-        );
-
-      if (srcMatch?.[1]) {
-        const widthMatch =
-          token.match(
-            /\bwidth\s*=\s*["']?([\d.]+)/i
-          );
-
-        const heightMatch =
-          token.match(
-            /\bheight\s*=\s*["']?([\d.]+)/i
-          );
-
-        parts.push({
-          type: "image",
-          src: srcMatch[1],
-          width: widthMatch
-            ? Number(widthMatch[1])
-            : undefined,
-          height: heightMatch
-            ? Number(heightMatch[1])
-            : undefined,
-        });
-      }
-    } else if (/^<br/i.test(token)) {
-      parts.push({ type: "break" });
-    } else if (/^<\/?(strong|b|em|i|u|s|strike|del|mark)>$/i.test(token)) {
-      const closing = /^<\//.test(token);
-      const tag = token
-        .replace(/[<\/>]/g, "")
-        .toLowerCase();
-
-      if (closing) {
-        if (
-          tag === "strong" ||
-          tag === "b"
-        ) {
-          currentStyle.fontWeight = 400;
-        }
-
-        if (
-          tag === "em" ||
-          tag === "i"
-        ) {
-          currentStyle.fontStyle = "normal";
-        }
-
-        if (tag === "u") {
-          currentStyle.textDecoration = "none";
-        }
-
-        if (
-          tag === "s" ||
-          tag === "strike" ||
-          tag === "del"
-        ) {
-          currentStyle.textDecoration = "none";
-        }
-
-        if (tag === "mark") {
-          currentStyle.backgroundColor =
-            undefined;
-        }
-      } else {
-        currentStyle = getInlineStyle(
-          tag,
-          currentStyle
-        );
-      }
-    } else if (
-      /^<\/?(p|div|li)>$/i.test(token)
-    ) {
-      parts.push({ type: "break" });
-    }
-
-    lastIndex = tokenRegex.lastIndex;
+  if (!src) {
+    return null;
   }
 
-  pushText(html.slice(lastIndex));
+  const resolved =
+    resolveImageSrc(src);
 
-  return parts;
+  if (!resolved) {
+    return null;
+  }
+
+  const dimensions =
+    getImageDimensions(node);
+
+  return (
+    <Image
+      src={resolved}
+      style={{
+        width: dimensions.width,
+        height: dimensions.height,
+        objectFit: "contain",
+        marginVertical: 5,
+        alignSelf: "flex-start",
+      }}
+    />
+  );
+}
+
+function renderInlineNodes(
+  nodes: HtmlNode[],
+  inheritedStyle: PdfInlineStyle = {}
+): React.ReactNode[] {
+  return nodes.map(
+    (node, index) => {
+      const key =
+        `${node.tag ?? "text"}-${index}`;
+
+      if (
+        node.type === "text"
+      ) {
+        return node.text ?? "";
+      }
+
+      const tag =
+        node.tag?.toLowerCase() ?? "";
+
+      if (tag === "br") {
+        return (
+          <Text key={key}>
+            {"\n"}
+          </Text>
+        );
+      }
+
+      if (tag === "img") {
+        return null;
+      }
+
+      const style =
+        getNodeStyle(
+          node,
+          inheritedStyle
+        );
+
+      return (
+        <Text
+          key={key}
+          style={normalizeFontStyle(
+            style
+          )}
+        >
+          {renderInlineNodes(
+            node.children ?? [],
+            style
+          )}
+        </Text>
+      );
+    }
+  );
+}
+
+function renderParagraph(
+  node: HtmlNode,
+  key: string
+) {
+  const children =
+    node.children ?? [];
+
+  const hasDirectImage =
+    children.some(isImageNode);
+
+  const blockStyle =
+    parseCssStyle(
+      node.attrs?.style
+    );
+
+  if (!hasDirectImage) {
+    return (
+      <Text
+        key={key}
+        style={normalizeFontStyle(
+          blockStyle
+        )}
+      >
+        {renderInlineNodes(
+          children,
+          blockStyle
+        )}
+      </Text>
+    );
+  }
+
+  return (
+    <View key={key}>
+      {children.map(
+        (child, index) => {
+          if (
+            isImageNode(child)
+          ) {
+            return (
+              <PdfImage
+                key={`img-${index}`}
+                node={child}
+              />
+            );
+          }
+
+          return (
+            <Text
+              key={`text-${index}`}
+              style={normalizeFontStyle(
+                blockStyle
+              )}
+            >
+              {renderInlineNodes(
+                [child],
+                blockStyle
+              )}
+            </Text>
+          );
+        }
+      )}
+    </View>
+  );
+}
+
+function renderHtmlBlock(
+  node: HtmlNode,
+  index: number
+): React.ReactNode {
+  if (
+    node.type === "text"
+  ) {
+    if (
+      !node.text?.trim()
+    ) {
+      return null;
+    }
+
+    return (
+      <Text
+        key={`text-${index}`}
+      >
+        {node.text}
+      </Text>
+    );
+  }
+
+  const tag =
+    node.tag?.toLowerCase() ?? "";
+
+  const key =
+    `${tag}-${index}`;
+
+  if (tag === "img") {
+    return (
+      <PdfImage
+        key={key}
+        node={node}
+      />
+    );
+  }
+
+  if (
+    tag === "p" ||
+    tag === "div" ||
+    tag === "section" ||
+    tag === "article"
+  ) {
+    return renderParagraph(
+      node,
+      key
+    );
+  }
+
+  if (
+    /^h[1-6]$/.test(tag)
+  ) {
+    const headingSize =
+      tag === "h1"
+        ? 15
+        : tag === "h2"
+        ? 13
+        : tag === "h3"
+        ? 11
+        : 9.5;
+
+    return (
+      <Text
+        key={key}
+        style={[
+          {
+            fontSize:
+              headingSize,
+            fontWeight: 700,
+            marginBottom: 5,
+            marginTop: 3,
+            color: DARK,
+          },
+          normalizeFontStyle(
+            parseCssStyle(
+              node.attrs?.style
+            )
+          ),
+        ]}
+      >
+        {renderInlineNodes(
+          node.children ?? [],
+          {
+            fontWeight: 700,
+          }
+        )}
+      </Text>
+    );
+  }
+
+  if (
+    tag === "ul" ||
+    tag === "ol"
+  ) {
+    return (
+      <View
+        key={key}
+        style={{
+          marginVertical: 3,
+        }}
+      >
+        {(node.children ?? []).map(
+          (child, childIndex) =>
+            renderListItem(
+              child,
+              childIndex,
+              tag === "ol"
+            )
+        )}
+      </View>
+    );
+  }
+
+  if (tag === "li") {
+    return renderListItem(
+      node,
+      index,
+      false
+    );
+  }
+
+  if (
+    tag === "figure"
+  ) {
+    return (
+      <View
+        key={key}
+        style={{
+          marginVertical: 5,
+        }}
+      >
+        {(node.children ?? []).map(
+          (child, childIndex) =>
+            renderHtmlBlock(
+              child,
+              childIndex
+            )
+        )}
+      </View>
+    );
+  }
+
+  if (
+    tag === "figcaption"
+  ) {
+    return (
+      <Text
+        key={key}
+        style={{
+          fontSize: 7,
+          color: GRAY,
+          marginTop: 2,
+        }}
+      >
+        {renderInlineNodes(
+          node.children ?? []
+        )}
+      </Text>
+    );
+  }
+
+  if (
+    tag === "blockquote"
+  ) {
+    return (
+      <View
+        key={key}
+        style={{
+          borderLeftWidth: 2,
+          borderLeftColor:
+            BURGUNDY,
+          paddingLeft: 7,
+          marginVertical: 4,
+        }}
+      >
+        <Text>
+          {renderInlineNodes(
+            node.children ?? []
+          )}
+        </Text>
+      </View>
+    );
+  }
+
+  if (tag === "hr") {
+    return (
+      <View
+        key={key}
+        style={{
+          borderTopWidth: 0.6,
+          borderTopColor:
+            LIGHT_GRAY,
+          marginVertical: 5,
+        }}
+      />
+    );
+  }
+
+  return (
+    <View key={key}>
+      {renderInlineNodes(
+        node.children ?? []
+      )}
+    </View>
+  );
+}
+
+function renderListItem(
+  node: HtmlNode,
+  index: number,
+  ordered: boolean
+) {
+  const marker = ordered
+    ? `${index + 1}.`
+    : "•";
+
+  return (
+    <View
+      key={`li-${index}`}
+      style={{
+        flexDirection: "row",
+        marginBottom: 3,
+      }}
+    >
+      <Text
+        style={{
+          width: 15,
+          fontSize: 8,
+          fontWeight: 700,
+        }}
+      >
+        {marker}
+      </Text>
+
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 8,
+          lineHeight: 1.35,
+        }}
+      >
+        {renderInlineNodes(
+          node.children ?? []
+        )}
+      </Text>
+    </View>
+  );
 }
 
 function HtmlContentPdf({
@@ -677,51 +1569,42 @@ function HtmlContentPdf({
   html: string;
   style?: any;
 }) {
-  const parts = parseHtmlParts(html);
-
-  if (parts.length === 0) {
+  if (!html) {
     return null;
+  }
+
+  const root =
+    parseHtml(html);
+
+  const children =
+    root.children ?? [];
+
+  if (
+    children.length === 0
+  ) {
+    const fallback =
+      stripHtml(html);
+
+    if (!fallback) {
+      return null;
+    }
+
+    return (
+      <Text style={style}>
+        {fallback}
+      </Text>
+    );
   }
 
   return (
     <View style={style}>
-      <Text>
-        {parts.map((part, index) => {
-          if (part.type === "break") {
-            return (
-              <Text key={index}>
-                {"\n"}
-              </Text>
-            );
-          }
-
-          if (part.type === "image") {
-            return (
-              <Image
-                key={index}
-                src={part.src}
-                style={{
-                  width:
-                    part.width || 240,
-                  height:
-                    part.height || 120,
-                  objectFit: "contain",
-                  marginVertical: 4,
-                }}
-              />
-            );
-          }
-
-          return (
-            <Text
-              key={index}
-              style={part.style}
-            >
-              {part.text}
-            </Text>
-          );
-        })}
-      </Text>
+      {children.map(
+        (node, index) =>
+          renderHtmlBlock(
+            node,
+            index
+          )
+      )}
     </View>
   );
 }
@@ -731,26 +1614,69 @@ function HtmlContentPdf({
 // =====================================================
 
 function getSignatureData(): string | null {
-  const signaturePath = path.join(
-    process.cwd(),
-    "public",
-    "branding",
-    "signature.jpg"
-  );
+  const brandingDir =
+    path.join(
+      process.cwd(),
+      "public",
+      "branding"
+    );
 
-  if (!fs.existsSync(signaturePath)) {
-    return null;
+  const candidates = [
+    "signature.jpg",
+    "signature.png",
+    "signature.png.jpg",
+  ];
+
+  for (const filename of candidates) {
+    const signaturePath =
+      path.join(
+        brandingDir,
+        filename
+      );
+
+    if (
+      !fs.existsSync(
+        signaturePath
+      )
+    ) {
+      continue;
+    }
+
+    try {
+      const buffer =
+        fs.readFileSync(
+          signaturePath
+        );
+
+      let mime =
+        "image/jpeg";
+
+      /*
+       * Визначаємо PNG за сигнатурою,
+       * навіть якщо файл має дивне
+       * розширення на кшталт
+       * signature.png.jpg.
+       */
+      if (
+        buffer.length >= 8 &&
+        buffer[0] === 0x89 &&
+        buffer[1] === 0x50 &&
+        buffer[2] === 0x4e &&
+        buffer[3] === 0x47
+      ) {
+        mime =
+          "image/png";
+      }
+
+      return `data:${mime};base64,${buffer.toString(
+        "base64"
+      )}`;
+    } catch {
+      return null;
+    }
   }
 
-  try {
-    const buffer = fs.readFileSync(signaturePath);
-
-    return `data:image/jpeg;base64,${buffer.toString(
-      "base64"
-    )}`;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 // =====================================================
@@ -760,7 +1686,7 @@ function getSignatureData(): string | null {
 const styles = StyleSheet.create({
   page: {
     paddingTop: 96,
-    paddingBottom: 92,
+    paddingBottom: 100,
     paddingHorizontal: 42,
     fontFamily: "NotoSans",
     fontSize: 9,
@@ -768,9 +1694,9 @@ const styles = StyleSheet.create({
     backgroundColor: WHITE,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // HEADER
-  // ---------------------------------------------------
+  // ===================================================
 
   header: {
     position: "absolute",
@@ -780,7 +1706,7 @@ const styles = StyleSheet.create({
     height: 74,
     backgroundColor: BURGUNDY,
     paddingHorizontal: 42,
-    paddingVertical: 17,
+    paddingVertical: 16,
     overflow: "hidden",
   },
 
@@ -831,18 +1757,22 @@ const styles = StyleSheet.create({
     opacity: 0.12,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // FOOTER
-  // ---------------------------------------------------
+  // ===================================================
 
   footer: {
     position: "absolute",
-    bottom: 24,
+    bottom: 22,
     left: 42,
     right: 42,
     borderTopWidth: 0.7,
     borderTopColor: LIGHT_GRAY,
     paddingTop: 8,
+  },
+
+  footerAuthorBlock: {
+    width: 330,
   },
 
   footerMain: {
@@ -853,18 +1783,26 @@ const styles = StyleSheet.create({
   },
 
   footerRole: {
+    width: 320,
     fontSize: 5.9,
-    lineHeight: 1.25,
+    lineHeight: 1.3,
     color: "#777777",
-    width: 390,
     marginBottom: 3,
   },
 
-  signatureRow: {
+  footerBottomRow: {
     flexDirection: "row",
-    alignItems: "center",
+    justifyContent:
+      "space-between",
+    alignItems: "flex-end",
+  },
+
+  signatureRow: {
     height: 29,
-    marginBottom: 1,
+    width: 100,
+    alignItems: "flex-start",
+    justifyContent:
+      "center",
   },
 
   signature: {
@@ -876,7 +1814,7 @@ const styles = StyleSheet.create({
   footerContact: {
     fontSize: 6.1,
     color: "#777777",
-    marginTop: 1,
+    marginTop: 2,
   },
 
   pageNumber: {
@@ -887,9 +1825,9 @@ const styles = StyleSheet.create({
     color: "#888888",
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // HEADINGS
-  // ---------------------------------------------------
+  // ===================================================
 
   mainHeading: {
     fontSize: 15,
@@ -906,9 +1844,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // GENERAL INFO
-  // ---------------------------------------------------
+  // ===================================================
 
   infoBox: {
     borderWidth: 0.7,
@@ -939,9 +1877,9 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // STATS
-  // ---------------------------------------------------
+  // ===================================================
 
   statsContainer: {
     flexDirection: "row",
@@ -971,9 +1909,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // ANSWER TABLE
-  // ---------------------------------------------------
+  // ===================================================
 
   table: {
     width: "100%",
@@ -991,9 +1929,9 @@ const styles = StyleSheet.create({
 
   tableHeaderCell: {
     color: WHITE,
-    fontSize: 7.3,
+    fontSize: 7.1,
     fontWeight: 700,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 5,
   },
 
@@ -1016,26 +1954,30 @@ const styles = StyleSheet.create({
 
   tableCell: {
     fontSize: 7.5,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 4,
   },
 
   colNumber: {
-    width: 48,
+    width: 52,
     textAlign: "center",
   },
 
   colAnswer: {
-    width: 145,
+    flex: 1,
+    textAlign: "center",
+  },
+
+  /*
+   * Саме третя колонка:
+   * Завдання | Відповідь | Нараховані бали | Правильна
+   */
+  colPoints: {
+    width: 82,
     textAlign: "center",
   },
 
   colCorrect: {
-    width: 145,
-    textAlign: "center",
-  },
-
-  colPoints: {
     flex: 1,
     textAlign: "center",
   },
@@ -1059,9 +2001,9 @@ const styles = StyleSheet.create({
     color: GRAY,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // QUESTIONS
-  // ---------------------------------------------------
+  // ===================================================
 
   questionBlock: {
     borderWidth: 0.7,
@@ -1073,7 +2015,8 @@ const styles = StyleSheet.create({
 
   questionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     marginBottom: 7,
   },
 
@@ -1155,9 +2098,9 @@ const styles = StyleSheet.create({
     fontWeight: 700,
   },
 
-  // ---------------------------------------------------
+  // ===================================================
   // MATCHING
-  // ---------------------------------------------------
+  // ===================================================
 
   matchingTable: {
     width: "100%",
@@ -1184,28 +2127,24 @@ const styles = StyleSheet.create({
     borderTopColor: LIGHT_GRAY,
   },
 
-  matchingCell: {
+  matchingCellView: {
     width: "50%",
-    fontSize: 7.5,
     padding: 5,
+  },
+
+  matchingCellText: {
+    fontSize: 7.5,
     lineHeight: 1.3,
   },
 
   matchingCellCorrect: {
     width: "50%",
-    fontSize: 7.5,
     padding: 5,
-    lineHeight: 1.3,
-    color: GREEN,
-    fontWeight: 700,
   },
 
   matchingCellIncorrect: {
     width: "50%",
-    fontSize: 7.5,
     padding: 5,
-    lineHeight: 1.3,
-    color: RED,
   },
 
   matchingResult: {
@@ -1247,17 +2186,39 @@ const styles = StyleSheet.create({
 
 function Header() {
   return (
-    <View style={styles.header} fixed>
-      <View style={styles.decorativeCircleLeft} />
-      <View style={styles.decorativeCircleRight} />
-      <View style={styles.decorativeCircleSmall} />
+    <View
+      style={styles.header}
+      fixed
+    >
+      <View
+        style={
+          styles.decorativeCircleLeft
+        }
+      />
 
-      <Text style={styles.headerBrand}>
+      <View
+        style={
+          styles.decorativeCircleRight
+        }
+      />
+
+      <View
+        style={
+          styles.decorativeCircleSmall
+        }
+      />
+
+      <Text
+        style={styles.headerBrand}
+      >
         NMT Platform
       </Text>
 
-      <Text style={styles.headerTitle}>
-        ПЛАТФОРМА КОМП&apos;ЮТЕРНОГО ТЕСТУВАННЯ
+      <Text
+        style={styles.headerTitle}
+      >
+        ПЛАТФОРМА КОМП&apos;ЮТЕРНОГО
+        ТЕСТУВАННЯ
       </Text>
     </View>
   );
@@ -1268,40 +2229,73 @@ function Header() {
 // =====================================================
 
 function Footer() {
-  const signature = getSignatureData();
+  const signature =
+    getSignatureData();
 
   return (
-    <View style={styles.footer} fixed>
-      <Text style={styles.footerMain}>
-        Автор &quot;NMT Platform&quot; Хорунжий Андрій
-        Володимирович
-      </Text>
+    <View
+      style={styles.footer}
+      fixed
+    >
+      <View
+        style={styles.footerAuthorBlock}
+      >
+        <Text
+          style={styles.footerMain}
+        >
+          Автор &quot;NMT Platform&quot;
+          {" "}
+          Хорунжий Андрій
+          Володимирович
+        </Text>
 
-      <Text style={styles.footerRole}>
-        Учитель української мови та літератури
-        Комунального закладу «Харківський ліцей № 5
-        Харківської міської ради», методист
-        Комунального закладу «Харківська обласна
-        Мала академія наук»
-      </Text>
-
-      <View style={styles.signatureRow}>
-        {signature ? (
-          <Image
-            src={signature}
-            style={styles.signature}
-          />
-        ) : null}
+        <Text
+          style={styles.footerRole}
+        >
+          Учитель української мови
+          та літератури Комунального
+          закладу «Харківський ліцей
+          № 5 Харківської міської
+          ради», методист
+          Комунального закладу
+          «Харківська обласна Мала
+          академія наук»
+        </Text>
       </View>
 
-      <Text style={styles.footerContact}>
-        У разі виникнення технічних проблем звертайтеся
-        на ahorunzij81@gmail.com
+      <View
+        style={
+          styles.footerBottomRow
+        }
+      >
+        <View
+          style={
+            styles.signatureRow
+          }
+        >
+          {signature ? (
+            <Image
+              src={signature}
+              style={styles.signature}
+            />
+          ) : null}
+        </View>
+      </View>
+
+      <Text
+        style={styles.footerContact}
+      >
+        У разі виникнення технічних
+        проблем звертайтеся на
+        ahorunzij81@gmail.com
       </Text>
 
       <Text
         style={styles.pageNumber}
-        render={({ pageNumber, totalPages }) =>
+        render={({
+          pageNumber,
+          totalPages,
+        }) =>
           `${pageNumber} / ${totalPages}`
         }
       />
@@ -1320,12 +2314,18 @@ function GeneralInfo({
 }) {
   return (
     <>
-      <Text style={styles.mainHeading}>
+      <Text
+        style={styles.mainHeading}
+      >
         {result.test.title}
       </Text>
 
-      <View style={styles.infoBox}>
-        <Text style={styles.sectionTitle}>
+      <View
+        style={styles.infoBox}
+      >
+        <Text
+          style={styles.sectionTitle}
+        >
           Загальна інформація
         </Text>
 
@@ -1333,8 +2333,11 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Учасник
           </Text>
+
           <Text style={styles.infoValue}>
-            {getParticipantName(result)}
+            {getParticipantName(
+              result
+            )}
           </Text>
         </View>
 
@@ -1342,6 +2345,7 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Тест
           </Text>
+
           <Text style={styles.infoValue}>
             {result.test.title}
           </Text>
@@ -1351,8 +2355,10 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Предмет
           </Text>
+
           <Text style={styles.infoValue}>
-            {result.test.subject || "—"}
+            {result.test.subject ||
+              "—"}
           </Text>
         </View>
 
@@ -1360,8 +2366,10 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Навчальний рік
           </Text>
+
           <Text style={styles.infoValue}>
-            {result.test.schoolYear || "—"}
+            {result.test
+              .schoolYear || "—"}
           </Text>
         </View>
 
@@ -1369,8 +2377,11 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Дата початку
           </Text>
+
           <Text style={styles.infoValue}>
-            {formatDate(result.startedAt)}
+            {formatDate(
+              result.startedAt
+            )}
           </Text>
         </View>
 
@@ -1378,8 +2389,11 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Дата завершення
           </Text>
+
           <Text style={styles.infoValue}>
-            {formatDate(result.finishedAt)}
+            {formatDate(
+              result.finishedAt
+            )}
           </Text>
         </View>
 
@@ -1387,8 +2401,11 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Час виконання
           </Text>
+
           <Text style={styles.infoValue}>
-            {formatDuration(result.timeSpent)}
+            {formatDuration(
+              result.timeSpent
+            )}
           </Text>
         </View>
 
@@ -1396,67 +2413,114 @@ function GeneralInfo({
           <Text style={styles.infoLabel}>
             Причина завершення
           </Text>
+
           <Text style={styles.infoValue}>
-            {getFinishReason(result.finishReason)}
+            {getFinishReason(
+              result.finishReason
+            )}
           </Text>
         </View>
 
-        <View style={styles.infoRowLast}>
+        <View
+          style={styles.infoRowLast}
+        >
           <Text style={styles.infoLabel}>
             Код учасника
           </Text>
+
           <Text style={styles.infoValue}>
-            {result.accessCode || "—"}
+            {result.accessCode ||
+              "—"}
           </Text>
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>
+      <Text
+        style={styles.sectionTitle}
+      >
         Результат
       </Text>
 
-      <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>
-            {result.earnedPoints} / {result.maxPoints}
+      <View
+        style={styles.statsContainer}
+      >
+        <View
+          style={styles.statBox}
+        >
+          <Text
+            style={styles.statValue}
+          >
+            {result.earnedPoints} /{" "}
+            {result.maxPoints}
           </Text>
-          <Text style={styles.statLabel}>
+
+          <Text
+            style={styles.statLabel}
+          >
             Набрані бали
           </Text>
         </View>
 
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>
+        <View
+          style={styles.statBox}
+        >
+          <Text
+            style={styles.statValue}
+          >
             {result.percent}%
           </Text>
-          <Text style={styles.statLabel}>
+
+          <Text
+            style={styles.statLabel}
+          >
             Результативність
           </Text>
         </View>
 
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>
+        <View
+          style={styles.statBox}
+        >
+          <Text
+            style={styles.statValue}
+          >
             {result.correct}
           </Text>
-          <Text style={styles.statLabel}>
+
+          <Text
+            style={styles.statLabel}
+          >
             Правильних
           </Text>
         </View>
 
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>
+        <View
+          style={styles.statBox}
+        >
+          <Text
+            style={styles.statValue}
+          >
             {result.incorrect}
           </Text>
-          <Text style={styles.statLabel}>
+
+          <Text
+            style={styles.statLabel}
+          >
             Неправильних
           </Text>
         </View>
 
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>
+        <View
+          style={styles.statBox}
+        >
+          <Text
+            style={styles.statValue}
+          >
             {result.skipped}
           </Text>
-          <Text style={styles.statLabel}>
+
+          <Text
+            style={styles.statLabel}
+          >
             Пропущених
           </Text>
         </View>
@@ -1476,12 +2540,16 @@ function AnswersTable({
 }) {
   return (
     <>
-      <Text style={styles.sectionTitle}>
+      <Text
+        style={styles.sectionTitle}
+      >
         Журнал відповідей
       </Text>
 
       <View style={styles.table}>
-        <View style={styles.tableHeader}>
+        <View
+          style={styles.tableHeader}
+        >
           <Text
             style={[
               styles.tableHeaderCell,
@@ -1503,25 +2571,29 @@ function AnswersTable({
           <Text
             style={[
               styles.tableHeaderCell,
-              styles.colCorrect,
-            ]}
-          >
-            Правильна відповідь
-          </Text>
-
-          <Text
-            style={[
-              styles.tableHeaderCell,
               styles.colPoints,
             ]}
           >
             Нараховані бали
           </Text>
+
+          <Text
+            style={[
+              styles.tableHeaderCell,
+              styles.colCorrect,
+            ]}
+          >
+            Правильна відповідь
+          </Text>
         </View>
 
         {result.test.questions.map(
-          (testQuestion, index) => {
-            const question = testQuestion.question;
+          (
+            testQuestion,
+            index
+          ) => {
+            const question =
+              testQuestion.question;
 
             const selectedAnswers =
               getSavedAnswers(
@@ -1530,10 +2602,16 @@ function AnswersTable({
               );
 
             const matching =
-              isMatchingQuestion(question);
+              isMatchingQuestion(
+                question
+              );
 
-            let participantAnswer = "—";
-            let correctAnswer = "—";
+            let participantAnswer =
+              "—";
+
+            let correctAnswer =
+              "—";
+
             let correct = false;
 
             if (matching) {
@@ -1556,7 +2634,8 @@ function AnswersTable({
 
               correct =
                 status.total > 0 &&
-                status.correct === status.total;
+                status.correct ===
+                  status.total;
             } else {
               participantAnswer =
                 getOrdinaryAnswerLetters(
@@ -1607,22 +2686,13 @@ function AnswersTable({
                     styles.colAnswer,
                     correct
                       ? styles.correctText
-                      : participantAnswer === "—"
+                      : participantAnswer ===
+                        "—"
                       ? styles.skippedText
                       : styles.incorrectText,
                   ]}
                 >
                   {participantAnswer}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.tableCell,
-                    styles.colCorrect,
-                    styles.correctText,
-                  ]}
-                >
-                  {correctAnswer}
                 </Text>
 
                 <Text
@@ -1635,6 +2705,16 @@ function AnswersTable({
                   ]}
                 >
                   {earnedPoints}
+                </Text>
+
+                <Text
+                  style={[
+                    styles.tableCell,
+                    styles.colCorrect,
+                    styles.correctText,
+                  ]}
+                >
+                  {correctAnswer}
                 </Text>
               </View>
             );
@@ -1658,30 +2738,49 @@ function OrdinaryQuestion({
   number: number;
   selectedAnswers: number[];
 }) {
-  const correct = isQuestionCorrect(
-    question,
-    selectedAnswers
-  );
+  const correct =
+    isQuestionCorrect(
+      question,
+      selectedAnswers
+    );
+
+  const earnedPoints =
+    getEarnedPoints(
+      question,
+      selectedAnswers
+    );
 
   return (
-    <View style={styles.questionBlock}>
-      <View style={styles.questionHeader}>
-        <Text style={styles.questionNumber}>
+    <View
+      style={styles.questionBlock}
+    >
+      <View
+        style={styles.questionHeader}
+      >
+        <Text
+          style={styles.questionNumber}
+        >
           Завдання {number}
         </Text>
 
-        <Text style={styles.questionPoints}>
+        <Text
+          style={styles.questionPoints}
+        >
           {question.points} б.
         </Text>
       </View>
 
-      <Text style={styles.conditionLabel}>
+      <Text
+        style={styles.conditionLabel}
+      >
         Умова
       </Text>
 
       <HtmlContentPdf
         html={question.text}
-        style={styles.conditionText}
+        style={
+          styles.conditionText
+        }
       />
 
       {question.answerOptions.map(
@@ -1697,23 +2796,43 @@ function OrdinaryQuestion({
               key={option.id}
               style={styles.optionRow}
             >
-              <Text style={styles.optionLetter}>
+              <Text
+                style={
+                  styles.optionLetter
+                }
+              >
                 {getLetter(index)}.
               </Text>
 
-              <HtmlContentPdf
-                html={option.text}
-                style={styles.optionText}
-              />
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                <HtmlContentPdf
+                  html={option.text}
+                  style={
+                    styles.optionText
+                  }
+                />
+              </View>
 
               {optionSelected ? (
-                <Text style={styles.selectedTag}>
-                  Відповідь учасника
+                <Text
+                  style={
+                    styles.selectedTag
+                  }
+                >
+                  Відповідь
                 </Text>
               ) : null}
 
               {option.isCorrect ? (
-                <Text style={styles.correctTag}>
+                <Text
+                  style={
+                    styles.correctTag
+                  }
+                >
                   Правильна
                 </Text>
               ) : null}
@@ -1722,12 +2841,18 @@ function OrdinaryQuestion({
         }
       )}
 
-      <View style={styles.answerLine}>
-        <Text style={styles.answerLabel}>
+      <View
+        style={styles.answerLine}
+      >
+        <Text
+          style={styles.answerLabel}
+        >
           Обрано:
         </Text>
 
-        <Text style={styles.answerValue}>
+        <Text
+          style={styles.answerValue}
+        >
           {getOrdinaryAnswerLetters(
             question,
             selectedAnswers
@@ -1735,8 +2860,12 @@ function OrdinaryQuestion({
         </Text>
       </View>
 
-      <View style={styles.answerLine}>
-        <Text style={styles.answerLabel}>
+      <View
+        style={styles.answerLine}
+      >
+        <Text
+          style={styles.answerLabel}
+        >
           Правильна відповідь:
         </Text>
 
@@ -1752,31 +2881,34 @@ function OrdinaryQuestion({
         </Text>
       </View>
 
-      <View style={styles.answerLine}>
-        <Text style={styles.answerLabel}>
+      <View
+        style={styles.answerLine}
+      >
+        <Text
+          style={styles.answerLabel}
+        >
           Нараховані бали:
         </Text>
 
         <Text
           style={[
             styles.answerValue,
-            getEarnedPoints(
-              question,
-              selectedAnswers
-            ) > 0
+            earnedPoints > 0
               ? styles.correctText
               : styles.incorrectText,
           ]}
         >
-          {getEarnedPoints(
-            question,
-            selectedAnswers
-          )} / {question.points}
+          {earnedPoints} /{" "}
+          {question.points}
         </Text>
       </View>
 
-      <View style={styles.answerLine}>
-        <Text style={styles.answerLabel}>
+      <View
+        style={styles.answerLine}
+      >
+        <Text
+          style={styles.answerLabel}
+        >
           Результат:
         </Text>
 
@@ -1790,7 +2922,8 @@ function OrdinaryQuestion({
         >
           {correct
             ? "Правильно"
-            : selectedAnswers.length === 0
+            : selectedAnswers.length ===
+              0
             ? "Не виконано"
             : "Неправильно"}
         </Text>
@@ -1828,28 +2961,44 @@ function MatchingQuestion({
     );
 
   return (
-    <View style={styles.questionBlock}>
-      <View style={styles.questionHeader}>
-        <Text style={styles.questionNumber}>
+    <View
+      style={styles.questionBlock}
+    >
+      <View
+        style={styles.questionHeader}
+      >
+        <Text
+          style={styles.questionNumber}
+        >
           Завдання {number}
         </Text>
 
-        <Text style={styles.questionPoints}>
+        <Text
+          style={styles.questionPoints}
+        >
           {question.points} б.
         </Text>
       </View>
 
-      <Text style={styles.conditionLabel}>
+      <Text
+        style={styles.conditionLabel}
+      >
         Умова
       </Text>
 
       <HtmlContentPdf
         html={question.text}
-        style={styles.conditionText}
+        style={
+          styles.conditionText
+        }
       />
 
-      <View style={styles.matchingTable}>
-        <View style={styles.matchingHeader}>
+      <View
+        style={styles.matchingTable}
+      >
+        <View
+          style={styles.matchingHeader}
+        >
           <Text
             style={[
               styles.matchingHeaderCell,
@@ -1869,67 +3018,99 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        {left.map((item, index) => {
-          const selectedRightId =
-            selectedAnswers[index];
+        {left.map(
+          (item, index) => {
+            const selectedRightId =
+              selectedAnswers[index];
 
-          const selectedRight =
-            right.find(
-              (rightItem) =>
-                rightItem.id ===
-                selectedRightId
-            );
+            const selectedRight =
+              right.find(
+                (rightItem) =>
+                  rightItem.id ===
+                  selectedRightId
+              );
 
-          const correctRight =
-            right.find(
-              (rightItem) =>
-                rightItem.id ===
-                item.correctRightId
-            );
+            const pairCorrect =
+              selectedRightId !==
+                undefined &&
+              selectedRightId ===
+                item.correctRightId;
 
-          const pairCorrect =
-            selectedRightId !== undefined &&
-            selectedRightId ===
-              item.correctRightId;
-
-          return (
-            <View
-              key={item.id}
-              style={styles.matchingRow}
-            >
-              <Text
-                style={styles.matchingCell}
-              >
-                {getLetter(index)}.{" "}
-                {stripHtml(item.text)}
-              </Text>
-
-              <Text
+            return (
+              <View
+                key={item.id}
                 style={
-                  pairCorrect
-                    ? styles.matchingCellCorrect
-                    : styles.matchingCellIncorrect
+                  styles.matchingRow
                 }
               >
-                {selectedRight
-                  ? stripHtml(
-                      selectedRight.text
-                    )
-                  : "—"}
-              </Text>
-            </View>
-          );
-        })}
+                <View
+                  style={
+                    styles.matchingCellView
+                  }
+                >
+                  <Text
+                    style={
+                      styles.matchingCellText
+                    }
+                  >
+                    {getLetter(index)}.
+                  </Text>
+
+                  <HtmlContentPdf
+                    html={item.text}
+                  />
+                </View>
+
+                <View
+                  style={
+                    pairCorrect
+                      ? styles.matchingCellCorrect
+                      : styles.matchingCellIncorrect
+                  }
+                >
+                  {selectedRight ? (
+                    <HtmlContentPdf
+                      html={
+                        selectedRight.text
+                      }
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.matchingCellText,
+                        styles.muted,
+                      ]}
+                    >
+                      —
+                    </Text>
+                  )}
+                </View>
+              </View>
+            );
+          }
+        )}
       </View>
 
-      <View style={styles.matchingResult}>
-        <View style={styles.matchingResultRow}>
-          <Text style={styles.matchingResultLabel}>
+      <View
+        style={styles.matchingResult}
+      >
+        <View
+          style={
+            styles.matchingResultRow
+          }
+        >
+          <Text
+            style={
+              styles.matchingResultLabel
+            }
+          >
             Відповідь учасника:
           </Text>
 
           <Text
-            style={styles.matchingResultValue}
+            style={
+              styles.matchingResultValue
+            }
           >
             {getMatchingAnswerLetters(
               question,
@@ -1938,8 +3119,16 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        <View style={styles.matchingResultRow}>
-          <Text style={styles.matchingResultLabel}>
+        <View
+          style={
+            styles.matchingResultRow
+          }
+        >
+          <Text
+            style={
+              styles.matchingResultLabel
+            }
+          >
             Правильна відповідь:
           </Text>
 
@@ -1955,18 +3144,39 @@ function MatchingQuestion({
           </Text>
         </View>
 
-        <View style={styles.matchingResultRow}>
-          <Text style={styles.matchingResultLabel}>
+        <View
+          style={
+            styles.matchingResultRow
+          }
+        >
+          <Text
+            style={
+              styles.matchingResultLabel
+            }
+          >
             Правильних пар:
           </Text>
 
-          <Text style={styles.matchingResultValue}>
-            {status.correct} / {status.total}
+          <Text
+            style={
+              styles.matchingResultValue
+            }
+          >
+            {status.correct} /{" "}
+            {status.total}
           </Text>
         </View>
 
-        <View style={styles.matchingResultRow}>
-          <Text style={styles.matchingResultLabel}>
+        <View
+          style={
+            styles.matchingResultRow
+          }
+        >
+          <Text
+            style={
+              styles.matchingResultLabel
+            }
+          >
             Нараховані бали:
           </Text>
 
@@ -1978,7 +3188,8 @@ function MatchingQuestion({
                 : styles.incorrectText,
             ]}
           >
-            {earnedPoints} / {question.points}
+            {earnedPoints} /{" "}
+            {question.points}
           </Text>
         </View>
       </View>
@@ -1997,12 +3208,17 @@ function FullQuestions({
 }) {
   return (
     <>
-      <Text style={styles.sectionTitle}>
+      <Text
+        style={styles.sectionTitle}
+      >
         Завдання та відповіді
       </Text>
 
       {result.test.questions.map(
-        (testQuestion, index) => {
+        (
+          testQuestion,
+          index
+        ) => {
           const question =
             testQuestion.question;
 
@@ -2013,11 +3229,15 @@ function FullQuestions({
             );
 
           if (
-            isMatchingQuestion(question)
+            isMatchingQuestion(
+              question
+            )
           ) {
             return (
               <MatchingQuestion
-                key={testQuestion.id}
+                key={
+                  testQuestion.id
+                }
                 question={question}
                 number={index + 1}
                 selectedAnswers={
@@ -2070,7 +3290,11 @@ export default function ResultPdfDocument({
 
         {mode === "summary" ? (
           <>
-            <Text style={styles.mainHeading}>
+            <Text
+              style={
+                styles.mainHeading
+              }
+            >
               РЕЗУЛЬТАТ ТЕСТУВАННЯ
             </Text>
 
@@ -2082,7 +3306,11 @@ export default function ResultPdfDocument({
 
         {mode === "answers" ? (
           <>
-            <Text style={styles.mainHeading}>
+            <Text
+              style={
+                styles.mainHeading
+              }
+            >
               ЖУРНАЛ ВІДПОВІДЕЙ
             </Text>
 
@@ -2098,7 +3326,11 @@ export default function ResultPdfDocument({
 
         {mode === "full" ? (
           <>
-            <Text style={styles.mainHeading}>
+            <Text
+              style={
+                styles.mainHeading
+              }
+            >
               ПОВНИЙ РЕЗУЛЬТАТ
             </Text>
 
