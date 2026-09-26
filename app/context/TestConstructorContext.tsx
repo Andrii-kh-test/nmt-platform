@@ -11,6 +11,26 @@ import { Test } from "@/app/types/test";
 import { Question } from "@/app/types/question";
 import { createQuestion } from "@/app/utils/createQuestion";
 
+// ========================================
+// Тимчасовий ID для нових питань
+// ========================================
+//
+// Нові питання ще не мають ID з бази даних.
+// Від'ємні ID дозволяють однозначно відрізнити
+// їх від уже збережених питань, які мають
+// позитивні ID.
+//
+// Наприклад:
+// перше нове питання → -1
+// друге нове питання → -2
+// третє нове питання → -3
+//
+let temporaryQuestionId = -1;
+
+// ========================================
+// TYPE
+// ========================================
+
 type TestConstructorContextType = {
   test: Test;
 
@@ -126,7 +146,15 @@ export function TestConstructorProvider({
 
       questions: [
         ...prev.questions,
-        createQuestion(Date.now()),
+
+        // Нове питання отримує тимчасовий
+        // від'ємний ID.
+        //
+        // База даних отримає власний
+        // autoincrement ID під час збереження.
+        createQuestion(
+          temporaryQuestionId--
+        ),
       ],
     }));
   }
