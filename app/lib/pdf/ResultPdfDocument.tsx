@@ -1,4 +1,5 @@
 import React from "react";
+
 import fs from "fs";
 import path from "path";
 
@@ -117,17 +118,6 @@ const fontItalicPath = path.join(
   "noto-sans-italic.woff"
 );
 
-/*
- * Якщо окремого italic-файлу немає, використовуємо
- * regular/bold як fallback.
- *
- * Головне — react-pdf отримує коректну пару
- * fontWeight + fontStyle і більше не падає
- * на:
- *
- * Could not resolve font for NotoSans,
- * fontWeight 700, fontStyle italic
- */
 const resolvedItalicPath = fs.existsSync(fontItalicPath)
   ? fontItalicPath
   : fontRegularPath;
@@ -574,6 +564,7 @@ function parseAttributes(
 
   while ((match = regex.exec(source)) !== null) {
     const name = match[1].toLowerCase();
+
     const value =
       match[2] ??
       match[3] ??
@@ -624,7 +615,9 @@ function parseHtml(
 
     if (token.startsWith("<")) {
       const closingMatch =
-        token.match(/^<\s*\/\s*([a-zA-Z0-9]+)\s*>$/);
+        token.match(
+          /^<\s*\/\s*([a-zA-Z0-9]+)\s*>$/
+        );
 
       if (closingMatch) {
         const closingTag =
@@ -1018,10 +1011,6 @@ function getImageDimensions(
     ) ??
     parseDimension(css.height);
 
-  /*
-   * Для зображень без заданого розміру
-   * використовуємо безпечний розмір.
-   */
   if (width && height) {
     return {
       width: Math.min(width, 470),
@@ -1113,13 +1102,6 @@ function renderInlineNodes(
       const dimensions =
         getImageDimensions(node);
 
-      /*
-       * Image НЕ вкладається всередину Text.
-       * Це була одна з причин падіння full-режиму.
-       *
-       * Тут повертаємо View, який може бути
-       * дочірнім елементом загального View.
-       */
       result.push(
         <View
           key={`image-${index}`}
@@ -1213,7 +1195,7 @@ function renderHtmlNode(
 
     return [
       <View
-        key={`image-${node.attrs.src}-${Math.random()}`}
+        key={`image-${node.attrs.src}`}
         style={{
           marginVertical: 5,
           alignItems: "flex-start",
@@ -1455,14 +1437,9 @@ function renderHtmlNode(
     ];
   }
 
-  /*
-   * Для p/div та інших block-елементів
-   * окремий View дозволяє безпечно вставляти
-   * зображення між текстовими частинами.
-   */
   return [
     <View
-      key={`block-${tag}-${Math.random()}`}
+      key={`block-${tag}`}
       style={{
         marginBottom:
           tag === "p" ? 4 : 2,
@@ -1518,65 +1495,6 @@ function HtmlContentPdf({
       {result}
     </View>
   );
-}
-
-// =====================================================
-// SIGNATURE
-// =====================================================
-
-function getSignatureData(): string | null {
-  const possibleFiles = [
-    "signature.jpg",
-    "signature.png",
-    "signature.png.jpg",
-  ];
-
-  for (const fileName of possibleFiles) {
-    const signaturePath = path.join(
-      brandingPath,
-      fileName
-    );
-
-    if (!fs.existsSync(signaturePath)) {
-      continue;
-    }
-
-    try {
-      const buffer =
-        fs.readFileSync(signaturePath);
-
-      const extension =
-        path.extname(signaturePath).toLowerCase();
-
-      let mime = "image/jpeg";
-
-      if (extension === ".png") {
-        mime = "image/png";
-      }
-
-      /*
-       * signature.png.jpg може фактично бути PNG.
-       * Перевіряємо сигнатуру файлу.
-       */
-      if (
-        buffer.length >= 8 &&
-        buffer[0] === 0x89 &&
-        buffer[1] === 0x50 &&
-        buffer[2] === 0x4e &&
-        buffer[3] === 0x47
-      ) {
-        mime = "image/png";
-      }
-
-      return `data:${mime};base64,${buffer.toString(
-        "base64"
-      )}`;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
 }
 
 // =====================================================
@@ -1695,25 +1613,6 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
 
-  signatureBlock: {
-    width: 90,
-    alignItems: "center",
-    justifyContent: "flex-start",
-  },
-
-  signatureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 29,
-    marginBottom: 1,
-  },
-
-  signature: {
-    width: 88,
-    height: 29,
-    objectFit: "contain",
-  },
-
   footerContact: {
     fontSize: 6.1,
     color: "#777777",
@@ -1821,44 +1720,59 @@ const styles = StyleSheet.create({
     borderWidth: 0.7,
     borderColor: LIGHT_GRAY,
     marginBottom: 14,
+    backgroundColor: WHITE,
   },
 
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: BURGUNDY,
     minHeight: 27,
-    alignItems: "center",
+    alignItems: "stretch",
+    backgroundColor: WHITE,
   },
 
   tableHeaderCell: {
     color: WHITE,
+    backgroundColor: BURGUNDY,
     fontSize: 7.3,
     fontWeight: 700,
     paddingHorizontal: 5,
     paddingVertical: 5,
+    borderRightWidth: 0.5,
+    borderRightColor: WHITE,
+    textAlign: "center",
+  },
+
+  tableHeaderCellLast: {
+    borderRightWidth: 0,
   },
 
   tableRow: {
     flexDirection: "row",
     minHeight: 25,
+    alignItems: "center",
+    backgroundColor: WHITE,
     borderTopWidth: 0.5,
     borderTopColor: LIGHT_GRAY,
-    alignItems: "center",
   },
 
   tableRowAlt: {
     flexDirection: "row",
     minHeight: 25,
-    borderTopWidth: 0.5,
-    borderTopColor: LIGHT_GRAY,
     alignItems: "center",
     backgroundColor: VERY_LIGHT_GRAY,
+    borderTopWidth: 0.5,
+    borderTopColor: LIGHT_GRAY,
   },
 
   tableCell: {
     fontSize: 7.5,
     paddingHorizontal: 5,
     paddingVertical: 4,
+    backgroundColor: WHITE,
+  },
+
+  tableCellAlt: {
+    backgroundColor: VERY_LIGHT_GRAY,
   },
 
   colNumber: {
@@ -1871,16 +1785,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /*
-   * Нараховані бали тепер третя колонка.
-   */
-  colPoints: {
-    width: 75,
+  colCorrect: {
+    flex: 1,
     textAlign: "center",
   },
 
-  colCorrect: {
-    flex: 1,
+  colPoints: {
+    width: 75,
     textAlign: "center",
   },
 
@@ -2117,8 +2028,6 @@ function Header() {
 // =====================================================
 
 function Footer() {
-  const signature = getSignatureData();
-
   return (
     <View style={styles.footer} fixed>
       <View style={styles.footerContent}>
@@ -2135,15 +2044,6 @@ function Footer() {
             Комунального закладу «Харківська
             обласна Мала академія наук»
           </Text>
-        </View>
-
-        <View style={styles.signatureBlock}>
-          {signature ? (
-            <Image
-              src={signature}
-              style={styles.signature}
-            />
-          ) : null}
         </View>
       </View>
 
@@ -2354,6 +2254,7 @@ function AnswersTable({
       </Text>
 
       <View style={styles.table}>
+        {/* HEADER */}
         <View style={styles.tableHeader}>
           <Text
             style={[
@@ -2376,22 +2277,24 @@ function AnswersTable({
           <Text
             style={[
               styles.tableHeaderCell,
-              styles.colPoints,
-            ]}
-          >
-            Нараховані бали
-          </Text>
-
-          <Text
-            style={[
-              styles.tableHeaderCell,
               styles.colCorrect,
             ]}
           >
             Правильна відповідь
           </Text>
+
+          <Text
+            style={[
+              styles.tableHeaderCell,
+              styles.colPoints,
+              styles.tableHeaderCellLast,
+            ]}
+          >
+            Нараховані бали
+          </Text>
         </View>
 
+        {/* ROWS */}
         {result.test.questions.map(
           (testQuestion, index) => {
             const question =
@@ -2404,9 +2307,7 @@ function AnswersTable({
               );
 
             const matching =
-              isMatchingQuestion(
-                question
-              );
+              isMatchingQuestion(question);
 
             let participantAnswer = "—";
             let correctAnswer = "—";
@@ -2464,23 +2365,34 @@ function AnswersTable({
                 ? styles.tableRow
                 : styles.tableRowAlt;
 
+            const cellStyle =
+              index % 2 === 0
+                ? styles.tableCell
+                : [
+                    styles.tableCell,
+                    styles.tableCellAlt,
+                  ];
+
             return (
               <View
                 key={testQuestion.id}
                 style={rowStyle}
+                wrap={false}
               >
+                {/* ЗАВДАННЯ */}
                 <Text
                   style={[
-                    styles.tableCell,
+                    cellStyle,
                     styles.colNumber,
                   ]}
                 >
                   {index + 1}
                 </Text>
 
+                {/* ВІДПОВІДЬ УЧАСНИКА */}
                 <Text
                   style={[
-                    styles.tableCell,
+                    cellStyle,
                     styles.colAnswer,
                     correct
                       ? styles.correctText
@@ -2492,9 +2404,21 @@ function AnswersTable({
                   {participantAnswer}
                 </Text>
 
+                {/* ПРАВИЛЬНА ВІДПОВІДЬ */}
                 <Text
                   style={[
-                    styles.tableCell,
+                    cellStyle,
+                    styles.colCorrect,
+                    styles.correctText,
+                  ]}
+                >
+                  {correctAnswer}
+                </Text>
+
+                {/* НАРАХОВАНІ БАЛИ */}
+                <Text
+                  style={[
+                    cellStyle,
                     styles.colPoints,
                     earnedPoints > 0
                       ? styles.pointsCell
@@ -2502,16 +2426,6 @@ function AnswersTable({
                   ]}
                 >
                   {earnedPoints}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.tableCell,
-                    styles.colCorrect,
-                    styles.correctText,
-                  ]}
-                >
-                  {correctAnswer}
                 </Text>
               </View>
             );
