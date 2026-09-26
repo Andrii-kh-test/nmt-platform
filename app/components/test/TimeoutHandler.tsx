@@ -20,33 +20,34 @@ export default function TimeoutHandler() {
   useEffect(() => {
     if (!test) return;
 
-    setOnTimeExpired(() => {
-      return async () => {
-        try {
-          const storedSessionId =
-  localStorage.getItem("testSessionId");
+    setOnTimeExpired(async () => {
+      try {
+        const storedSessionId =
+          localStorage.getItem("testSessionId");
 
-const sessionId =
-  Number(storedSessionId);
+        const sessionId =
+          Number(storedSessionId);
 
-if (!sessionId) {
-  throw new Error(
-    "Не знайдено sessionId тестування"
-  );
-}
-
-await finishTest(
-  "timeout",
-  test,
-  savedAnswers,
-  timeLeft,
-  sessionId,
-  router
-);
-        } catch (error) {
-          console.error(error);
+        if (!sessionId) {
+          throw new Error(
+            "Не знайдено sessionId тестування"
+          );
         }
-      };
+
+        await finishTest(
+          "timeout",
+          test,
+          savedAnswers,
+          timeLeft,
+          sessionId,
+          router
+        );
+      } catch (error) {
+        console.error(
+          "TIMEOUT FINISH ERROR:",
+          error
+        );
+      }
     });
 
     return () => {
