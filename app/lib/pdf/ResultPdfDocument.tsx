@@ -96,37 +96,31 @@ const RED = "#A83232";
 
 const fontRegularPath = path.join(
   process.cwd(),
-  "node_modules",
-  "@fontsource",
-  "noto-sans",
-  "files",
-  "noto-sans-cyrillic-400-normal.ttf"
+  "public",
+  "branding",
+  "noto-sans-regular.ttf"
 );
 
 const fontBoldPath = path.join(
   process.cwd(),
-  "node_modules",
-  "@fontsource",
-  "noto-sans",
-  "files",
-  "noto-sans-cyrillic-700-normal.ttf"
+  "public",
+  "branding",
+  "noto-sans-bold.ttf"
 );
 
-if (fs.existsSync(fontRegularPath)) {
-  Font.register({
-    family: "NotoSans",
-    src: fontRegularPath,
-    fontWeight: 400,
-  });
-}
-
-if (fs.existsSync(fontBoldPath)) {
-  Font.register({
-    family: "NotoSans",
-    src: fontBoldPath,
-    fontWeight: 700,
-  });
-}
+Font.register({
+  family: "NotoSans",
+  fonts: [
+    {
+      src: fontRegularPath,
+      fontWeight: 400,
+    },
+    {
+      src: fontBoldPath,
+      fontWeight: 700,
+    },
+  ],
+});
 
 // =====================================================
 // HELPERS
