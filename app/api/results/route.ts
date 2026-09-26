@@ -141,3 +141,106 @@ export async function POST(
     );
   }
 }
+
+// =====================================================
+// DELETE — МАСОВЕ ВИДАЛЕННЯ РЕЗУЛЬТАТІВ
+//
+// DELETE /api/results
+//
+// Body:
+// {
+//   "ids": [1, 2, 3]
+// }
+// =====================================================
+
+export async function DELETE(
+  request: Request
+) {
+  try {
+    const body = await request.json();
+
+    const ids = body?.ids;
+
+    // Перевіряємо, що ids є масивом
+    // і що в ньому є хоча б один елемент.
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Не вибрано жодного результату.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // Перетворюємо отримані значення
+    // на числа та залишаємо тільки
+    // додатні цілі числа.
+    const resultIds = [
+      ...new Set(
+        ids
+          .map((id: unknown) =>
+            Number(id)
+          )
+          .filter(
+            (id: number) =>
+              Number.isInteger(id) &&
+              id > 0
+          )
+      ),
+    ];
+
+    // Якщо після перевірки не залишилося
+    // жодного коректного id.
+    if (resultIds.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Некоректні id результатів.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // Масове видалення одним запитом.
+    const deleted =
+      await prisma.testResult.deleteMany({
+        where: {
+          id: {
+            in: resultIds,
+          },
+        },
+      });
+
+    return NextResponse.json({
+      success: true,
+      deletedCount: deleted.count,
+      message: `Успішно видалено результатів: ${deleted.count}.`,
+    });
+  } catch (error) {
+    console.error(
+      "DELETE RESULTS ERROR:",
+      error
+    );
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          "Не вдалося видалити вибрані результати.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+}
