@@ -1,57 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
 
-import {
-  calculateQuestionPsychometrics,
-  type PsychometricQuestion,
-  type PsychometricParticipant,
-} from "@/app/lib/analytics/psychometrics";
-
 // =====================================================
-// TYPES
+// СКЛАДНІСТЬ
 // =====================================================
 
-type MatchingLeftItem = {
-  leftId: number;
-  text: string;
-  correctRightId: number;
-};
-
-type QuestionType =
-  | "SINGLE"
-  | "MULTIPLE"
-  | "MATCHING"
-  | "SEQUENCE"
-  | string;
-
-type DifficultyResult = {
-  label: string;
-  color: string;
-};
-
-// =====================================================
-// HELPERS
-// =====================================================
-
-/**
- * Визначає назву складності за P-value.
- *
- * P-value у psychometrics.ts уже представлений
- * у відсотках: 0–100.
- *
- * AnalyticsClient.tsx очікує саме ці текстові
- * значення:
- *
- * Дуже легке
- * Легке
- * Оптимальне
- * Складне
- * Дуже складне
- */
 function getDifficulty(
   correctPercent: number
-): DifficultyResult {
+) {
   if (correctPercent > 80) {
     return {
       label: "Дуже легке",
@@ -87,128 +44,65 @@ function getDifficulty(
 }
 
 // =====================================================
-// JSON / ANSWERS
-// =====================================================
-
-function getAnswersRecord(
-  value: unknown
-): Record<string, unknown> {
-  if (!value) {
-    return {};
-  }
-
-  if (
-    typeof value === "object" &&
-    !Array.isArray(value)
-  ) {
-    return value as Record<string, unknown>;
-  }
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        !Array.isArray(parsed)
-      ) {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-// =====================================================
-// ANSWER IDS
+// ОТРИМАННЯ ID ВІДПОВІДЕЙ
 // =====================================================
 
 function getAnswerIds(
   value: unknown
 ): number[] {
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
-    return [];
-  }
+  let source = value;
 
-  let parsed: unknown = value;
-
-  if (typeof value === "string") {
+  if (typeof source === "string") {
     try {
-      parsed = JSON.parse(value);
+      source = JSON.parse(source);
     } catch {
       return [];
     }
   }
 
-  if (!Array.isArray(parsed)) {
+  if (!Array.isArray(source)) {
     return [];
   }
 
-  return parsed
-    .map((item) => {
-      if (typeof item === "number") {
-        return item;
-      }
-
-      if (typeof item === "string") {
-        const number = Number(item);
-
-        return Number.isFinite(number)
-          ? number
-          : NaN;
-      }
-
-      return NaN;
-    })
+  return source
+    .map((item) => Number(item))
     .filter(
-      (item): item is number =>
-        Number.isFinite(item) && item > 0
+      (item) =>
+        Number.isInteger(item) &&
+        item > 0
     );
 }
 
 // =====================================================
-// SINGLE / MULTIPLE
+// ПОРІВНЯННЯ SINGLE / MULTIPLE
 // =====================================================
 
 function isSameAnswers(
-  userAnswer: unknown,
+  userAnswer: number[],
   correctAnswers: number[]
 ): boolean {
-  const userIds = getAnswerIds(userAnswer);
+  const normalizedUserAnswer =
+    [...userAnswer].sort(
+      (a, b) => a - b
+    );
+
+  const normalizedCorrectAnswers =
+    [...correctAnswers].sort(
+      (a, b) => a - b
+    );
 
   if (
-    userIds.length !==
-    correctAnswers.length
+    normalizedUserAnswer.length !==
+    normalizedCorrectAnswers.length
   ) {
     return false;
   }
 
-  const userSet = new Set(userIds);
-  const correctSet =
-    new Set(correctAnswers);
-
-  if (
-    userSet.size !==
-    correctSet.size
-  ) {
-    return false;
-  }
-
-  for (const id of correctSet) {
-    if (!userSet.has(id)) {
-      return false;
-    }
-  }
-
-  return true;
+  return normalizedCorrectAnswers.every(
+    (id, index) =>
+      normalizedUserAnswer[index] ===
+      id
+  );
 }
 
 // =====================================================
@@ -222,94 +116,115 @@ function getMatchingLeftItems(
     text: string;
     isCorrect: boolean;
   }>
-): MatchingLeftItem[] {
-  const result: MatchingLeftItem[] = [];
+) {
+  return options
+    .filter((option) =>
+      option.text?.startsWith("L|")
+    )
+    .map((option) => {
+      const parts =
+        option.text.split("|");
 
-  for (const option of options) {
-    const parts =
-      option.text.split("|");
-
-    if (parts.length < 4) {
-      continue;
-    }
-
-    const prefix = parts[0];
-
-    if (prefix !== "L") {
-      continue;
-    }
-
-    const leftId =
-      Number(parts[1]);
-
-    const text =
-      parts[2];
-
-    const correctRightId =
-      Number(parts[3]);
-
-    if (
-      !Number.isFinite(leftId) ||
-      !Number.isFinite(
-        correctRightId
-      )
-    ) {
-      continue;
-    }
-
-    result.push({
-      leftId,
-      text,
-      correctRightId,
-    });
-  }
-
-  return result.sort(
-    (a, b) =>
-      a.leftId - b.leftId
-  );
+      return {
+        id: Number(parts[1]),
+        text: parts[2] ?? "",
+        correctRightId:
+          Number(parts[3]),
+      };
+    })
+    .filter(
+      (item) =>
+        Number.isInteger(item.id) &&
+        Number.isInteger(
+          item.correctRightId
+        )
+    )
+    .sort(
+      (a, b) => a.id - b.id
+    );
 }
 
+// =====================================================
+// ПЕРЕВІРКА MATCHING
+// =====================================================
+
 function isMatchingCorrect(
-  userAnswer: unknown,
-  leftItems: MatchingLeftItem[]
+  userAnswer: number[],
+  leftItems: Array<{
+    id: number;
+    text: string;
+    correctRightId: number;
+  }>
 ): boolean {
-  const userIds =
-    getAnswerIds(userAnswer);
+  if (leftItems.length === 0) {
+    return false;
+  }
 
   if (
-    userIds.length !==
+    userAnswer.length !==
     leftItems.length
   ) {
     return false;
   }
 
-  for (
-    let i = 0;
-    i < leftItems.length;
-    i++
-  ) {
-    if (
-      userIds[i] !==
-      leftItems[i].correctRightId
-    ) {
-      return false;
-    }
-  }
-
-  return true;
+  return leftItems.every(
+    (leftItem, index) =>
+      userAnswer[index] ===
+      leftItem.correctRightId
+  );
 }
 
 // =====================================================
-// GET /api/analytics
+// ОТРИМАННЯ ANSWERS
+// =====================================================
+
+function getAnswersRecord(
+  value: unknown
+): Record<string, unknown> {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<
+      string,
+      unknown
+    >;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed =
+        JSON.parse(value);
+
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        return parsed as Record<
+          string,
+          unknown
+        >;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+// =====================================================
+// GET
 // =====================================================
 
 export async function GET(
-  request: NextRequest
+  request: Request
 ) {
   try {
-    const searchParams =
-      request.nextUrl.searchParams;
+    const { searchParams } =
+      new URL(request.url);
 
     // =================================================
     // TEST ID
@@ -321,8 +236,8 @@ export async function GET(
     if (!testIdParam) {
       return NextResponse.json(
         {
-          error:
-            "Не вказано testId.",
+          message:
+            "Не вказано ID тесту.",
         },
         {
           status: 400,
@@ -339,8 +254,8 @@ export async function GET(
     ) {
       return NextResponse.json(
         {
-          error:
-            "Некоректний testId.",
+          message:
+            "Некоректний ID тесту.",
         },
         {
           status: 400,
@@ -349,7 +264,7 @@ export async function GET(
     }
 
     // =================================================
-    // PARTICIPANT FILTER
+    // СПИСОК УЧАСНИКІВ
     // =================================================
 
     const participantIdsParam =
@@ -357,56 +272,81 @@ export async function GET(
         "participantIds"
       );
 
-    let participantIds: number[] =
-      [];
+    let participantIds:
+      | number[]
+      | undefined;
 
     if (participantIdsParam) {
-      let values: string[] = [];
-
       try {
+        let parsed: unknown;
+
         if (
-          participantIdsParam
-            .trim()
-            .startsWith("[")
+          participantIdsParam.startsWith(
+            "["
+          )
         ) {
-          const parsed =
+          parsed =
             JSON.parse(
               participantIdsParam
             );
-
-          if (
-            Array.isArray(parsed)
-          ) {
-            values =
-              parsed.map(String);
-          }
         } else {
-          values =
-            participantIdsParam.split(
-              ","
+          parsed =
+            participantIdsParam
+              .split(",")
+              .map((id) =>
+                Number(id.trim())
+              );
+        }
+
+        if (!Array.isArray(parsed)) {
+          return NextResponse.json(
+            {
+              message:
+                "Некоректний список учасників.",
+            },
+            {
+              status: 400,
+            }
+          );
+        }
+
+        participantIds =
+          parsed
+            .map((id) => Number(id))
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
             );
+
+        if (
+          participantIds.length === 0
+        ) {
+          return NextResponse.json(
+            {
+              message:
+                "Некоректний список учасників.",
+            },
+            {
+              status: 400,
+            }
+          );
         }
       } catch {
-        values =
-          participantIdsParam.split(
-            ","
-          );
+        return NextResponse.json(
+          {
+            message:
+              "Некоректний список учасників.",
+          },
+          {
+            status: 400,
+          }
+        );
       }
-
-      participantIds =
-        values
-          .map((id) =>
-            Number(id.trim())
-          )
-          .filter(
-            (id) =>
-              Number.isInteger(id) &&
-              id > 0
-          );
     }
 
     // =================================================
-    // TEST
+    // ЗАВАНТАЖЕННЯ ТЕСТУ
     // =================================================
 
     const test =
@@ -459,7 +399,7 @@ export async function GET(
     if (!test) {
       return NextResponse.json(
         {
-          error:
+          message:
             "Тест не знайдено.",
         },
         {
@@ -469,7 +409,7 @@ export async function GET(
     }
 
     // =================================================
-    // RESULTS
+    // РЕЗУЛЬТАТИ
     // =================================================
 
     const results =
@@ -477,18 +417,16 @@ export async function GET(
         where: {
           testId,
 
-          ...(participantIds.length >
-          0
+          ...(participantIds &&
+          participantIds.length > 0
             ? {
-                id: {
-                  in: participantIds,
+                session: {
+                  participantId: {
+                    in: participantIds,
+                  },
                 },
               }
             : {}),
-        },
-
-        orderBy: {
-          createdAt: "asc",
         },
 
         select: {
@@ -517,10 +455,14 @@ export async function GET(
             },
           },
         },
+
+        orderBy: {
+          createdAt: "asc",
+        },
       });
 
     // =================================================
-    // PARTICIPANTS
+    // УЧАСНИКИ / РЕЗУЛЬТАТИ
     // =================================================
 
     const participants =
@@ -529,18 +471,18 @@ export async function GET(
 
         participantId:
           result.session
-            ?.participantId ??
-          null,
+            ?.participantId ?? null,
 
+        // ВАЖЛИВО:
+        // session у TestResult optional.
         sessionId:
-          result.session?.id ??
-          null,
-
-        firstName:
-          result.firstName,
+          result.session?.id ?? null,
 
         lastName:
           result.lastName,
+
+        firstName:
+          result.firstName,
 
         middleName:
           result.middleName,
@@ -567,266 +509,149 @@ export async function GET(
           result.createdAt,
       }));
 
-    // =================================================
-    // PSYCHOMETRIC PARTICIPANTS
-    // =================================================
-
-    const psychometricParticipants: PsychometricParticipant[] =
-      results.map((result) => ({
-        id: result.id,
-
-        earnedPoints:
-          result.earnedPoints,
-
-        answers:
-          result.answers,
-      }));
+    const totalParticipants =
+      results.length;
 
     // =================================================
-    // QUESTIONS
+    // СТАТИСТИКА ЗАВДАНЬ
     // =================================================
 
-    const questions =
+    const questionStatistics =
       test.questions.map(
         (testQuestion) => {
           const question =
             testQuestion.question;
 
-          // ---------------------------------------------
-          // BASIC STATISTICS
-          // ---------------------------------------------
-
           let correct = 0;
           let incorrect = 0;
           let skipped = 0;
 
-          const answersRecord =
-            results.map(
-              (result) => ({
-                result,
+          // -------------------------------------------
+          // ПРАВИЛЬНІ ВІДПОВІДІ
+          // -------------------------------------------
 
-                answers:
-                  getAnswersRecord(
-                    result.answers
-                  ),
-              })
-            );
-
-          const correctOptions =
+          const correctAnswers =
             question.answerOptions
               .filter(
                 (option) =>
-                  option.isCorrect
+                  option.isCorrect ===
+                  true
               )
               .map(
                 (option) =>
                   option.id
               );
 
+          // -------------------------------------------
+          // MATCHING
+          // -------------------------------------------
+
           const matchingLeftItems =
-            question.type ===
-            "MATCHING"
-              ? getMatchingLeftItems(
-                  question.answerOptions
-                )
-              : [];
+            getMatchingLeftItems(
+              question.answerOptions
+            );
 
-          // ---------------------------------------------
-          // ANALYZE EACH PARTICIPANT
-          // ---------------------------------------------
+          // -------------------------------------------
+          // КОЖЕН УЧАСНИК
+          // -------------------------------------------
 
-          for (const item of answersRecord) {
-            const rawAnswer =
-              item.answers[
+          results.forEach(
+            (result) => {
+              const answers =
+                getAnswersRecord(
+                  result.answers
+                );
+
+              const answerKey =
                 String(
                   question.id
-                )
-              ] ??
-              item.answers[
-                question.id
-              ];
-
-            const answerIds =
-              getAnswerIds(
-                rawAnswer
-              );
-
-            // -------------------------------------------
-            // SKIPPED
-            // -------------------------------------------
-
-            if (
-              answerIds.length ===
-              0
-            ) {
-              skipped++;
-              continue;
-            }
-
-            let isCorrect =
-              false;
-
-            // -------------------------------------------
-            // MATCHING
-            // -------------------------------------------
-
-            if (
-              question.type ===
-              "MATCHING"
-            ) {
-              isCorrect =
-                isMatchingCorrect(
-                  rawAnswer,
-                  matchingLeftItems
                 );
-            }
 
-            // -------------------------------------------
-            // SINGLE / MULTIPLE
-            // -------------------------------------------
+              const rawAnswer =
+                answers[answerKey];
 
-            else if (
-              question.type ===
-                "SINGLE" ||
-              question.type ===
-                "MULTIPLE"
-            ) {
-              isCorrect =
+              const userAnswer =
+                getAnswerIds(
+                  rawAnswer
+                );
+
+              // ---------------------------------------
+              // ПРОПУЩЕНО
+              // ---------------------------------------
+
+              if (
+                userAnswer.length === 0
+              ) {
+                skipped++;
+                return;
+              }
+
+              // ---------------------------------------
+              // MATCHING
+              // ---------------------------------------
+
+              if (
+                question.type ===
+                "matching"
+              ) {
+                const matchingCorrect =
+                  isMatchingCorrect(
+                    userAnswer,
+                    matchingLeftItems
+                  );
+
+                if (
+                  matchingCorrect
+                ) {
+                  correct++;
+                } else {
+                  incorrect++;
+                }
+
+                return;
+              }
+
+              // ---------------------------------------
+              // SINGLE / MULTIPLE
+              // ---------------------------------------
+
+              const answerIsCorrect =
                 isSameAnswers(
-                  rawAnswer,
-                  correctOptions
+                  userAnswer,
+                  correctAnswers
                 );
+
+              if (
+                answerIsCorrect
+              ) {
+                correct++;
+              } else {
+                incorrect++;
+              }
             }
+          );
 
-            // -------------------------------------------
-            // SEQUENCE
-            // -------------------------------------------
-
-            else if (
-              question.type ===
-              "SEQUENCE"
-            ) {
-              isCorrect =
-                answerIds.length ===
-                  correctOptions.length &&
-                answerIds.every(
-                  (
-                    id,
-                    index
-                  ) =>
-                    id ===
-                    correctOptions[
-                      index
-                    ]
-                );
-            }
-
-            // -------------------------------------------
-            // OTHER
-            // -------------------------------------------
-
-            else {
-              isCorrect =
-                isSameAnswers(
-                  rawAnswer,
-                  correctOptions
-                );
-            }
-
-            if (isCorrect) {
-              correct++;
-            } else {
-              incorrect++;
-            }
-          }
-
-          // ---------------------------------------------
-          // PERCENTAGES
-          // ---------------------------------------------
-
-          const totalParticipants =
-            results.length;
+          // -------------------------------------------
+          // ВІДСОТОК
+          // -------------------------------------------
 
           const correctPercent =
             totalParticipants > 0
-              ? (correct /
-                  totalParticipants) *
-                100
+              ? Math.round(
+                  (correct /
+                    totalParticipants) *
+                    10000
+                ) / 100
               : 0;
 
-          const incorrectPercent =
-            totalParticipants > 0
-              ? (incorrect /
-                  totalParticipants) *
-                100
-              : 0;
-
-          const skippedPercent =
-            totalParticipants > 0
-              ? (skipped /
-                  totalParticipants) *
-                100
-              : 0;
-
-          // ---------------------------------------------
-          // PSYCHOMETRICS
-          // ---------------------------------------------
-
-          const psychometricQuestion: PsychometricQuestion =
-            {
-              id: question.id,
-
-              order:
-                testQuestion.order,
-
-              type:
-                question.type as QuestionType,
-
-              points:
-                question.points,
-
-              answerOptions:
-                question.answerOptions.map(
-                  (option) => ({
-                    id: option.id,
-
-                    order:
-                      option.order,
-
-                    text:
-                      option.text,
-
-                    isCorrect:
-                      option.isCorrect,
-                  })
-                ),
-            };
-
-          const psychometrics =
-            calculateQuestionPsychometrics(
-              psychometricQuestion,
-              psychometricParticipants
-            );
-
-          // ---------------------------------------------
-          // DIFFICULTY
-          // ---------------------------------------------
+          // -------------------------------------------
+          // СКЛАДНІСТЬ
+          // -------------------------------------------
 
           const difficulty =
-            psychometrics.pValue ===
-            null
-              ? {
-                  label:
-                    "Не визначено",
-                  color: "gray",
-                }
-              : getDifficulty(
-                  psychometrics.pValue
-                );
-
-          // ---------------------------------------------
-          // QUESTION RESULT
-          // ---------------------------------------------
+            getDifficulty(
+              correctPercent
+            );
 
           return {
             id: question.id,
@@ -843,34 +668,8 @@ export async function GET(
             points:
               question.points,
 
-            // -------------------------------------------
-            // ANSWER OPTIONS
-            // -------------------------------------------
-
-            answerOptions:
-              question.answerOptions.map(
-                (option) => ({
-                  id: option.id,
-
-                  order:
-                    option.order,
-
-                  text:
-                    option.text,
-
-                  isCorrect:
-                    option.isCorrect,
-                })
-              ),
-
-            // -------------------------------------------
-            // BASIC STATISTICS
-            // -------------------------------------------
-
             correct,
-
             incorrect,
-
             skipped,
 
             total:
@@ -878,31 +677,17 @@ export async function GET(
 
             correctPercent,
 
-            incorrectPercent,
-
-            skippedPercent,
-
-            // -------------------------------------------
-            // DIFFICULTY
-            // -------------------------------------------
-
             difficulty:
               difficulty.label,
 
             difficultyColor:
               difficulty.color,
-
-            // -------------------------------------------
-            // PSYCHOMETRICS
-            // -------------------------------------------
-
-            psychometrics,
           };
         }
       );
 
     // =================================================
-    // SUMMARY
+    // ЗАГАЛЬНА СТАТИСТИКА
     // =================================================
 
     const scores =
@@ -911,47 +696,45 @@ export async function GET(
           result.earnedPoints
       );
 
-    const percents =
-      results.map(
-        (result) =>
-          result.percent
-      );
-
-    const participantsCount =
-      results.length;
-
     const maxScore =
-      participantsCount > 0
+      scores.length > 0
         ? Math.max(...scores)
         : 0;
 
     const minScore =
-      participantsCount > 0
+      scores.length > 0
         ? Math.min(...scores)
         : 0;
 
     const averageScore =
-      participantsCount > 0
-        ? scores.reduce(
-            (sum, value) =>
-              sum + value,
-            0
-          ) /
-          participantsCount
+      scores.length > 0
+        ? Math.round(
+            (scores.reduce(
+              (sum, score) =>
+                sum + score,
+              0
+            ) /
+              scores.length) *
+              100
+          ) / 100
         : 0;
 
     const averagePercent =
-      participantsCount > 0
-        ? percents.reduce(
-            (sum, value) =>
-              sum + value,
-            0
-          ) /
-          participantsCount
+      results.length > 0
+        ? Math.round(
+            (results.reduce(
+              (sum, result) =>
+                sum +
+                result.percent,
+              0
+            ) /
+              results.length) *
+              100
+          ) / 100
         : 0;
 
     // =================================================
-    // RESPONSE
+    // ВІДПОВІДЬ
     // =================================================
 
     return NextResponse.json({
@@ -973,7 +756,7 @@ export async function GET(
 
       summary: {
         participants:
-          participantsCount,
+          totalParticipants,
 
         maxScore,
 
@@ -986,20 +769,19 @@ export async function GET(
 
       participants,
 
-      questions,
+      questions:
+        questionStatistics,
     });
   } catch (error) {
     console.error(
-      "[GET /api/analytics] Error:",
+      "ANALYTICS ERROR:",
       error
     );
 
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Помилка під час формування аналітики",
+        message:
+          "Не вдалося сформувати аналітику.",
       },
       {
         status: 500,
