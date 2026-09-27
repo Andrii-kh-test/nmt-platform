@@ -1,17 +1,9 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  useTestSession,
-} from "@/app/context/TestSessionContext";
-
+import { useTestSession } from "@/app/context/TestSessionContext";
 import { finishTest } from "@/app/services/testEngine";
 
 export default function TestSecurityGuard() {
@@ -24,614 +16,420 @@ export default function TestSecurityGuard() {
     timeLeft,
   } = useTestSession();
 
-  // =========================================================
-  // ПОПЕРЕДЖЕННЯ
-  // =========================================================
+  // =====================================================
+  // STATE
+  // =====================================================
 
-  const [warningVisible, setWarningVisible] =
-    useState(false);
+  const [warningVisible, setWarningVisible] = useState(false);
 
-  const warningVisibleRef =
-    useRef(false);
+  // =====================================================
+  // REFS
+  // =====================================================
 
-  // =========================================================
-  // КІЛЬКІСТЬ ПОРУШЕНЬ
-  // =========================================================
+  const violationsRef = useRef(0);
+  const finishingRef = useRef(false);
 
-  const violationsRef =
-    useRef(0);
+  const sessionIdRef = useRef<number | null>(sessionId);
+  const testRef = useRef(test);
+  const savedAnswersRef = useRef(savedAnswers);
+  const timeLeftRef = useRef(timeLeft);
 
-  // =========================================================
-  // ЗАХИСТ ВІД ПОДВІЙНОГО ЗАВЕРШЕННЯ
-  // =========================================================
-
-  const finishingRef =
-    useRef(false);
-
-  // =========================================================
-  // АКТУАЛЬНІ ДАНІ СЕСІЇ
-  //
-  // Обробники клавіатури створюються один раз.
-  // Тому беремо актуальні значення через ref.
-  // =========================================================
-
-  const sessionIdRef =
-    useRef(sessionId);
-
-  const testRef =
-    useRef(test);
-
-  const savedAnswersRef =
-    useRef(savedAnswers);
-
-  const timeLeftRef =
-    useRef(timeLeft);
-
+  // Оновлюємо refs без повторної реєстрації event listeners
   useEffect(() => {
-    sessionIdRef.current =
-      sessionId;
+    sessionIdRef.current = sessionId;
   }, [sessionId]);
 
   useEffect(() => {
-    testRef.current =
-      test;
+    testRef.current = test;
   }, [test]);
 
   useEffect(() => {
-    savedAnswersRef.current =
-      savedAnswers;
+    savedAnswersRef.current = savedAnswers;
   }, [savedAnswers]);
 
   useEffect(() => {
-    timeLeftRef.current =
-      timeLeft;
+    timeLeftRef.current = timeLeft;
   }, [timeLeft]);
 
-  // =========================================================
-  // ПОКАЗ ПОПЕРЕДЖЕННЯ
-  // =========================================================
+  // =====================================================
+  // VIOLATION
+  // =====================================================
 
-  const showWarning = () => {
-    if (
-      warningVisibleRef.current ||
-      finishingRef.current
-    ) {
+  const registerViolation = () => {
+    if (finishingRef.current) {
       return;
     }
 
-    warningVisibleRef.current =
-      true;
+    violationsRef.current += 1;
 
-    setWarningVisible(true);
+    // ===================================================
+    // ПЕРШЕ ПОРУШЕННЯ
+    // ===================================================
+
+    if (violationsRef.current === 1) {
+      setWarningVisible(true);
+      return;
+    }
+
+    // ===================================================
+    // ДРУГЕ ПОРУШЕННЯ
+    // ===================================================
+
+    if (violationsRef.current >= 2) {
+      finishingRef.current = true;
+
+      const currentTest = testRef.current;
+      const currentSessionId = sessionIdRef.current;
+
+      if (!currentTest || !currentSessionId) {
+        return;
+      }
+
+      void finishTest(
+        "security",
+        currentTest,
+        savedAnswersRef.current,
+        timeLeftRef.current,
+        currentSessionId,
+        router
+      );
+    }
   };
 
-  // =========================================================
-  // ПРИМУСОВЕ ЗАВЕРШЕННЯ
-  // =========================================================
-
-  const finishForViolation =
-    async () => {
-      if (finishingRef.current) {
-        return;
-      }
-
-      finishingRef.current =
-        true;
-
-      const currentTest =
-        testRef.current;
-
-      const currentSessionId =
-        Number(
-          sessionIdRef.current
-        );
-
-      const currentTimeLeft =
-        Number(
-          timeLeftRef.current ?? 0
-        );
-
-      if (!currentTest) {
-        console.error(
-          "SECURITY: відсутній test."
-        );
-
-        finishingRef.current =
-          false;
-
-        return;
-      }
-
-      if (
-        !Number.isInteger(
-          currentSessionId
-        ) ||
-        currentSessionId <= 0
-      ) {
-        console.error(
-          "SECURITY: відсутній або некоректний sessionId."
-        );
-
-        finishingRef.current =
-          false;
-
-        return;
-      }
-
-      try {
-        console.warn(
-          "SECURITY: друге порушення. Тест буде автоматично завершено."
-        );
-
-        await finishTest(
-          "security",
-          currentTest,
-          savedAnswersRef.current,
-          currentTimeLeft,
-          currentSessionId,
-          router
-        );
-      } catch (error) {
-        console.error(
-          "SECURITY: помилка примусового завершення:",
-          error
-        );
-
-        finishingRef.current =
-          false;
-      }
-    };
-
-  // =========================================================
-  // ФІКСАЦІЯ ПОРУШЕННЯ
-  // =========================================================
-
-  const registerViolation =
-    () => {
-      if (
-        finishingRef.current ||
-        warningVisibleRef.current
-      ) {
-        return;
-      }
-
-      violationsRef.current += 1;
-
-      console.warn(
-        "SECURITY: порушення №",
-        violationsRef.current
-      );
-
-      // =====================================================
-      // ПЕРШЕ ПОРУШЕННЯ
-      // =====================================================
-
-      if (
-        violationsRef.current === 1
-      ) {
-        showWarning();
-
-        return;
-      }
-
-      // =====================================================
-      // ДРУГЕ ПОРУШЕННЯ
-      // =====================================================
-
-      if (
-        violationsRef.current >= 2
-      ) {
-        void finishForViolation();
-      }
-    };
-
-  // =========================================================
-  // ПОВЕРНЕННЯ ДО ТЕСТУ
-  // =========================================================
-
-  const returnToTest =
-    () => {
-      warningVisibleRef.current =
-        false;
-
-      setWarningVisible(false);
-    };
-
-  // =========================================================
-  // SECURITY LISTENERS
-  // =========================================================
+  // =====================================================
+  // SECURITY EVENTS
+  // =====================================================
 
   useEffect(() => {
-    // =======================================================
-    // КОНТЕКСТНЕ МЕНЮ
-    // =======================================================
+    // ---------------------------------------------------
+    // ПРАВИЙ КЛІК
+    // ---------------------------------------------------
 
-    const handleContextMenu =
-      (event: MouseEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        registerViolation();
-      };
-
-    // =======================================================
+    // ---------------------------------------------------
     // ВИДІЛЕННЯ ТЕКСТУ
-    // =======================================================
+    //
+    // Блокуємо тихо.
+    // НЕ є порушенням.
+    // ---------------------------------------------------
 
-    const handleSelectStart =
-      (event: Event) => {
-        event.preventDefault();
-        event.stopPropagation();
+    const handleSelectStart = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
-        registerViolation();
-      };
+    // ---------------------------------------------------
+    // DRAG
+    //
+    // Блокуємо тихо.
+    // НЕ є порушенням.
+    // ---------------------------------------------------
 
-    // =======================================================
-    // ПЕРЕТЯГУВАННЯ
-    // =======================================================
+    const handleDragStart = (event: DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
-    const handleDragStart =
-      (event: DragEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        registerViolation();
-      };
-
-    // =======================================================
+    // ---------------------------------------------------
     // КЛАВІАТУРА
-    // =======================================================
+    // ---------------------------------------------------
 
-    const handleKeyDown =
-      (event: KeyboardEvent) => {
-        const key =
-          event.key.toLowerCase();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
 
-        const ctrl =
-          event.ctrlKey;
+      // =================================================
+      // Ctrl+C
+      // =================================================
 
-        const shift =
-          event.shiftKey;
+      if (event.ctrlKey && key === "c") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        const alt =
-          event.altKey;
+        registerViolation();
+        return;
+      }
 
-        const meta =
-          event.metaKey;
+      // =================================================
+      // Ctrl+X
+      // =================================================
 
-        // ===================================================
-        // CTRL+C
-        // ===================================================
+      if (event.ctrlKey && key === "x") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (
-          ctrl &&
-          key === "c"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+        registerViolation();
+        return;
+      }
 
-          registerViolation();
+      // =================================================
+      // Ctrl+V
+      // =================================================
 
-          return;
-        }
+      if (event.ctrlKey && key === "v") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        // ===================================================
-        // CTRL+X
-        // ===================================================
+        registerViolation();
+        return;
+      }
 
-        if (
-          ctrl &&
-          key === "x"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      // =================================================
+      // Ctrl+U
+      // =================================================
 
-          registerViolation();
+      if (event.ctrlKey && key === "u") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          return;
-        }
+        registerViolation();
+        return;
+      }
 
-        // ===================================================
-        // CTRL+V
-        // ===================================================
+      // =================================================
+      // Ctrl+P
+      // =================================================
 
-        if (
-          ctrl &&
-          key === "v"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      if (event.ctrlKey && key === "p") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          registerViolation();
+        registerViolation();
+        return;
+      }
 
-          return;
-        }
+      // =================================================
+      // Ctrl+S
+      // =================================================
 
-        // ===================================================
-        // CTRL+U
-        // ===================================================
+      if (event.ctrlKey && key === "s") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (
-          ctrl &&
-          key === "u"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+        registerViolation();
+        return;
+      }
 
-          registerViolation();
+      // =================================================
+      // Ctrl+Shift+C
+      // Ctrl+Shift+I
+      // Ctrl+Shift+J
+      // =================================================
 
-          return;
-        }
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        (key === "c" || key === "i" || key === "j")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
 
-        // ===================================================
-        // CTRL+P
-        // ===================================================
+        registerViolation();
+        return;
+      }
 
-        if (
-          ctrl &&
-          key === "p"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      // =================================================
+      // F12
+      // =================================================
 
-          registerViolation();
+      if (event.key === "F12") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          return;
-        }
+        registerViolation();
+        return;
+      }
 
-        // ===================================================
-        // CTRL+S
-        // ===================================================
+      // =================================================
+      // PRINT SCREEN
+      // =================================================
 
-        if (
-          ctrl &&
-          key === "s"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      if (event.key === "PrintScreen") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          registerViolation();
+        document.documentElement.classList.add(
+          "screenshot-protection-active"
+        );
 
-          return;
-        }
-
-        // ===================================================
-        // CTRL+SHIFT+C
-        // CTRL+SHIFT+I
-        // CTRL+SHIFT+J
-        // ===================================================
-
-        if (
-          ctrl &&
-          shift &&
-          (
-            key === "c" ||
-            key === "i" ||
-            key === "j"
-          )
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          registerViolation();
-
-          return;
-        }
-
-        // ===================================================
-        // F12
-        // ===================================================
-
-        if (
-          event.key === "F12"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          registerViolation();
-
-          return;
-        }
-
-        // ===================================================
-        // PRINT SCREEN
-        // ===================================================
-
-        if (
-          event.key === "PrintScreen"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          document.documentElement.classList.add(
+        window.setTimeout(() => {
+          document.documentElement.classList.remove(
             "screenshot-protection-active"
           );
+        }, 1200);
 
-          window.setTimeout(() => {
-            document.documentElement.classList.remove(
-              "screenshot-protection-active"
-            );
-          }, 1200);
+        registerViolation();
+        return;
+      }
 
-          registerViolation();
+      // =================================================
+      // WINDOWS / META
+      //
+      // Браузер може отримати Meta.
+      // Якщо отримав — реєструємо порушення.
+      // =================================================
 
-          return;
-        }
+      if (event.metaKey) {
+        event.preventDefault();
+        event.stopPropagation();
 
-        // ===================================================
-        // WINDOWS / META
-        // ===================================================
+        registerViolation();
+        return;
+      }
 
-        if (meta) {
-          event.preventDefault();
-          event.stopPropagation();
+      // =================================================
+      // Ctrl+L
+      // Адресний рядок
+      // =================================================
 
-          registerViolation();
+      if (event.ctrlKey && key === "l") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          return;
-        }
+        registerViolation();
+        return;
+      }
 
-        // ===================================================
-        // CTRL+L
-        // ===================================================
+      // =================================================
+      // Ctrl+T
+      // Нова вкладка
+      // =================================================
 
-        if (
-          ctrl &&
-          key === "l"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      if (event.ctrlKey && key === "t") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          registerViolation();
+        registerViolation();
+        return;
+      }
 
-          return;
-        }
+      // =================================================
+      // Ctrl+N
+      // Нове вікно
+      // =================================================
 
-        // ===================================================
-        // CTRL+T
-        // ===================================================
+      if (event.ctrlKey && key === "n") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (
-          ctrl &&
-          key === "t"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+        registerViolation();
+        return;
+      }
 
-          registerViolation();
+      // =================================================
+      // Ctrl+W
+      // Закриття вкладки
+      // =================================================
 
-          return;
-        }
+      if (event.ctrlKey && key === "w") {
+        event.preventDefault();
+        event.stopPropagation();
 
-        // ===================================================
-        // CTRL+N
-        // ===================================================
+        registerViolation();
+        return;
+      }
 
-        if (
-          ctrl &&
-          key === "n"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      // =================================================
+      // Ctrl+Shift+W
+      // =================================================
 
-          registerViolation();
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        key === "w"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
 
-          return;
-        }
+        registerViolation();
+        return;
+      }
 
-        // ===================================================
-        // CTRL+W
-        // ===================================================
+      // =================================================
+      // Ctrl+Tab
+      // Перемикання вкладок
+      // =================================================
 
-        if (
-          ctrl &&
-          key === "w"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+      if (event.ctrlKey && event.key === "Tab") {
+        event.preventDefault();
+        event.stopPropagation();
 
-          registerViolation();
+        registerViolation();
+        return;
+      }
 
-          return;
-        }
+      // =================================================
+      // Alt + ←
+      // Назад
+      // =================================================
 
-        // ===================================================
-        // CTRL+SHIFT+W
-        // ===================================================
+      if (
+        event.altKey &&
+        event.key === "ArrowLeft"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (
-          ctrl &&
-          shift &&
-          key === "w"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
+        registerViolation();
+        return;
+      }
 
-          registerViolation();
+      // =================================================
+      // Alt + →
+      // Вперед
+      // =================================================
 
-          return;
-        }
+      if (
+        event.altKey &&
+        event.key === "ArrowRight"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
 
-        // ===================================================
-        // CTRL+TAB
-        // ===================================================
+        registerViolation();
+        return;
+      }
+    };
 
-        if (
-          ctrl &&
-          key === "tab"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          registerViolation();
-
-          return;
-        }
-
-        // ===================================================
-        // ALT+LEFT / ALT+RIGHT
-        // ===================================================
-
-        if (
-          alt &&
-          (
-            key === "arrowleft" ||
-            key === "arrowright"
-          )
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          registerViolation();
-
-          return;
-        }
-      };
-
-    // =======================================================
+    // =====================================================
     // COPY
-    // =======================================================
+    //
+    // Блокуємо тихо.
+    // НЕ є порушенням.
+    // =====================================================
 
-    const handleCopy =
-      (event: ClipboardEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
+    const handleCopy = (event: ClipboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
-        registerViolation();
-      };
-
-    // =======================================================
+    // =====================================================
     // CUT
-    // =======================================================
+    //
+    // Блокуємо тихо.
+    // НЕ є порушенням.
+    // =====================================================
 
-    const handleCut =
-      (event: ClipboardEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
+    const handleCut = (event: ClipboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
-        registerViolation();
-      };
-
-    // =======================================================
+    // =====================================================
     // PASTE
-    // =======================================================
+    //
+    // Блокуємо тихо.
+    // НЕ є порушенням.
+    // =====================================================
 
-    const handlePaste =
-      (event: ClipboardEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
+    const handlePaste = (event: ClipboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
 
-        registerViolation();
-      };
+    // =====================================================
+    // LISTENERS
+    // =====================================================
 
-    // =======================================================
-    // ПІДКЛЮЧЕННЯ
-    // =======================================================
-
-    document.addEventListener(
-      "contextmenu",
-      handleContextMenu
-    );
+  
 
     document.addEventListener(
       "selectstart",
@@ -664,15 +462,11 @@ export default function TestSecurityGuard() {
       handlePaste
     );
 
-    // =======================================================
+    // =====================================================
     // CLEANUP
-    // =======================================================
+    // =====================================================
 
     return () => {
-      document.removeEventListener(
-        "contextmenu",
-        handleContextMenu
-      );
 
       document.removeEventListener(
         "selectstart",
@@ -707,9 +501,9 @@ export default function TestSecurityGuard() {
     };
   }, []);
 
-  // =========================================================
+  // =====================================================
   // WARNING CARD
-  // =========================================================
+  // =====================================================
 
   if (!warningVisible) {
     return null;
@@ -717,140 +511,136 @@ export default function TestSecurityGuard() {
 
   return (
     <div
-      className="
-        fixed
-        inset-0
-        z-[99999]
-        flex
-        items-center
-        justify-center
-        bg-[#7A1F2B]
-        overflow-hidden
-      "
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0, 0, 0, 0.72)",
+        padding: "24px",
+      }}
     >
-      {/* ===================================================
-          ДЕКОРАТИВНІ КОЛА
-         =================================================== */}
-
       <div
-        className="
-          absolute
-          -top-32
-          -left-32
-          w-96
-          h-96
-          rounded-full
-          bg-white/10
-        "
-      />
-
-      <div
-        className="
-          absolute
-          -bottom-40
-          -right-40
-          w-[500px]
-          h-[500px]
-          rounded-full
-          bg-white/10
-        "
-      />
-
-      {/* ===================================================
-          ВЕЛИКИЙ ЗНАК ОКЛИКУ
-         =================================================== */}
-
-      <div
-        className="
-          absolute
-          text-[28rem]
-          leading-none
-          font-black
-          text-white/5
-          select-none
-          pointer-events-none
-        "
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: "620px",
+          overflow: "hidden",
+          borderRadius: "24px",
+          background: "#7A1F2B",
+          color: "#ffffff",
+          padding: "48px 42px 42px",
+          textAlign: "center",
+          boxShadow:
+            "0 25px 80px rgba(0, 0, 0, 0.45)",
+        }}
       >
-        !
-      </div>
+        {/* Декоративні кола */}
 
-      {/* ===================================================
-          КАРТКА
-         =================================================== */}
-
-      <div
-        className="
-          relative
-          z-10
-          w-full
-          max-w-2xl
-          mx-6
-          rounded-3xl
-          bg-white
-          shadow-2xl
-          p-10
-          text-center
-        "
-      >
         <div
-          className="
-            mx-auto
-            mb-7
-            flex
-            h-20
-            w-20
-            items-center
-            justify-center
-            rounded-full
-            bg-[#7A1F2B]
-            text-5xl
-            font-black
-            text-white
-          "
+          style={{
+            position: "absolute",
+            width: "180px",
+            height: "180px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.07)",
+            top: "-80px",
+            right: "-60px",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: "130px",
+            height: "130px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.05)",
+            bottom: "-55px",
+            left: "-45px",
+          }}
+        />
+
+        {/* Значок */}
+
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            width: "92px",
+            height: "92px",
+            margin: "0 auto 26px",
+            borderRadius: "50%",
+            border: "3px solid rgba(255,255,255,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "58px",
+            fontWeight: 800,
+            lineHeight: 1,
+            background: "rgba(255,255,255,0.08)",
+          }}
         >
           !
         </div>
 
+        {/* Заголовок */}
+
         <h2
-          className="
-            text-3xl
-            font-bold
-            text-[#7A1F2B]
-            mb-5
-          "
+          style={{
+            position: "relative",
+            zIndex: 1,
+            margin: "0 0 18px",
+            fontSize: "30px",
+            fontWeight: 700,
+            lineHeight: 1.2,
+          }}
         >
           Порушення правила тестування
         </h2>
 
+        {/* Текст */}
+
         <p
-          className="
-            text-lg
-            leading-relaxed
-            text-gray-700
-            mb-8
-          "
+          style={{
+            position: "relative",
+            zIndex: 1,
+            margin: "0 auto 32px",
+            maxWidth: "500px",
+            fontSize: "18px",
+            lineHeight: 1.55,
+            color: "rgba(255,255,255,0.94)",
+          }}
         >
           Дотримуйтеся правил проходження
           тестування. Повторне порушення
           автоматично завершить тест
         </p>
 
+        {/* Кнопка */}
+
         <button
           type="button"
-          onClick={returnToTest}
-          className="
-            w-full
-            rounded-xl
-            bg-[#7A1F2B]
-            px-6
-            py-4
-            text-lg
-            font-semibold
-            text-white
-            transition
-            hover:bg-[#641923]
-            active:scale-[0.99]
-          "
+          onClick={() => {
+            setWarningVisible(false);
+          }}
+          style={{
+            position: "relative",
+            zIndex: 1,
+            border: "none",
+            borderRadius: "12px",
+            background: "#ffffff",
+            color: "#7A1F2B",
+            padding: "14px 28px",
+            fontSize: "17px",
+            fontWeight: 700,
+            cursor: "pointer",
+            minWidth: "250px",
+            boxShadow:
+              "0 8px 24px rgba(0,0,0,0.18)",
+          }}
         >
           Повернутися до тестування
         </button>
