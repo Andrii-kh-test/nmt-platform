@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import Link from "next/link";
+import HtmlContent from "@/app/components/common/HtmlContent";
 
 // =====================================================
 // TYPES
@@ -383,38 +384,6 @@ function cleanText(
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-}
-
-// =====================================================
-// RICH TEXT
-// =====================================================
-//
-// Не видаляємо HTML-оформлення.
-//
-// Підтримуються:
-// - жирний текст
-// - курсив
-// - підкреслення
-// - зображення
-// - фігури
-// - інше HTML-оформлення редактора
-// =====================================================
-
-function RichText({
-  html,
-  className = "",
-}: {
-  html: string;
-  className?: string;
-}) {
-  return (
-    <div
-      className={className}
-      dangerouslySetInnerHTML={{
-        __html: html,
-      }}
-    />
-  );
 }
 
 // =====================================================
@@ -1847,7 +1816,7 @@ export default function AnalyticsClient({
                                       </div>
 
                                       <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
-                                        <RichText
+                                        <HtmlContent
                                           html={
                                             details.text
                                           }
@@ -1918,7 +1887,7 @@ export default function AnalyticsClient({
                                                       </div>
 
                                                       <div className="min-w-0 flex-1">
-                                                        <RichText
+                                                        <HtmlContent
                                                           html={
                                                             option.text
                                                           }
@@ -2011,7 +1980,7 @@ export default function AnalyticsClient({
                                                         Елемент
                                                       </p>
 
-                                                      <RichText
+                                                      <HtmlContent
                                                         html={
                                                           left.text
                                                         }
@@ -2026,7 +1995,7 @@ export default function AnalyticsClient({
                                                       </p>
 
                                                       {rightOption ? (
-                                                        <RichText
+                                                        <HtmlContent
                                                           html={
                                                             getMatchingParts(
                                                               rightOption.text
@@ -2097,7 +2066,7 @@ export default function AnalyticsClient({
                                                   </div>
 
                                                   <div className="flex-1">
-                                                    <RichText
+                                                    <HtmlContent
                                                       html={
                                                         option.text
                                                       }
