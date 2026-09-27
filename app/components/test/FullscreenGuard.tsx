@@ -17,219 +17,147 @@ function WarningCard({
 }) {
   return (
     <div
-      className="
-        fixed
-        inset-0
-        z-[9999]
-        flex
-        items-center
-        justify-center
-        bg-slate-900/65
-        p-6
-        backdrop-blur-sm
-      "
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 999999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0, 0, 0, 0.72)",
+        padding: "24px",
+      }}
     >
       <div
-        className="
-          relative
-          w-full
-          max-w-xl
-          overflow-hidden
-          rounded-[28px]
-          bg-white
-          shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45)]
-        "
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: "620px",
+          overflow: "hidden",
+          borderRadius: "24px",
+          background: "#7A1F2B",
+          color: "#ffffff",
+          padding: "48px 42px 42px",
+          textAlign: "center",
+          boxShadow:
+            "0 25px 80px rgba(0, 0, 0, 0.45)",
+        }}
       >
         {/* =====================================================
-            ДЕКОРАТИВНА БОРДОВА ЗОНА
+            ДЕКОРАТИВНІ КОЛА
         ===================================================== */}
 
         <div
-          className="
-            relative
-            h-48
-            overflow-hidden
-            bg-[#7A1F2B]
-          "
+          style={{
+            position: "absolute",
+            width: "180px",
+            height: "180px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.07)",
+            top: "-80px",
+            right: "-60px",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: "130px",
+            height: "130px",
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.05)",
+            bottom: "-55px",
+            left: "-45px",
+          }}
+        />
+
+        {/* =====================================================
+            ЗНАК ОКЛИКУ
+        ===================================================== */}
+
+        <div
+          style={{
+            position: "relative",
+            zIndex: 1,
+            width: "92px",
+            height: "92px",
+            margin: "0 auto 26px",
+            borderRadius: "50%",
+            border: "3px solid rgba(255,255,255,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "58px",
+            fontWeight: 800,
+            lineHeight: 1,
+            background: "rgba(255,255,255,0.08)",
+          }}
         >
-          {/* Великий напівпрозорий знак оклику */}
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -right-2
-              -top-20
-              select-none
-              text-[300px]
-              font-black
-              leading-none
-              text-white/[0.08]
-            "
-          >
-            !
-          </div>
-
-          {/* Білі напівпрозорі кола */}
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -left-20
-              -top-24
-              h-64
-              w-64
-              rounded-full
-              border
-              border-white/[0.12]
-              bg-white/[0.04]
-            "
-          />
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -bottom-28
-              left-24
-              h-52
-              w-52
-              rounded-full
-              border
-              border-white/[0.10]
-              bg-white/[0.04]
-            "
-          />
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -right-16
-              bottom-[-90px]
-              h-56
-              w-56
-              rounded-full
-              border
-              border-white/[0.10]
-              bg-white/[0.03]
-            "
-          />
-
-          {/* Маленьке коло-акцент */}
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              left-10
-              top-10
-              h-5
-              w-5
-              rounded-full
-              bg-white/20
-            "
-          />
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              left-20
-              top-20
-              h-2.5
-              w-2.5
-              rounded-full
-              bg-white/30
-            "
-          />
+          !
         </div>
 
         {/* =====================================================
-            ОСНОВНИЙ ВМІСТ
+            ЗАГОЛОВОК
         ===================================================== */}
 
-        <div className="relative px-8 pb-8 pt-7 sm:px-10 sm:pb-10">
-          {/* Великий напівпрозорий знак оклику
-              на білій частині картки */}
+        <h2
+          style={{
+            position: "relative",
+            zIndex: 1,
+            margin: "0 0 18px",
+            fontSize: "30px",
+            fontWeight: 700,
+            lineHeight: 1.2,
+          }}
+        >
+          Порушення правила тестування
+        </h2>
 
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -right-3
-              -top-20
-              select-none
-              text-[300px]
-              font-black
-              leading-none
-              text-[#7A1F2B]/[0.035]
-            "
-          >
-            !
-          </div>
+        {/* =====================================================
+            ТЕКСТ
+        ===================================================== */}
 
-          <div className="relative">
-            {/* Заголовок */}
+        <p
+          style={{
+            position: "relative",
+            zIndex: 1,
+            margin: "0 auto 32px",
+            maxWidth: "500px",
+            fontSize: "18px",
+            lineHeight: 1.55,
+            color: "rgba(255,255,255,0.94)",
+          }}
+        >
+          Дотримуйтеся правил проходження
+          тестування. Повторне порушення
+          автоматично завершить тест
+        </p>
 
-            <h2
-              className="
-                text-2xl
-                font-bold
-                leading-tight
-                text-[#7A1F2B]
-                sm:text-[28px]
-              "
-            >
-              Порушення правила тестування
-            </h2>
+        {/* =====================================================
+            КНОПКА
+        ===================================================== */}
 
-            {/* Основний текст */}
-
-            <p
-              className="
-                mt-4
-                max-w-lg
-                text-base
-                leading-7
-                text-gray-600
-              "
-            >
-              Дотримуйтеся правил проходження
-              тестування. Повторне порушення
-              автоматично завершить тест
-            </p>
-
-            {/* Кнопка */}
-
-            <button
-              type="button"
-              onClick={onReturn}
-              className="
-                mt-7
-                w-full
-                rounded-xl
-                bg-[#7A1F2B]
-                px-6
-                py-3.5
-                text-base
-                font-semibold
-                text-white
-                shadow-sm
-                transition
-                hover:bg-[#651722]
-                hover:shadow-md
-                focus:outline-none
-                focus:ring-2
-                focus:ring-[#7A1F2B]/30
-                active:scale-[0.99]
-              "
-            >
-              Повернутися до тестування
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={onReturn}
+          style={{
+            position: "relative",
+            zIndex: 1,
+            border: "none",
+            borderRadius: "12px",
+            background: "#ffffff",
+            color: "#7A1F2B",
+            padding: "14px 28px",
+            fontSize: "17px",
+            fontWeight: 700,
+            cursor: "pointer",
+            minWidth: "250px",
+            boxShadow:
+              "0 8px 24px rgba(0,0,0,0.18)",
+          }}
+        >
+          Повернутися до тестування
+        </button>
       </div>
     </div>
   );
@@ -242,10 +170,8 @@ function OrdinaryFullscreenGuard() {
     test,
     savedAnswers,
     timeLeft,
+    registerSecurityViolation,
   } = useTestSession();
-
-  const [violations, setViolations] =
-    useState(0);
 
   const [showWarning, setShowWarning] =
     useState(false);
@@ -262,59 +188,67 @@ function OrdinaryFullscreenGuard() {
         return;
       }
 
-      const nextViolations =
-        violations + 1;
-
-      setViolations(nextViolations);
-
       // =====================================================
-      // ПЕРШЕ ПОРУШЕННЯ
+      // СПІЛЬНИЙ ЛІЧИЛЬНИК ПОРУШЕНЬ
+      //
+      // Вихід із fullscreen рахується разом
+      // із забороненими клавішами.
       // =====================================================
 
-      if (nextViolations === 1) {
+      const violationNumber =
+        registerSecurityViolation();
+
+      // =====================================================
+      // ПЕРШЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+      // =====================================================
+
+      if (violationNumber === 1) {
         setShowWarning(true);
         return;
       }
 
       // =====================================================
-      // ДРУГЕ ПОРУШЕННЯ
-      // Автоматичне завершення тесту
+      // ДРУГЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+      //
+      // Автоматичне завершення тесту.
       // =====================================================
 
-      if (!test) {
-        return;
-      }
+      if (violationNumber >= 2) {
+        if (!test) {
+          return;
+        }
 
-      const storedSessionId =
-        localStorage.getItem(
-          "testSessionId"
-        );
+        const storedSessionId =
+          localStorage.getItem(
+            "testSessionId"
+          );
 
-      const sessionId =
-        Number(storedSessionId);
+        const sessionId =
+          Number(storedSessionId);
 
-      if (!sessionId) {
-        console.error(
-          "Не знайдено testSessionId"
-        );
+        if (!sessionId) {
+          console.error(
+            "Не знайдено testSessionId"
+          );
 
-        return;
-      }
+          return;
+        }
 
-      try {
-        await finishTest(
-          "security",
-          test,
-          savedAnswers,
-          timeLeft,
-          sessionId,
-          router
-        );
-      } catch (error) {
-        console.error(
-          "Помилка завершення тесту після порушення:",
-          error
-        );
+        try {
+          await finishTest(
+            "security",
+            test,
+            savedAnswers,
+            timeLeft,
+            sessionId,
+            router
+          );
+        } catch (error) {
+          console.error(
+            "Помилка завершення тесту після порушення:",
+            error
+          );
+        }
       }
     };
 
@@ -330,7 +264,7 @@ function OrdinaryFullscreenGuard() {
       );
     };
   }, [
-    violations,
+    registerSecurityViolation,
     test,
     savedAnswers,
     timeLeft,
@@ -359,8 +293,9 @@ function OrdinaryFullscreenGuard() {
 function CombinedFullscreenGuard({
   onViolationFinish,
 }: Props) {
-  const [violations, setViolations] =
-    useState(0);
+  const {
+    registerSecurityViolation,
+  } = useTestSession();
 
   const [showWarning, setShowWarning] =
     useState(false);
@@ -377,17 +312,30 @@ function CombinedFullscreenGuard({
         return;
       }
 
-      const nextViolations =
-        violations + 1;
+      // =====================================================
+      // СПІЛЬНИЙ ЛІЧИЛЬНИК ПОРУШЕНЬ
+      // =====================================================
 
-      setViolations(nextViolations);
+      const violationNumber =
+        registerSecurityViolation();
 
-      if (nextViolations === 1) {
+      // =====================================================
+      // ПЕРШЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+      // =====================================================
+
+      if (violationNumber === 1) {
         setShowWarning(true);
         return;
       }
 
-      if (onViolationFinish) {
+      // =====================================================
+      // ДРУГЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+      // =====================================================
+
+      if (
+        violationNumber >= 2 &&
+        onViolationFinish
+      ) {
         try {
           await onViolationFinish();
         } catch (error) {
@@ -411,7 +359,7 @@ function CombinedFullscreenGuard({
       );
     };
   }, [
-    violations,
+    registerSecurityViolation,
     onViolationFinish,
   ]);
 

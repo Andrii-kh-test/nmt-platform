@@ -14,87 +14,56 @@ export default function TestSecurityGuard() {
     test,
     savedAnswers,
     timeLeft,
+    registerSecurityViolation,
   } = useTestSession();
 
   // =====================================================
   // STATE
   // =====================================================
 
-  const [warningVisible, setWarningVisible] = useState(false);
+  const [warningVisible, setWarningVisible] =
+    useState(false);
 
   // =====================================================
   // REFS
   // =====================================================
 
-  const violationsRef = useRef(0);
-  const finishingRef = useRef(false);
+  const finishingRef =
+    useRef(false);
 
-  const sessionIdRef = useRef<number | null>(sessionId);
-  const testRef = useRef(test);
-  const savedAnswersRef = useRef(savedAnswers);
-  const timeLeftRef = useRef(timeLeft);
+  const sessionIdRef =
+    useRef<number | null>(sessionId);
 
-  // Оновлюємо refs без повторної реєстрації event listeners
+  const testRef =
+    useRef(test);
+
+  const savedAnswersRef =
+    useRef(savedAnswers);
+
+  const timeLeftRef =
+    useRef(timeLeft);
+
+  // Оновлюємо refs без повторної
+  // реєстрації event listeners
   useEffect(() => {
-    sessionIdRef.current = sessionId;
+    sessionIdRef.current =
+      sessionId;
   }, [sessionId]);
 
   useEffect(() => {
-    testRef.current = test;
+    testRef.current =
+      test;
   }, [test]);
 
   useEffect(() => {
-    savedAnswersRef.current = savedAnswers;
+    savedAnswersRef.current =
+      savedAnswers;
   }, [savedAnswers]);
 
   useEffect(() => {
-    timeLeftRef.current = timeLeft;
+    timeLeftRef.current =
+      timeLeft;
   }, [timeLeft]);
-
-  // =====================================================
-  // VIOLATION
-  // =====================================================
-
-  const registerViolation = () => {
-    if (finishingRef.current) {
-      return;
-    }
-
-    violationsRef.current += 1;
-
-    // ===================================================
-    // ПЕРШЕ ПОРУШЕННЯ
-    // ===================================================
-
-    if (violationsRef.current === 1) {
-      setWarningVisible(true);
-      return;
-    }
-
-    // ===================================================
-    // ДРУГЕ ПОРУШЕННЯ
-    // ===================================================
-
-    if (violationsRef.current >= 2) {
-      finishingRef.current = true;
-
-      const currentTest = testRef.current;
-      const currentSessionId = sessionIdRef.current;
-
-      if (!currentTest || !currentSessionId) {
-        return;
-      }
-
-      void finishTest(
-        "security",
-        currentTest,
-        savedAnswersRef.current,
-        timeLeftRef.current,
-        currentSessionId,
-        router
-      );
-    }
-  };
 
   // =====================================================
   // SECURITY EVENTS
@@ -102,17 +71,15 @@ export default function TestSecurityGuard() {
 
   useEffect(() => {
     // ---------------------------------------------------
-    // ПРАВИЙ КЛІК
-    // ---------------------------------------------------
-
-    // ---------------------------------------------------
     // ВИДІЛЕННЯ ТЕКСТУ
     //
     // Блокуємо тихо.
     // НЕ є порушенням.
     // ---------------------------------------------------
 
-    const handleSelectStart = (event: Event) => {
+    const handleSelectStart = (
+      event: Event
+    ) => {
       event.preventDefault();
       event.stopPropagation();
     };
@@ -124,7 +91,9 @@ export default function TestSecurityGuard() {
     // НЕ є порушенням.
     // ---------------------------------------------------
 
-    const handleDragStart = (event: DragEvent) => {
+    const handleDragStart = (
+      event: DragEvent
+    ) => {
       event.preventDefault();
       event.stopPropagation();
     };
@@ -133,18 +102,81 @@ export default function TestSecurityGuard() {
     // КЛАВІАТУРА
     // ---------------------------------------------------
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
+    const handleKeyDown = (
+      event: KeyboardEvent
+    ) => {
+      const key =
+        event.key.toLowerCase();
+
+      // =================================================
+      // Функція реєстрації порушення
+      // =================================================
+
+      const handleViolation = () => {
+        if (finishingRef.current) {
+          return;
+        }
+
+        const violationNumber =
+          registerSecurityViolation();
+
+        // =================================================
+        // ПЕРШЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+        // =================================================
+
+        if (
+          violationNumber === 1
+        ) {
+          setWarningVisible(true);
+          return;
+        }
+
+        // =================================================
+        // ДРУГЕ ЗАГАЛЬНЕ ПОРУШЕННЯ
+        // =================================================
+
+        if (
+          violationNumber >= 2
+        ) {
+          finishingRef.current =
+            true;
+
+          const currentTest =
+            testRef.current;
+
+          const currentSessionId =
+            sessionIdRef.current;
+
+          if (
+            !currentTest ||
+            !currentSessionId
+          ) {
+            return;
+          }
+
+          void finishTest(
+            "security",
+            currentTest,
+            savedAnswersRef.current,
+            timeLeftRef.current,
+            currentSessionId,
+            router
+          );
+        }
+      };
 
       // =================================================
       // Ctrl+C
       // =================================================
 
-      if (event.ctrlKey && key === "c") {
+      if (
+        event.ctrlKey &&
+        key === "c"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -152,11 +184,14 @@ export default function TestSecurityGuard() {
       // Ctrl+X
       // =================================================
 
-      if (event.ctrlKey && key === "x") {
+      if (
+        event.ctrlKey &&
+        key === "x"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -164,11 +199,14 @@ export default function TestSecurityGuard() {
       // Ctrl+V
       // =================================================
 
-      if (event.ctrlKey && key === "v") {
+      if (
+        event.ctrlKey &&
+        key === "v"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -176,11 +214,14 @@ export default function TestSecurityGuard() {
       // Ctrl+U
       // =================================================
 
-      if (event.ctrlKey && key === "u") {
+      if (
+        event.ctrlKey &&
+        key === "u"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -188,11 +229,14 @@ export default function TestSecurityGuard() {
       // Ctrl+P
       // =================================================
 
-      if (event.ctrlKey && key === "p") {
+      if (
+        event.ctrlKey &&
+        key === "p"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -200,11 +244,14 @@ export default function TestSecurityGuard() {
       // Ctrl+S
       // =================================================
 
-      if (event.ctrlKey && key === "s") {
+      if (
+        event.ctrlKey &&
+        key === "s"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -217,12 +264,16 @@ export default function TestSecurityGuard() {
       if (
         event.ctrlKey &&
         event.shiftKey &&
-        (key === "c" || key === "i" || key === "j")
+        (
+          key === "c" ||
+          key === "i" ||
+          key === "j"
+        )
       ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -230,11 +281,13 @@ export default function TestSecurityGuard() {
       // F12
       // =================================================
 
-      if (event.key === "F12") {
+      if (
+        event.key === "F12"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -242,7 +295,9 @@ export default function TestSecurityGuard() {
       // PRINT SCREEN
       // =================================================
 
-      if (event.key === "PrintScreen") {
+      if (
+        event.key === "PrintScreen"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
@@ -256,7 +311,7 @@ export default function TestSecurityGuard() {
           );
         }, 1200);
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -267,11 +322,13 @@ export default function TestSecurityGuard() {
       // Якщо отримав — реєструємо порушення.
       // =================================================
 
-      if (event.metaKey) {
+      if (
+        event.metaKey
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -280,11 +337,14 @@ export default function TestSecurityGuard() {
       // Адресний рядок
       // =================================================
 
-      if (event.ctrlKey && key === "l") {
+      if (
+        event.ctrlKey &&
+        key === "l"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -293,11 +353,14 @@ export default function TestSecurityGuard() {
       // Нова вкладка
       // =================================================
 
-      if (event.ctrlKey && key === "t") {
+      if (
+        event.ctrlKey &&
+        key === "t"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -306,11 +369,14 @@ export default function TestSecurityGuard() {
       // Нове вікно
       // =================================================
 
-      if (event.ctrlKey && key === "n") {
+      if (
+        event.ctrlKey &&
+        key === "n"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -319,11 +385,14 @@ export default function TestSecurityGuard() {
       // Закриття вкладки
       // =================================================
 
-      if (event.ctrlKey && key === "w") {
+      if (
+        event.ctrlKey &&
+        key === "w"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -339,7 +408,7 @@ export default function TestSecurityGuard() {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -348,11 +417,14 @@ export default function TestSecurityGuard() {
       // Перемикання вкладок
       // =================================================
 
-      if (event.ctrlKey && event.key === "Tab") {
+      if (
+        event.ctrlKey &&
+        event.key === "Tab"
+      ) {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -368,7 +440,7 @@ export default function TestSecurityGuard() {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
 
@@ -384,7 +456,7 @@ export default function TestSecurityGuard() {
         event.preventDefault();
         event.stopPropagation();
 
-        registerViolation();
+        handleViolation();
         return;
       }
     };
@@ -396,7 +468,9 @@ export default function TestSecurityGuard() {
     // НЕ є порушенням.
     // =====================================================
 
-    const handleCopy = (event: ClipboardEvent) => {
+    const handleCopy = (
+      event: ClipboardEvent
+    ) => {
       event.preventDefault();
       event.stopPropagation();
     };
@@ -408,7 +482,9 @@ export default function TestSecurityGuard() {
     // НЕ є порушенням.
     // =====================================================
 
-    const handleCut = (event: ClipboardEvent) => {
+    const handleCut = (
+      event: ClipboardEvent
+    ) => {
       event.preventDefault();
       event.stopPropagation();
     };
@@ -420,7 +496,9 @@ export default function TestSecurityGuard() {
     // НЕ є порушенням.
     // =====================================================
 
-    const handlePaste = (event: ClipboardEvent) => {
+    const handlePaste = (
+      event: ClipboardEvent
+    ) => {
       event.preventDefault();
       event.stopPropagation();
     };
@@ -428,8 +506,6 @@ export default function TestSecurityGuard() {
     // =====================================================
     // LISTENERS
     // =====================================================
-
-  
 
     document.addEventListener(
       "selectstart",
@@ -467,7 +543,6 @@ export default function TestSecurityGuard() {
     // =====================================================
 
     return () => {
-
       document.removeEventListener(
         "selectstart",
         handleSelectStart
@@ -499,7 +574,10 @@ export default function TestSecurityGuard() {
         handlePaste
       );
     };
-  }, []);
+  }, [
+    registerSecurityViolation,
+    router,
+  ]);
 
   // =====================================================
   // WARNING CARD
@@ -518,7 +596,8 @@ export default function TestSecurityGuard() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.72)",
+        background:
+          "rgba(0, 0, 0, 0.72)",
         padding: "24px",
       }}
     >
@@ -545,7 +624,8 @@ export default function TestSecurityGuard() {
             width: "180px",
             height: "180px",
             borderRadius: "50%",
-            background: "rgba(255,255,255,0.07)",
+            background:
+              "rgba(255,255,255,0.07)",
             top: "-80px",
             right: "-60px",
           }}
@@ -557,7 +637,8 @@ export default function TestSecurityGuard() {
             width: "130px",
             height: "130px",
             borderRadius: "50%",
-            background: "rgba(255,255,255,0.05)",
+            background:
+              "rgba(255,255,255,0.05)",
             bottom: "-55px",
             left: "-45px",
           }}
@@ -573,14 +654,16 @@ export default function TestSecurityGuard() {
             height: "92px",
             margin: "0 auto 26px",
             borderRadius: "50%",
-            border: "3px solid rgba(255,255,255,0.75)",
+            border:
+              "3px solid rgba(255,255,255,0.75)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: "58px",
             fontWeight: 800,
             lineHeight: 1,
-            background: "rgba(255,255,255,0.08)",
+            background:
+              "rgba(255,255,255,0.08)",
           }}
         >
           !
@@ -611,7 +694,8 @@ export default function TestSecurityGuard() {
             maxWidth: "500px",
             fontSize: "18px",
             lineHeight: 1.55,
-            color: "rgba(255,255,255,0.94)",
+            color:
+              "rgba(255,255,255,0.94)",
           }}
         >
           Дотримуйтеся правил проходження

@@ -82,6 +82,16 @@ type TestSessionContextType = {
       | null
   ) => void;
 
+  // =====================================================
+  // SECURITY VIOLATIONS
+  // =====================================================
+
+  securityViolations: number;
+
+  registerSecurityViolation: () => number;
+
+  resetSecurityViolations: () => void;
+
   resetTest: () => void;
 };
 
@@ -216,6 +226,53 @@ export function TestSessionProvider({
     useRef<number | null>(null);
 
   // =====================================================
+  // SECURITY VIOLATIONS
+  //
+  // Один спільний лічильник для:
+  //
+  // 1. заборонених клавіш
+  // 2. виходу з fullscreen
+  //
+  // Він НЕ використовується для:
+  // - selectstart
+  // - dragstart
+  // - copy
+  // - cut
+  // - paste
+  // =====================================================
+
+  const [
+    securityViolations,
+    setSecurityViolations,
+  ] = useState(0);
+
+  const securityViolationsRef =
+    useRef(0);
+
+  const registerSecurityViolation =
+    useCallback(() => {
+      const nextViolation =
+        securityViolationsRef.current + 1;
+
+      securityViolationsRef.current =
+        nextViolation;
+
+      setSecurityViolations(
+        nextViolation
+      );
+
+      return nextViolation;
+    }, []);
+
+  const resetSecurityViolations =
+    useCallback(() => {
+      securityViolationsRef.current =
+        0;
+
+      setSecurityViolations(0);
+    }, []);
+
+  // =====================================================
   // EXPIRATION CALLBACK
   // =====================================================
 
@@ -271,6 +328,12 @@ export function TestSessionProvider({
 
             setSavedAnswers({});
 
+            // =================================================
+            // НОВИЙ ТЕСТ = НОВИЙ ЛІЧИЛЬНИК ПОРУШЕНЬ
+            // =================================================
+
+            resetSecurityViolations();
+
             /*
              * Початковий час використовується
              * тільки як початкове значення UI.
@@ -318,7 +381,7 @@ export function TestSessionProvider({
           }
         );
       },
-      []
+      [resetSecurityViolations]
     );
 
   // =====================================================
@@ -806,7 +869,13 @@ export function TestSessionProvider({
 
       deadlineRef.current =
         null;
-    }, []);
+
+      // =================================================
+      // СКИДАЄМО СПІЛЬНИЙ ЛІЧИЛЬНИК
+      // =================================================
+
+      resetSecurityViolations();
+    }, [resetSecurityViolations]);
 
   // =====================================================
   // PROVIDER
@@ -843,6 +912,16 @@ export function TestSessionProvider({
 
         onTimeExpired,
         setOnTimeExpired,
+
+        // =================================================
+        // SECURITY
+        // =================================================
+
+        securityViolations,
+
+        registerSecurityViolation,
+
+        resetSecurityViolations,
 
         resetTest,
       }}
