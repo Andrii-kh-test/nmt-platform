@@ -89,38 +89,6 @@ export default async function TestPage({
 
   // =====================================================
   // СТОРІНКА ТЕСТУВАННЯ
-  //
-  // КРИТИЧНО:
-  //
-  // RestoreSession тут НЕ використовується.
-  //
-  // SessionMonitor є ЄДИНИМ компонентом,
-  // який працює з офіційним початком сесії.
-  //
-  // Перший вхід:
-  //
-  // page
-  //   ↓
-  // TestLoader
-  //   ↓
-  // SessionMonitor
-  //   ↓
-  // POST /api/test/begin
-  //   ↓
-  // startedAt = NOW
-  // timeLeft = duration * 60 + extraTime
-  //   ↓
-  // Context отримує рівно 3600
-  //   ↓
-  // startTimer()
-  //
-  // Тобто для тесту на 60 хвилин:
-  //
-  // 01:00:00
-  // 00:59:59
-  // 00:59:58
-  // ...
-  //
   // =====================================================
 
   return (
@@ -136,16 +104,6 @@ export default async function TestPage({
 
       {/* =================================================
           SESSION MONITOR
-         =================================================
-
-          Саме цей компонент:
-
-          1. знаходить sessionId;
-          2. виконує POST /api/test/begin;
-          3. отримує офіційний startedAt;
-          4. отримує початковий timeLeft;
-          5. запускає таймер;
-          6. синхронізує сесію із сервером.
          ================================================= */}
 
       <SessionMonitor
@@ -176,13 +134,13 @@ export default async function TestPage({
 
       <div className="mx-auto max-w-7xl px-6 py-8">
 
-        <div className="grid grid-cols-12 gap-8">
+        <div className="grid grid-cols-12 gap-8 items-start">
 
           {/* =============================================
               QUESTIONS
              ============================================= */}
 
-          <div className="col-span-8">
+          <div className="col-span-8 min-w-0">
             <QuestionView />
           </div>
 
@@ -190,8 +148,23 @@ export default async function TestPage({
               SIDEBAR
              ============================================= */}
 
-          <div className="col-span-4">
-            <Sidebar />
+          <div
+            className="
+              col-span-4
+              min-w-0
+              self-start
+            "
+          >
+            <div
+              className="
+                sticky
+                top-[var(--test-header-height)]
+                max-h-[calc(100vh-var(--test-header-height))]
+                overflow-y-auto
+              "
+            >
+              <Sidebar />
+            </div>
           </div>
 
         </div>
@@ -207,7 +180,9 @@ export default async function TestPage({
       <SecurityGuard />
 
       <VisibilityGuard />
-<TestSecurityGuard />
+
+      <TestSecurityGuard />
+
     </main>
   );
 }

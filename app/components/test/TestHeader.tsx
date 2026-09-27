@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { useRouter } from "next/navigation";
 
 import { useTestSession } from "@/app/context/TestSessionContext";
@@ -27,6 +32,9 @@ export default function TestHeader() {
     timeLeft,
   } = useTestSession();
 
+  const headerRef =
+    useRef<HTMLElement | null>(null);
+
   const [participant, setParticipant] =
     useState<Participant | null>(null);
 
@@ -50,6 +58,56 @@ export default function TestHeader() {
 
   const [pdfMinimized, setPdfMinimized] =
     useState(false);
+
+  // =====================================================
+  // HEADER HEIGHT
+  // =====================================================
+
+  useEffect(() => {
+    const header =
+      headerRef.current;
+
+    if (!header) {
+      return;
+    }
+
+    const updateHeaderHeight = () => {
+      const height =
+        header.getBoundingClientRect().height;
+
+      document.documentElement.style.setProperty(
+        "--test-header-height",
+        `${height}px`
+      );
+    };
+
+    updateHeaderHeight();
+
+    const observer =
+      new ResizeObserver(() => {
+        updateHeaderHeight();
+      });
+
+    observer.observe(header);
+
+    window.addEventListener(
+      "resize",
+      updateHeaderHeight
+    );
+
+    return () => {
+      observer.disconnect();
+
+      window.removeEventListener(
+        "resize",
+        updateHeaderHeight
+      );
+
+      document.documentElement.style.removeProperty(
+        "--test-header-height"
+      );
+    };
+  }, []);
 
   // =====================================================
   // PDF MATERIALS
@@ -182,8 +240,17 @@ export default function TestHeader() {
           HEADER
       ================================================= */}
 
-      <header className="bg-white border-b shadow-sm sticky top-0 z-50">
-
+      <header
+        ref={headerRef}
+        className="
+          bg-white
+          border-b
+          shadow-sm
+          sticky
+          top-0
+          z-50
+        "
+      >
         <div className="max-w-7xl mx-auto px-6 py-5">
 
           {/* =================================================
@@ -220,8 +287,6 @@ export default function TestHeader() {
                   strokeWidth="1.8"
                   className="w-5 h-5"
                 >
-                  {/* чотири діагональні стрілки назовні */}
-
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -287,8 +352,6 @@ export default function TestHeader() {
                   {test.title}
                 </h1>
 
-                {/* TEST INFORMATION */}
-
                 <div className="flex flex-wrap gap-6 mt-3 text-gray-700">
 
                   <span>
@@ -310,14 +373,11 @@ export default function TestHeader() {
 
               </div>
 
-
               {/* =================================================
                   MATERIALS + PARTICIPANT
               ================================================= */}
 
               <div className="mt-4 flex items-center justify-between gap-8">
-
-                {/* REFERENCE MATERIALS */}
 
                 <div className="min-w-0">
 
@@ -333,8 +393,6 @@ export default function TestHeader() {
                       p-2
                     "
                   >
-
-                    {/* МАТЕМАТИКА */}
 
                     <button
                       type="button"
@@ -363,9 +421,6 @@ export default function TestHeader() {
                       Математика: довідкові матеріали
                     </button>
 
-
-                    {/* ФІЗИКА */}
-
                     <button
                       type="button"
                       onClick={() =>
@@ -393,9 +448,6 @@ export default function TestHeader() {
                       Фізика: довідкові матеріали
                     </button>
 
-
-                    {/* ХІМІЯ */}
-
                     <button
                       type="button"
                       onClick={() =>
@@ -422,9 +474,6 @@ export default function TestHeader() {
                     >
                       Хімія: довідкові матеріали
                     </button>
-
-
-                    {/* ІНСТРУКЦІЯ */}
 
                     <button
                       type="button"
@@ -457,9 +506,6 @@ export default function TestHeader() {
 
                 </div>
 
-
-                {/* PARTICIPANT */}
-
                 {participant && (
                   <div className="shrink-0 text-right">
 
@@ -478,7 +524,6 @@ export default function TestHeader() {
 
               </div>
 
-
               {/* =================================================
                   INFORMATION + TIMER
               ================================================= */}
@@ -493,8 +538,6 @@ export default function TestHeader() {
                 "
               >
 
-                {/* INFORMATION TEXT */}
-
                 <div
                   className="
                     flex-1
@@ -505,7 +548,6 @@ export default function TestHeader() {
                     pt-1
                   "
                 >
-
                   <span className="font-semibold text-[#7A1F2B]">
                     {test.title}
                   </span>{" "}
@@ -516,11 +558,7 @@ export default function TestHeader() {
                   <span className="font-medium text-gray-600">
                     "Зберегти відповідь"
                   </span>.
-
                 </div>
-
-
-                {/* TIMER + FINISH BUTTON */}
 
                 <div
                   className="
@@ -531,8 +569,6 @@ export default function TestHeader() {
                     min-w-[250px]
                   "
                 >
-
-                  {/* TIMER */}
 
                   <div className="flex items-center">
 
@@ -596,7 +632,7 @@ export default function TestHeader() {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.038 7.19 19.5 12 19.5c1.827 0 3.546-.465 5.032-1.285M6.228 6.228A10.45 10.45 0 0112 4.5c4.81 0 8.774 3.462 10.066 7.5a10.523 10.523 0 01-4.132 5.411M6.228 6.228L3 3m3.228 3.228l3.15 3.15m0 0a3 3 0 104.243 4.243m-4.243-4.243l4.243 4.243m0 0L21 21"
+                            d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.038 7.19 19.5 12 19.5c4.81 0 8.774-3.462 10.066-7.5a10.523 10.523 0 01-4.132 5.411M6.228 6.228A10.45 10.45 0 0112 4.5c4.81 0 8.774 3.462 10.066 7.5a10.523 10.523 0 01-4.132 5.411M6.228 6.228L3 3m3.228 3.228l3.15 3.15m0 0a3 3 0 104.243 4.243m-4.243-4.243l4.243 4.243m0 0L21 21"
                           />
                         </svg>
                       )}
@@ -610,9 +646,6 @@ export default function TestHeader() {
                     )}
 
                   </div>
-
-
-                  {/* FINISH BUTTON */}
 
                   <button
                     type="button"
@@ -644,7 +677,6 @@ export default function TestHeader() {
 
               </div>
 
-
               {/* =================================================
                   COLLAPSE BUTTON
               ================================================= */}
@@ -675,8 +707,6 @@ export default function TestHeader() {
                     className="w-5 h-5"
                   >
 
-                    {/* Верхній лівий напрямок */}
-
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -688,8 +718,6 @@ export default function TestHeader() {
                       strokeLinejoin="round"
                       d="M3 3l6 6"
                     />
-
-                    {/* Верхній правий напрямок */}
 
                     <path
                       strokeLinecap="round"
@@ -703,8 +731,6 @@ export default function TestHeader() {
                       d="M21 3l-6 6"
                     />
 
-                    {/* Нижній лівий напрямок */}
-
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -716,8 +742,6 @@ export default function TestHeader() {
                       strokeLinejoin="round"
                       d="M3 21l6-6"
                     />
-
-                    {/* Нижній правий напрямок */}
 
                     <path
                       strokeLinecap="round"
@@ -742,9 +766,7 @@ export default function TestHeader() {
           )}
 
         </div>
-
       </header>
-
 
       {/* =================================================
           FINISH MODAL
