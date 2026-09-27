@@ -110,6 +110,33 @@ export default function TestHeader() {
   }, []);
 
   // =====================================================
+  // HEADER COLLAPSED / EXPANDED STATE
+  // =====================================================
+  //
+  // Передаємо SidebarSync реальний стан
+  // верхньої панелі.
+  //
+  // 1 = панель згорнута
+  // 0 = панель розгорнута
+  //
+  // SidebarSync більше не буде визначати стан
+  // за висотою header.
+  // =====================================================
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--test-header-collapsed",
+      panelCollapsed ? "1" : "0"
+    );
+
+    return () => {
+      document.documentElement.style.removeProperty(
+        "--test-header-collapsed"
+      );
+    };
+  }, [panelCollapsed]);
+
+  // =====================================================
   // PDF MATERIALS
   // =====================================================
 
@@ -342,6 +369,7 @@ export default function TestHeader() {
           ) : (
 
             <>
+
               {/* =================================================
                   TEST TITLE
               ================================================= */}

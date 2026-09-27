@@ -6,6 +6,7 @@ export default function QuestionNumbers() {
   const {
     test,
     savedAnswers,
+    currentQuestion,
   } = useTestSession();
 
   if (!test) {
@@ -29,11 +30,30 @@ export default function QuestionNumbers() {
 
   return (
     <div className="grid grid-cols-5 gap-3">
-
       {test.questions.map((question, index) => {
-
         const saved =
           savedAnswers[question.id] !== undefined;
+
+        const current =
+          currentQuestion === index;
+
+        let className =
+          "bg-white border border-gray-300 text-gray-700 hover:border-[#7A1F2B]";
+
+        if (saved) {
+          className =
+            "bg-[#7A1F2B] text-white";
+        }
+
+        if (current && !saved) {
+          className =
+            "bg-gray-100 border-2 border-[#7A1F2B] text-[#7A1F2B]";
+        }
+
+        if (current && saved) {
+          className =
+            "bg-[#7A1F2B] text-white ring-2 ring-[#7A1F2B] ring-offset-2";
+        }
 
         return (
           <button
@@ -47,18 +67,12 @@ export default function QuestionNumbers() {
               rounded-lg
               font-semibold
               transition
-
-              ${
-                saved
-                  ? "bg-[#7A1F2B] text-white"
-                  : "bg-white border border-gray-300 text-gray-700 hover:border-[#7A1F2B]"
-              }
+              ${className}
             `}
           >
             {index + 1}
           </button>
         );
-
       })}
     </div>
   );

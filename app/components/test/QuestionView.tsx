@@ -22,11 +22,6 @@ export default function QuestionView() {
 
   // =====================================================
   // ВИЗНАЧЕННЯ ПОТОЧНОГО ПИТАННЯ
-  //
-  // Тест іде однією стрічкою.
-  //
-  // Поточним вважаємо питання, центр якого
-  // найближчий до центру видимої області екрана.
   // =====================================================
 
   useEffect(() => {
@@ -63,17 +58,25 @@ export default function QuestionView() {
         let closestDistance = Infinity;
 
         elements.forEach(
-          (element, index) => {
+          (
+            element,
+            index
+          ) => {
             const rect =
               element.getBoundingClientRect();
 
             // Питання повністю нижче екрана
-            if (rect.top >= window.innerHeight) {
+            if (
+              rect.top >=
+              window.innerHeight
+            ) {
               return;
             }
 
             // Питання повністю вище екрана
-            if (rect.bottom <= 0) {
+            if (
+              rect.bottom <= 0
+            ) {
               return;
             }
 
@@ -94,7 +97,8 @@ export default function QuestionView() {
               closestDistance =
                 distance;
 
-              closestIndex = index;
+              closestIndex =
+                index;
             }
           }
         );
@@ -105,7 +109,6 @@ export default function QuestionView() {
       });
     }
 
-    // Перша перевірка
     updateCurrentQuestion();
 
     window.addEventListener(
@@ -151,8 +154,13 @@ export default function QuestionView() {
     return null;
   }
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   return (
     <div className="space-y-6">
+
       {test.questions.map(
         (
           question,
@@ -168,6 +176,7 @@ export default function QuestionView() {
               ] = element;
             }}
           >
+
             <QuestionCard
               question={question}
               number={index + 1}
@@ -188,9 +197,11 @@ export default function QuestionView() {
                 )
               }
             />
+
           </div>
         )
       )}
+
     </div>
   );
 }

@@ -8,13 +8,14 @@ import AutoSaveSession from "@/app/components/test/AutoSaveSession";
 import TimeoutHandler from "@/app/components/test/TimeoutHandler";
 import TestHeader from "@/app/components/test/TestHeader";
 import QuestionView from "@/app/components/test/QuestionView";
-import Sidebar from "@/app/components/test/Sidebar";
+import SidebarSync from "@/app/components/test/SidebarSync";
 
 import FullscreenGuard from "@/app/components/test/FullscreenGuard";
 import SecurityGuard from "@/app/components/test/SecurityGuard";
 import VisibilityGuard from "@/app/components/test/VisibilityGuard";
 import SessionMonitor from "@/app/components/test/SessionMonitor";
 import TestSecurityGuard from "@/app/components/test/TestSecurityGuard";
+
 import { mapPrismaTest } from "@/app/utils/mapPrismaTest";
 
 type Props = {
@@ -26,13 +27,10 @@ type Props = {
 export default async function TestPage({
   params,
 }: Props) {
-  // =====================================================
-  // TEST ID
-  // =====================================================
-
   const { id } = await params;
 
-  const testId = Number(id);
+  const testId =
+    Number(id);
 
   if (
     !Number.isInteger(testId) ||
@@ -41,22 +39,16 @@ export default async function TestPage({
     notFound();
   }
 
-  // =====================================================
-  // ЗАВАНТАЖЕННЯ ТЕСТУ
-  // =====================================================
-
   const prismaTest =
     await prisma.test.findUnique({
       where: {
         id: testId,
       },
-
       include: {
         questions: {
           orderBy: {
             order: "asc",
           },
-
           include: {
             question: {
               include: {
@@ -72,108 +64,72 @@ export default async function TestPage({
       },
     });
 
-  // =====================================================
-  // ТЕСТ НЕ ЗНАЙДЕНО
-  // =====================================================
-
   if (!prismaTest) {
     notFound();
   }
 
-  // =====================================================
-  // МАПІНГ
-  // =====================================================
-
   const test =
     mapPrismaTest(prismaTest);
 
-  // =====================================================
-  // СТОРІНКА ТЕСТУВАННЯ
-  // =====================================================
-
   return (
     <main className="min-h-screen bg-[#F8FAFC]">
-
-      {/* =================================================
-          TEST LOADER
-         ================================================= */}
-
-      <TestLoader
-        test={test}
-      />
-
-      {/* =================================================
-          SESSION MONITOR
-         ================================================= */}
+      <TestLoader test={test} />
 
       <SessionMonitor
         testId={testId}
       />
 
-      {/* =================================================
-          AUTO SAVE
-         ================================================= */}
-
       <AutoSaveSession />
-
-      {/* =================================================
-          TIMEOUT
-         ================================================= */}
 
       <TimeoutHandler />
 
-      {/* =================================================
-          HEADER
-         ================================================= */}
-
       <TestHeader />
 
-      {/* =================================================
-          CONTENT
-         ================================================= */}
+      <div
+        className="
+          mx-auto
+          w-full
+          max-w-7xl
+          px-6
+          py-8
+        "
+      >
+        <div
+          className="
+            grid
+            grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)]
+            gap-6
+            items-start
+          "
+        >
+          {/* =============================== */}
+          {/* ПИТАННЯ                         */}
+          {/* =============================== */}
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-
-        <div className="grid grid-cols-12 gap-8 items-start">
-
-          {/* =============================================
-              QUESTIONS
-             ============================================= */}
-
-          <div className="col-span-8 min-w-0">
-            <QuestionView />
-          </div>
-
-          {/* =============================================
-              SIDEBAR
-             ============================================= */}
-
-          <div
+          <section
             className="
-              col-span-4
               min-w-0
-              self-start
+              w-full
             "
           >
-            <div
-              className="
-                sticky
-                top-[var(--test-header-height)]
-                max-h-[calc(100vh-var(--test-header-height))]
-                overflow-y-auto
-              "
-            >
-              <Sidebar />
-            </div>
-          </div>
+            <QuestionView />
+          </section>
 
+          {/* =============================== */}
+          {/* НАВІГАЦІЯ                       */}
+          {/* =============================== */}
+
+          <aside
+            className="
+              min-w-0
+              w-full
+              h-full
+            "
+          >
+            <SidebarSync />
+          </aside>
         </div>
-
       </div>
-
-      {/* =================================================
-          SECURITY
-         ================================================= */}
 
       <FullscreenGuard />
 
@@ -182,7 +138,6 @@ export default async function TestPage({
       <VisibilityGuard />
 
       <TestSecurityGuard />
-
     </main>
   );
 }
