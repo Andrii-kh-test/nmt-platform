@@ -16,25 +16,15 @@ export default function Sidebar() {
   return (
     <aside
       className="
-        sticky
-        top-6
-        w-64
-        shrink-0
         bg-white
         border
         border-gray-200
         rounded-xl
         shadow-md
         p-6
-        max-h-[calc(100vh-3rem)]
-        overflow-y-auto
+        h-fit
       "
     >
-
-      {/* =================================================
-          TITLE
-      ================================================= */}
-
       <h2
         className="
           text-xl
@@ -46,17 +36,7 @@ export default function Sidebar() {
         Завдання
       </h2>
 
-
-      {/* =================================================
-          QUESTION NUMBERS
-      ================================================= */}
-
       <QuestionNumbers />
-
-
-      {/* =================================================
-          LEGEND
-      ================================================= */}
 
       <div
         className="
@@ -66,9 +46,6 @@ export default function Sidebar() {
           pt-6
         "
       >
-
-        {/* SAVED */}
-
         <div
           className="
             flex
@@ -77,25 +54,19 @@ export default function Sidebar() {
             mb-3
           "
         >
-
           <div
             className="
               w-5
               h-5
               rounded
               bg-[#7A1F2B]
-              shrink-0
             "
           />
 
           <span className="text-sm">
             Відповідь збережена
           </span>
-
         </div>
-
-
-        {/* NOT SAVED */}
 
         <div
           className="
@@ -104,7 +75,6 @@ export default function Sidebar() {
             gap-3
           "
         >
-
           <div
             className="
               w-5
@@ -113,18 +83,14 @@ export default function Sidebar() {
               border
               border-gray-300
               bg-white
-              shrink-0
             "
           />
 
           <span className="text-sm">
             Відповідь не збережена
           </span>
-
         </div>
-
       </div>
-
     </aside>
   );
 }
