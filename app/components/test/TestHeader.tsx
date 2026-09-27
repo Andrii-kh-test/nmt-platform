@@ -39,12 +39,6 @@ export default function TestHeader() {
   const [timerVisible, setTimerVisible] =
     useState(true);
 
-  /*
-   * =========================================================
-   * PDF-ДОВІДКОВІ МАТЕРІАЛИ
-   * =========================================================
-   */
-
   const [pdfMaterial, setPdfMaterial] =
     useState<{
       title: string;
@@ -53,6 +47,10 @@ export default function TestHeader() {
 
   const [pdfMinimized, setPdfMinimized] =
     useState(false);
+
+  // =====================================================
+  // PDF MATERIALS
+  // =====================================================
 
   function openPdfMaterial(
     title: string,
@@ -79,11 +77,9 @@ export default function TestHeader() {
     setPdfMinimized(false);
   }
 
-  /*
-   * =========================================================
-   * ДАНІ УЧАСНИКА
-   * =========================================================
-   */
+  // =====================================================
+  // PARTICIPANT
+  // =====================================================
 
   useEffect(() => {
     const saved =
@@ -91,18 +87,18 @@ export default function TestHeader() {
 
     if (saved) {
       try {
-        setParticipant(JSON.parse(saved));
+        setParticipant(
+          JSON.parse(saved)
+        );
       } catch {
         setParticipant(null);
       }
     }
   }, []);
 
-  /*
-   * =========================================================
-   * ЗАВЕРШЕННЯ ТЕСТУ
-   * =========================================================
-   */
+  // =====================================================
+  // FINISH TEST
+  // =====================================================
 
   async function handleFinishTest() {
     if (!test) {
@@ -113,7 +109,9 @@ export default function TestHeader() {
       setLoading(true);
 
       const storedSessionId =
-        localStorage.getItem("testSessionId");
+        localStorage.getItem(
+          "testSessionId"
+        );
 
       const sessionId =
         Number(storedSessionId);
@@ -143,15 +141,19 @@ export default function TestHeader() {
     }
   }
 
+  // =====================================================
+  // RENDER
+  // =====================================================
+
   if (!test) {
     return null;
   }
 
   return (
     <>
-      {/* =====================================================
-          PDF-ДОВІДКОВІ МАТЕРІАЛИ
-          ===================================================== */}
+      {/* =================================================
+          PDF VIEWER
+      ================================================= */}
 
       {pdfMaterial && (
         <PdfMaterialViewer
@@ -173,198 +175,251 @@ export default function TestHeader() {
         />
       )}
 
-      {/* =====================================================
+      {/* =================================================
           HEADER
-          ===================================================== */}
+      ================================================= */}
 
       <header className="bg-white border-b shadow-sm sticky top-0 z-50">
+
         <div className="max-w-7xl mx-auto px-6 py-5">
 
-          <div className="flex justify-between items-start gap-8">
+          {/* =================================================
+              TEST TITLE
+          ================================================= */}
 
-            {/* =================================================
-                ЛІВА ЧАСТИНА
-                ================================================= */}
+          <div>
 
-            <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-[#7A1F2B]">
+              {test.title}
+            </h1>
 
-              <h1 className="text-3xl font-bold text-[#7A1F2B]">
-                {test.title}
-              </h1>
+            {/* TEST INFORMATION */}
 
-              <div className="flex flex-wrap gap-6 mt-3 text-gray-700">
+            <div className="flex flex-wrap gap-6 mt-3 text-gray-700">
 
-                <span>
-                  <strong>Предмет:</strong>{" "}
-                  {test.subject}
-                </span>
+              <span>
+                <strong>Предмет:</strong>{" "}
+                {test.subject}
+              </span>
 
-                <span>
-                  <strong>Питань:</strong>{" "}
-                  {test.questions.length}
-                </span>
+              <span>
+                <strong>Питань:</strong>{" "}
+                {test.questions.length}
+              </span>
 
-                <span>
-                  <strong>Максимум:</strong>{" "}
-                  {test.maxPoints} б.
-                </span>
-
-              </div>
-
-              {participant && (
-                <div className="mt-4 bg-slate-100 rounded-lg px-4 py-3 border">
-
-                  <div className="text-sm text-gray-500">
-                    Учасник тестування
-                  </div>
-
-                  <div className="font-semibold text-lg text-[#7A1F2B]">
-                    {participant.lastName}{" "}
-                    {participant.firstName}{" "}
-                    {participant.middleName}
-                  </div>
-
-                </div>
-              )}
+              <span>
+                <strong>Максимум:</strong>{" "}
+                {test.maxPoints} б.
+              </span>
 
             </div>
 
+          </div>
+
+
+          {/* =================================================
+              REFERENCE MATERIALS
+          ================================================= */}
+
+          <div className="mt-4">
+
+            <div
+              className="
+                inline-flex
+                items-center
+                gap-1
+                bg-gray-50
+                border
+                border-gray-100
+                rounded-xl
+                p-2
+              "
+            >
+
+              {/* МАТЕМАТИКА */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  openPdfMaterial(
+                    "Математика: довідкові матеріали",
+                    "/pdf/mathematics.pdf"
+                  )
+                }
+                disabled={loading}
+                className="
+                  rounded-lg
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-[#7A1F2B]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  transition
+                  whitespace-nowrap
+                "
+              >
+                Математика: довідкові матеріали
+              </button>
+
+
+              {/* ФІЗИКА */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  openPdfMaterial(
+                    "Фізика: довідкові матеріали",
+                    "/pdf/physics.pdf"
+                  )
+                }
+                disabled={loading}
+                className="
+                  rounded-lg
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-[#7A1F2B]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  transition
+                  whitespace-nowrap
+                "
+              >
+                Фізика: довідкові матеріали
+              </button>
+
+
+              {/* ХІМІЯ */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  openPdfMaterial(
+                    "Хімія: довідкові матеріали",
+                    "/pdf/chemistry.pdf"
+                  )
+                }
+                disabled={loading}
+                className="
+                  rounded-lg
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-[#7A1F2B]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  transition
+                  whitespace-nowrap
+                "
+              >
+                Хімія: довідкові матеріали
+              </button>
+
+
+              {/* ІНСТРУКЦІЯ */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  openPdfMaterial(
+                    "Інструкція",
+                    "/pdf/instruction.pdf"
+                  )
+                }
+                disabled={loading}
+                className="
+                  rounded-lg
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-[#7A1F2B]
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  transition
+                  whitespace-nowrap
+                "
+              >
+                Інструкція
+              </button>
+
+            </div>
+
+          </div>
+
+
+          {/* =================================================
+              INFORMATION + TIMER
+          ================================================= */}
+
+          <div
+            className="
+              mt-4
+              flex
+              items-start
+              justify-between
+              gap-8
+            "
+          >
+
             {/* =================================================
-                ПРАВА ЧАСТИНА
-                ДОВІДКОВІ МАТЕРІАЛИ + ТАЙМЕР + ЗАВЕРШЕННЯ
-                ================================================= */}
+                INFORMATION TEXT
+            ================================================= */}
 
-            <div className="shrink-0 flex flex-col items-stretch min-w-[280px]">
+            <div
+              className="
+                flex-1
+                min-w-0
+                text-sm
+                leading-6
+                text-gray-500
+                pt-1
+              "
+            >
 
-              {/* ===============================================
-                  ДОВІДКОВІ МАТЕРІАЛИ
-                  =============================================== */}
+              <span className="font-semibold text-[#7A1F2B]">
+                {test.title}
+              </span>{" "}
+              обмежений у часі. Таймер праворуч
+              показує, скільки хвилин залишилося
+              до завершення роботи. Вибравши
+              відповідь, не забудьте натиснути{" "}
+              <span className="font-medium text-gray-600">
+                "Зберегти відповідь"
+              </span>.
 
-              <div className="flex flex-col gap-2">
+            </div>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    openPdfMaterial(
-                      "Математика: довідкові матеріали",
-                      "/pdf/mathematics.pdf"
-                    )
-                  }
-                  disabled={loading}
-                  className="
-                    rounded-lg
-                    border
-                    border-gray-200
-                    bg-white
-                    px-4
-                    py-2.5
-                    text-sm
-                    font-medium
-                    text-gray-700
-                    hover:bg-gray-50
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    transition
-                    whitespace-nowrap
-                  "
-                >
-                  Математика: довідкові матеріали
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    openPdfMaterial(
-                      "Фізика: довідкові матеріали",
-                      "/pdf/physics.pdf"
-                    )
-                  }
-                  disabled={loading}
-                  className="
-                    rounded-lg
-                    border
-                    border-gray-200
-                    bg-white
-                    px-4
-                    py-2.5
-                    text-sm
-                    font-medium
-                    text-gray-700
-                    hover:bg-gray-50
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    transition
-                    whitespace-nowrap
-                  "
-                >
-                  Фізика: довідкові матеріали
-                </button>
+            {/* =================================================
+                TIMER + FINISH BUTTON
+            ================================================= */}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    openPdfMaterial(
-                      "Хімія: довідкові матеріали",
-                      "/pdf/chemistry.pdf"
-                    )
-                  }
-                  disabled={loading}
-                  className="
-                    rounded-lg
-                    border
-                    border-gray-200
-                    bg-white
-                    px-4
-                    py-2.5
-                    text-sm
-                    font-medium
-                    text-gray-700
-                    hover:bg-gray-50
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    transition
-                    whitespace-nowrap
-                  "
-                >
-                  Хімія: довідкові матеріали
-                </button>
+            <div
+              className="
+                shrink-0
+                flex
+                flex-col
+                items-end
+                min-w-[250px]
+              "
+            >
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    openPdfMaterial(
-                      "Інструкція",
-                      "/pdf/instruction.pdf"
-                    )
-                  }
-                  disabled={loading}
-                  className="
-                    rounded-lg
-                    border
-                    border-gray-200
-                    bg-white
-                    px-4
-                    py-2.5
-                    text-sm
-                    font-medium
-                    text-gray-700
-                    hover:bg-gray-50
-                    disabled:opacity-50
-                    disabled:cursor-not-allowed
-                    transition
-                    whitespace-nowrap
-                  "
-                >
-                  Інструкція
-                </button>
+              {/* TIMER */}
 
-              </div>
-
-              {/* ===============================================
-                  ТАЙМЕР
-                  =============================================== */}
-
-              <div className="flex items-center justify-center mt-3">
+              <div className="flex items-center">
 
                 <button
                   type="button"
@@ -392,6 +447,7 @@ export default function TestHeader() {
                     transition
                   "
                 >
+
                   {timerVisible ? (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -429,6 +485,7 @@ export default function TestHeader() {
                       />
                     </svg>
                   )}
+
                 </button>
 
                 {timerVisible && (
@@ -439,9 +496,8 @@ export default function TestHeader() {
 
               </div>
 
-              {/* ===============================================
-                  ЗАВЕРШЕННЯ
-                  =============================================== */}
+
+              {/* FINISH BUTTON */}
 
               <button
                 type="button"
@@ -452,7 +508,6 @@ export default function TestHeader() {
                 className="
                   mt-2
                   w-full
-                  min-w-[280px]
                   bg-[#7A1F2B]
                   hover:bg-[#641923]
                   disabled:bg-gray-400
@@ -474,12 +529,35 @@ export default function TestHeader() {
 
           </div>
 
+
+          {/* =================================================
+              PARTICIPANT
+          ================================================= */}
+
+          {participant && (
+            <div className="mt-4 bg-slate-100 rounded-lg px-4 py-3 border">
+
+              <div className="text-sm text-gray-500">
+                Учасник тестування
+              </div>
+
+              <div className="font-semibold text-lg text-[#7A1F2B]">
+                {participant.lastName}{" "}
+                {participant.firstName}{" "}
+                {participant.middleName}
+              </div>
+
+            </div>
+          )}
+
         </div>
+
       </header>
 
-      {/* =====================================================
-          МОДАЛЬНЕ ВІКНО ЗАВЕРШЕННЯ
-          ===================================================== */}
+
+      {/* =================================================
+          FINISH MODAL
+      ================================================= */}
 
       <TestFinishedModal
         open={finishOpen}
