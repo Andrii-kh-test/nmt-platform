@@ -386,6 +386,38 @@ function cleanText(
 }
 
 // =====================================================
+// RICH TEXT
+// =====================================================
+//
+// Не видаляємо HTML-оформлення.
+//
+// Підтримуються:
+// - жирний текст
+// - курсив
+// - підкреслення
+// - зображення
+// - фігури
+// - інше HTML-оформлення редактора
+// =====================================================
+
+function RichText({
+  html,
+  className = "",
+}: {
+  html: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={className}
+      dangerouslySetInnerHTML={{
+        __html: html,
+      }}
+    />
+  );
+}
+
+// =====================================================
 // MATCHING
 // =====================================================
 
@@ -1815,11 +1847,12 @@ export default function AnalyticsClient({
                                       </div>
 
                                       <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
-                                        <div className="whitespace-pre-wrap break-words text-base leading-7 text-gray-800">
-                                          {cleanText(
+                                        <RichText
+                                          html={
                                             details.text
-                                          )}
-                                        </div>
+                                          }
+                                          className="break-words text-base leading-7 text-gray-800"
+                                        />
                                       </div>
                                     </div>
 
@@ -1885,11 +1918,12 @@ export default function AnalyticsClient({
                                                       </div>
 
                                                       <div className="min-w-0 flex-1">
-                                                        <p className="whitespace-pre-wrap break-words text-gray-800">
-                                                          {cleanText(
+                                                        <RichText
+                                                          html={
                                                             option.text
-                                                          )}
-                                                        </p>
+                                                          }
+                                                          className="break-words text-gray-800"
+                                                        />
 
                                                         {option.isCorrect && (
                                                           <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-green-700">
@@ -1977,11 +2011,12 @@ export default function AnalyticsClient({
                                                         Елемент
                                                       </p>
 
-                                                      <p className="mt-2 break-words text-gray-800">
-                                                        {cleanText(
+                                                      <RichText
+                                                        html={
                                                           left.text
-                                                        )}
-                                                      </p>
+                                                        }
+                                                        className="mt-2 break-words text-gray-800"
+                                                      />
                                                     </div>
 
                                                     <div className="rounded-lg border border-green-200 bg-green-50 p-4">
@@ -1990,15 +2025,20 @@ export default function AnalyticsClient({
                                                         відповідь
                                                       </p>
 
-                                                      <p className="mt-2 break-words text-gray-800">
-                                                        {rightOption
-                                                          ? cleanText(
-                                                              getMatchingParts(
-                                                                rightOption.text
-                                                              ).text
-                                                            )
-                                                          : "Не визначено"}
-                                                      </p>
+                                                      {rightOption ? (
+                                                        <RichText
+                                                          html={
+                                                            getMatchingParts(
+                                                              rightOption.text
+                                                            ).text
+                                                          }
+                                                          className="mt-2 break-words text-gray-800"
+                                                        />
+                                                      ) : (
+                                                        <p className="mt-2 break-words text-gray-800">
+                                                          Не визначено
+                                                        </p>
+                                                      )}
                                                     </div>
                                                   </div>
                                                 );
@@ -2057,11 +2097,12 @@ export default function AnalyticsClient({
                                                   </div>
 
                                                   <div className="flex-1">
-                                                    <p className="break-words text-gray-800">
-                                                      {cleanText(
+                                                    <RichText
+                                                      html={
                                                         option.text
-                                                      )}
-                                                    </p>
+                                                      }
+                                                      className="break-words text-gray-800"
+                                                    />
 
                                                     {option.isCorrect && (
                                                       <p className="mt-2 text-sm font-semibold text-green-700">
