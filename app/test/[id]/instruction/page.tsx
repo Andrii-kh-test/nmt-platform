@@ -1,16 +1,9 @@
 "use client";
 
-import {
-  use,
-  useEffect,
-  useState,
-} from "react";
-
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  useTestSession,
-} from "@/app/context/TestSessionContext";
+import { useTestSession } from "@/app/context/TestSessionContext";
 
 type Props = {
   params: Promise<{
@@ -18,351 +11,559 @@ type Props = {
   }>;
 };
 
+type ParticipantData = {
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  accessCode: string;
+};
+
+type IdentityOption = {
+  id: number;
+  name: string;
+  correct: boolean;
+};
+
+// =====================================================
+// ВИПАДКОВІ ІМЕНА ДЛЯ НЕПРАВИЛЬНИХ ВАРІАНТІВ
+// =====================================================
+
+const RANDOM_NAMES = [
+  "Бондаренко Олександр Петрович",
+  "Коваленко Марія Ігорівна",
+  "Мельник Андрій Олексійович",
+  "Шевченко Наталія Василівна",
+  "Ткаченко Дмитро Сергійович",
+  "Кравченко Олена Миколаївна",
+  "Петренко Максим Вікторович",
+  "Савченко Анна Олександрівна",
+  "Романенко Владислав Іванович",
+  "Лисенко Катерина Андріївна",
+  "Гончаренко Богдан Петрович",
+  "Марченко Юлія Олегівна",
+  "Захарченко Денис Михайлович",
+  "Федоренко Ірина Володимирівна",
+  "Поліщук Артем Сергійович",
+  "Даниленко Софія Романівна",
+  "Олійник Роман Васильович",
+  "Козак Анастасія Дмитрівна",
+  "Власенко Євген Павлович",
+  "Мороз Наталія Ігорівна",
+];
+
+// =====================================================
+// SHUFFLE
+// =====================================================
+
+function shuffle<T>(array: T[]): T[] {
+  const result = [...array];
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+
+    [result[i], result[j]] = [
+      result[j],
+      result[i],
+    ];
+  }
+
+  return result;
+}
+
+// =====================================================
+// ПОВНЕ ПІБ
+// =====================================================
+
+function getParticipantFullName(
+  participant: ParticipantData
+) {
+  return [
+    participant.lastName,
+    participant.firstName,
+    participant.middleName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+// =====================================================
+// СТВОРЕННЯ ВАРІАНТІВ ПІБ
+// =====================================================
+
+function createIdentityOptions(
+  participant: ParticipantData
+): IdentityOption[] {
+  const correctName =
+    getParticipantFullName(participant);
+
+  const distractors = shuffle(
+    RANDOM_NAMES.filter(
+      (name) => name !== correctName
+    )
+  ).slice(0, 2);
+
+  return shuffle([
+    {
+      id: 1,
+      name: correctName,
+      correct: true,
+    },
+    {
+      id: 2,
+      name: distractors[0],
+      correct: false,
+    },
+    {
+      id: 3,
+      name: distractors[1],
+      correct: false,
+    },
+  ]);
+}
+
+// =====================================================
+// PAGE
+// =====================================================
+
 export default function InstructionPage({
   params,
 }: Props) {
   const { id } = use(params);
 
-  const router =
-    useRouter();
+  const router = useRouter();
 
   const {
     stopTimer,
     setSessionId,
   } = useTestSession();
 
-  const [
-    accepted,
-    setAccepted,
-  ] = useState(false);
+  const [accepted, setAccepted] =
+    useState(false);
 
-  const [
-    starting,
-    setStarting,
-  ] = useState(false);
+  const [starting, setStarting] =
+    useState(false);
 
-  const [
-    error,
-    setError,
-  ] = useState<
-    string | null
-  >(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
-  // =====================================================
-  // INSTRUCTION PAGE
-  // =====================================================
+  const [participant, setParticipant] =
+    useState<ParticipantData | null>(null);
+
+  const [identityOptions, setIdentityOptions] =
+    useState<IdentityOption[]>([]);
+
+  const [selectedIdentity, setSelectedIdentity] =
+    useState<number | null>(null);
+
+  const [identityConfirmed, setIdentityConfirmed] =
+    useState(false);
+
+  // ===================================================
+  // ЗУПИНЯЄМО ТАЙМЕР НА СТОРІНЦІ ІНСТРУКЦІЇ
+  // ===================================================
 
   useEffect(() => {
-    /*
-     * На сторінці інструкції
-     * локальний countdown не працює.
-     *
-     * Офіційний час тестування
-     * тут НЕ запускається.
-     */
-
     stopTimer();
   }, [stopTimer]);
 
-  // =====================================================
-  // START TEST
-  // =====================================================
+  // ===================================================
+  // ЗАВАНТАЖУЄМО ПІБ УЧАСНИКА
+  // ===================================================
 
-  const handleStartTest =
-    async () => {
-      if (
-        !accepted ||
-        starting
-      ) {
+  useEffect(() => {
+    try {
+      const storedParticipant =
+        localStorage.getItem("participant");
+
+      if (!storedParticipant) {
+        router.replace(`/test/start/${id}`);
         return;
       }
 
-      setStarting(true);
+      const parsed =
+        JSON.parse(storedParticipant);
+
+      if (
+        !parsed ||
+        typeof parsed.lastName !== "string" ||
+        typeof parsed.firstName !== "string" ||
+        typeof parsed.accessCode !== "string"
+      ) {
+        localStorage.removeItem("participant");
+
+        router.replace(`/test/start/${id}`);
+        return;
+      }
+
+      const participantData: ParticipantData = {
+        lastName: parsed.lastName,
+        firstName: parsed.firstName,
+        middleName:
+          typeof parsed.middleName === "string"
+            ? parsed.middleName
+            : "",
+        accessCode: parsed.accessCode,
+      };
+
+      setParticipant(participantData);
+
+      setIdentityOptions(
+        createIdentityOptions(
+          participantData
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Помилка читання даних учасника:",
+        error
+      );
+
+      router.replace(`/test/start/${id}`);
+    }
+  }, [id, router]);
+
+  // ===================================================
+  // ПІДТВЕРДЖЕННЯ ОСОБИ
+  // ===================================================
+
+  const handleIdentitySelect = (
+    option: IdentityOption
+  ) => {
+    setSelectedIdentity(option.id);
+
+    if (option.correct) {
+      setIdentityConfirmed(true);
       setError(null);
+    } else {
+      setIdentityConfirmed(false);
 
-      // =================================================
-      // TEST ID
-      // =================================================
+      setError(
+        "Ви обрали неправильне ПІБ. Будь ласка, оберіть своє ПІБ."
+      );
+    }
+  };
 
-      const testId =
-        Number(id);
+  // ===================================================
+  // ПОЧАТОК ТЕСТУ
+  // ===================================================
 
+  const handleStartTest = async () => {
+    if (
+      !accepted ||
+      starting ||
+      !participant ||
+      !identityConfirmed
+    ) {
+      return;
+    }
+
+    setStarting(true);
+    setError(null);
+
+    const testId = Number(id);
+
+    if (
+      !Number.isInteger(testId) ||
+      testId <= 0
+    ) {
+      setError("Некоректний id тесту.");
+      setStarting(false);
+      return;
+    }
+
+    // -----------------------------------------------
+    // Перевіряємо існуючу сесію
+    // -----------------------------------------------
+
+    const sessionStorageId =
+      sessionStorage.getItem(
+        "testSessionId"
+      );
+
+    const localStorageId =
+      localStorage.getItem(
+        "testSessionId"
+      );
+
+    const storedSessionId =
+      sessionStorageId ??
+      localStorageId;
+
+    if (!storedSessionId) {
+      setError(
+        "Сесію тестування не знайдено. Будь ласка, розпочніть тестування ще раз."
+      );
+
+      setStarting(false);
+      return;
+    }
+
+    const sessionId =
+      Number(storedSessionId);
+
+    if (
+      !Number.isInteger(sessionId) ||
+      sessionId <= 0
+    ) {
+      setError(
+        "Некоректний id сесії."
+      );
+
+      setStarting(false);
+      return;
+    }
+
+    // -----------------------------------------------
+    // Зберігаємо sessionId у Context
+    // -----------------------------------------------
+
+    setSessionId(sessionId);
+
+    // -----------------------------------------------
+    // Переходимо у fullscreen
+    // -----------------------------------------------
+
+    try {
       if (
-        !Number.isInteger(
-          testId
-        ) ||
-        testId <= 0
+        !document.fullscreenElement &&
+        document.documentElement.requestFullscreen
       ) {
-        setError(
-          "Некоректний id тесту."
-        );
-
-        setStarting(false);
-
-        return;
+        await document.documentElement.requestFullscreen();
       }
-
-      // =================================================
-      // SESSION ID
-      // =================================================
-
-      const sessionStorageId =
-        sessionStorage.getItem(
-          "testSessionId"
-        );
-
-      const localStorageId =
-        localStorage.getItem(
-          "testSessionId"
-        );
-
-      const storedSessionId =
-        sessionStorageId ??
-        localStorageId;
-
-      if (!storedSessionId) {
-        setError(
-          "Сесію тестування не знайдено. Будь ласка, розпочніть тестування ще раз."
-        );
-
-        setStarting(false);
-
-        return;
-      }
-
-      const sessionId =
-        Number(
-          storedSessionId
-        );
-
-      if (
-        !Number.isInteger(
-          sessionId
-        ) ||
-        sessionId <= 0
-      ) {
-        setError(
-          "Некоректний id сесії."
-        );
-
-        setStarting(false);
-
-        return;
-      }
-
-      // =================================================
-      // SYNCHRONIZE SESSION ID
-      // =================================================
-
-      setSessionId(
-        sessionId
+    } catch (fullscreenError) {
+      console.error(
+        "Помилка переходу у fullscreen:",
+        fullscreenError
       );
 
-      // =================================================
-      // GO TO TEST
-      // =================================================
-      //
-      // ВАЖЛИВО:
-      //
-      // Тут НЕ викликаємо:
-      //
-      // POST /api/test/begin
-      //
-      // Офіційний початок тесту
-      // виконає SessionMonitor
-      // вже на сторінці завдань.
-      //
-      // Саме тому час не починає
-      // відраховуватися під час
-      // перебування на сторінці інструкції.
-      // =================================================
-
-      console.log(
-        "INSTRUCTION: GO TO TEST",
-        {
-          testId,
-          sessionId,
-        }
+      setError(
+        "Не вдалося перейти в повноекранний режим. Будь ласка, дозвольте повноекранний режим і спробуйте ще раз."
       );
 
-      router.push(
-        `/test/${testId}`
-      );
-    };
+      setStarting(false);
+      return;
+    }
 
-  // =====================================================
+    // -----------------------------------------------
+    // Переходимо до тесту
+    //
+    // POST /api/test/begin тут НЕ викликаємо.
+    // Офіційний початок тесту виконає
+    // SessionMonitor на сторінці завдань.
+    // -----------------------------------------------
+
+    console.log(
+      "INSTRUCTION: IDENTITY CONFIRMED → GO TO TEST",
+      {
+        testId,
+        sessionId,
+      }
+    );
+
+    router.push(`/test/${testId}`);
+  };
+
+  // ===================================================
   // RENDER
-  // =====================================================
+  // ===================================================
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] flex justify-center py-10">
-      <div className="bg-white w-full max-w-5xl rounded-xl shadow-lg border border-gray-200 p-10">
+    <main className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl p-8 md:p-12">
 
-        <h1 className="text-4xl font-bold text-[#7A1F2B] mb-8">
-          Інструкція щодо проходження тестування
-        </h1>
+        {/* =================================================
+            ІНСТРУКЦІЯ
+        ================================================= */}
 
-        <div className="text-gray-700 leading-8 text-justify">
+        {!identityConfirmed && (
+          <>
+            <h1 className="text-3xl md:text-4xl font-bold text-[#7A1F2B] mb-8 text-center">
+              Інструкція щодо проходження тестування
+            </h1>
 
-          <p className="text-center font-bold mb-6">
-            Шановний учасник / учасниця тренувального тестування!
-          </p>
+            <div className="space-y-5 text-gray-800 leading-relaxed">
 
-          <p className="mb-4">
-            Обов’язково ознайомтеся з правилами проходження тестування та
-            правилами роботи із сервісом і натисніть на кнопку
-            «Ознайомлений / Ознайомлена з правилами проходження тестування».
-            Наголошуємо, що в разі порушення цих правил вас буде позбавлено
-            права продовжувати роботу, а ваші результати буде анульовано.
-          </p>
+              <p>
+                Перед початком виконання тесту уважно
+                ознайомтеся з правилами його проходження.
+              </p>
 
-          <p className="mb-4">
-            Зауважуємо: у ТЕЦ може бути здійснено контроль за дотриманням
-            процедури проходження НМТ за допомогою металодетектора. Також у
-            ТЕЦ здійснюється відеоспостереження.
-          </p>
+              <p>
+                Під час виконання тесту уважно читайте
+                умови завдань та обирайте відповіді,
+                які вважаєте правильними.
+              </p>
 
-          <p className="mb-4">
-            Якщо ви забули вимкнути мобільні телефони чи залишити їх або
-            зарядні пристрої, смартгодинники, навушники в спеціально
-            відведеному місці — пропонуємо зробити це зараз. У разі
-            виникнення технічних збоїв у роботі сервісу або погіршення
-            самопочуття потрібно негайно повідомити про це інструктора.
-          </p>
+              <p>
+                Для переходу до наступного завдання
+                використовуйте відповідні елементи
+                керування на сторінці тестування.
+              </p>
 
-          <p className="mb-4">
-            Якщо ви вважатимете, що щодо вас допущено порушення процедури
-            проведення НМТ, що може вплинути на ваш результат, — до виходу
-            з тимчасового екзаменаційного центру (ТЕЦ) подайте відповідальному
-            за ТЕЦ апеляційну заяву щодо порушення процедури.
-          </p>
+              <p>
+                Після завершення роботи результати
+                тестування будуть опрацьовані системою.
+              </p>
 
-          <p className="mb-4">
-            У випадку оголошення повітряної тривоги до початку допуску до ТЕЦ
-            пройдіть в укриття за вказівниками та перебувайте там до
-            повідомлення про її завершення. Якщо ж повітряну тривогу
-            оголосять під час тестування — вас буде повідомлено про це,
-            а роботу над тестом заблоковано.
-          </p>
+              <div className="mt-8 border-t pt-6">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    id="agree"
+                    type="checkbox"
+                    checked={accepted}
+                    onChange={(event) => {
+                      setAccepted(
+                        event.target.checked
+                      );
+                      setError(null);
+                    }}
+                    className="mt-1 h-5 w-5"
+                  />
 
-          <p className="mb-4">
-            Якщо ви не зможете завершити виконання роботи через виникнення
-            нестандартних ситуацій у ТЕЦ або через різке погіршення стану
-            здоров’я, вам буде надано змогу пройти НМТ під час додаткових
-            сесій відповідно до встановленого порядку.
-          </p>
+                  <span className="text-lg">
+                    Ознайомлений / Ознайомлена з
+                    правилами проходження тестування
+                  </span>
+                </label>
+              </div>
 
-          <p className="mb-4">
-            На виконання завдань з української мови відведено 60 хвилин.
-            Для зарахування відповіді на завдання обов’язково потрібно
-            натиснути на кнопку «Зберегти відповідь».
-          </p>
+              {error && (
+                <div className="mt-6 rounded-lg border border-red-300 bg-red-50 p-4 text-red-700">
+                  {error}
+                </div>
+              )}
 
-          <p className="mb-4">
-            На боковій панелі, розташованій праворуч, відображатиметься
-            інформація про опрацювання вами завдань.
-          </p>
+              <div className="flex justify-center pt-6">
+                <button
+                  type="button"
+                  disabled={!accepted || starting}
+                  onClick={() => {
+                    setError(null);
 
-          <p className="mb-4">
-            Стежте за вказівками, які з’являються на моніторі комп’ютера,
-            а також читайте інформацію у спливних повідомленнях.
-          </p>
-
-          <p className="mb-4">
-            Якщо ви дочасно закінчите роботу над завданнями — можете
-            завершити тестування, натиснувши кнопку
-            «Завершити роботу над тестом».
-          </p>
-
-          <p className="mb-4">
-            Будьте уважні: перед завершенням роботи система повідомить,
-            на які завдання ви не надали або не зберегли відповіді.
-          </p>
-
-          <p className="mb-4">
-            Після завершення виконання завдань тестування на екрані
-            відобразиться інформація про збережені вами відповіді
-            та набрані тестові бали.
-          </p>
-
-          <p className="mb-8">
-            Якщо вам потрібна допомога у вирішенні питань, які не стосуються
-            змісту завдань тесту, піднесіть руку, і до вас підійде старший
-            інструктор.
-          </p>
-
-          <p className="text-center font-bold mb-8">
-            Зичимо успіхів!
-          </p>
-
-        </div>
-
-        {/* AGREEMENT */}
-
-        <div className="mt-10 flex items-center gap-4">
-
-          <input
-            id="agree"
-            type="checkbox"
-            checked={accepted}
-            onChange={(event) =>
-              setAccepted(
-                event.target.checked
-              )
-            }
-            disabled={starting}
-            className="w-5 h-5"
-          />
-
-          <label
-            htmlFor="agree"
-            className="text-lg cursor-pointer"
-          >
-            Ознайомлений / Ознайомлена з правилами проходження тестування
-          </label>
-
-        </div>
-
-        {/* ERROR */}
-
-        {error && (
-          <div className="mt-6 rounded-lg border border-red-300 bg-red-50 px-5 py-4 text-red-700">
-            {error}
-          </div>
+                    // Після ознайомлення відкриваємо
+                    // блок підтвердження особи.
+                    if (accepted) {
+                      setIdentityConfirmed(false);
+                      setSelectedIdentity(null);
+                    }
+                  }}
+                  className="
+                    rounded-xl
+                    bg-[#7A1F2B]
+                    px-8
+                    py-4
+                    text-lg
+                    font-semibold
+                    text-white
+                    transition
+                    hover:bg-[#641923]
+                    disabled:cursor-not-allowed
+                    disabled:opacity-50
+                  "
+                >
+                  Продовжити
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
-        {/* START */}
+        {/* =================================================
+            ПІДТВЕРДЖЕННЯ ОСОБИ
+        ================================================= */}
 
-        <div className="mt-10 flex justify-end">
+        {accepted && !identityConfirmed && (
+          <div className="mt-10 border-t pt-10">
 
-          <button
-            type="button"
-            disabled={
-              !accepted ||
-              starting
-            }
-            onClick={
-              handleStartTest
-            }
-            className="
-              px-8
-              py-4
-              rounded-xl
-              text-white
-              font-semibold
-              transition
-              disabled:bg-gray-400
-              disabled:cursor-not-allowed
-              bg-[#7A1F2B]
-              hover:bg-[#641823]
-            "
-          >
-            {starting
-              ? "Починаємо тестування..."
-              : "Розпочати тестування"}
-          </button>
+            <h2 className="text-3xl font-bold text-[#7A1F2B] mb-4 text-center">
+              Підтвердження особи
+            </h2>
 
-        </div>
+            <p className="text-xl text-center text-gray-700 mb-8">
+              Оберіть своє ПІБ із запропонованих
+              варіантів.
+            </p>
+
+            <div className="max-w-2xl mx-auto space-y-4">
+              {identityOptions.map(
+                (option) => {
+                  const selected =
+                    selectedIdentity ===
+                    option.id;
+
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() =>
+                        handleIdentitySelect(
+                          option
+                        )
+                      }
+                      className={`
+                        w-full
+                        rounded-xl
+                        border-2
+                        px-6
+                        py-5
+                        text-left
+                        text-lg
+                        font-medium
+                        transition
+                        ${
+                          selected
+                            ? option.correct
+                              ? "border-green-500 bg-green-50 text-green-800"
+                              : "border-red-500 bg-red-50 text-red-800"
+                            : "border-gray-300 bg-white hover:border-[#7A1F2B] hover:bg-gray-50"
+                        }
+                      `}
+                    >
+                      {option.name}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+
+            {error && (
+              <div className="max-w-2xl mx-auto mt-6 rounded-lg border border-red-300 bg-red-50 p-4 text-red-700 text-center">
+                {error}
+              </div>
+            )}
+
+            <div className="flex justify-center pt-8">
+              <button
+                type="button"
+                disabled={
+                  !identityConfirmed ||
+                  starting
+                }
+                onClick={
+                  handleStartTest
+                }
+                className="
+                  rounded-xl
+                  bg-[#7A1F2B]
+                  px-10
+                  py-4
+                  text-lg
+                  font-semibold
+                  text-white
+                  transition
+                  hover:bg-[#641923]
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                "
+              >
+                {starting
+                  ? "Підготовка до тесту..."
+                  : "Розпочати роботу над тестом"}
+              </button>
+            </div>
+
+          </div>
+        )}
 
       </div>
     </main>
