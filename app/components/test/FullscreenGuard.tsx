@@ -10,10 +10,6 @@ type Props = {
   onViolationFinish?: () => Promise<void>;
 };
 
-type OrdinaryGuardProps = {
-  onViolationFinish: () => Promise<void>;
-};
-
 function WarningCard({
   onReturn,
 }: {
@@ -29,142 +25,217 @@ function WarningCard({
         items-center
         justify-center
         bg-slate-900/65
-        backdrop-blur-sm
         p-6
+        backdrop-blur-sm
       "
     >
       <div
         className="
+          relative
           w-full
-          max-w-lg
+          max-w-xl
           overflow-hidden
-          rounded-2xl
+          rounded-[28px]
           bg-white
-          shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)]
+          shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45)]
         "
       >
-        {/* Верхній акцент */}
-        <div className="h-1.5 bg-[#F97316]" />
+        {/* =====================================================
+            ДЕКОРАТИВНА БОРДОВА ЗОНА
+        ===================================================== */}
 
-        <div className="p-8">
-          {/* Заголовок */}
-          <div className="flex items-start gap-5">
-            <div
-              className="
-                flex
-                h-14
-                w-14
-                shrink-0
-                items-center
-                justify-center
-                rounded-full
-                bg-orange-50
-                text-orange-500
-              "
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-7 w-7"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v4"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 17h.01"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
-                />
-              </svg>
-            </div>
+        <div
+          className="
+            relative
+            h-48
+            overflow-hidden
+            bg-[#7A1F2B]
+          "
+        >
+          {/* Великий напівпрозорий знак оклику */}
 
-            <div className="pt-0.5">
-              <h2 className="text-2xl font-bold text-[#7A1F2B]">
-                Попередження
-              </h2>
-
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                Зафіксовано порушення правил тестування
-              </p>
-            </div>
-          </div>
-
-          {/* Основний текст */}
           <div
             className="
-              mt-7
-              rounded-xl
-              border
-              border-orange-100
-              bg-orange-50/60
-              px-5
-              py-4
+              pointer-events-none
+              absolute
+              -right-2
+              -top-20
+              select-none
+              text-[300px]
+              font-black
+              leading-none
+              text-white/[0.08]
             "
           >
-            <p className="text-base leading-7 text-gray-700">
-              Ви вийшли з повноекранного режиму.
-            </p>
-
-            <p className="mt-3 text-base leading-7 text-gray-700">
-              Це є порушенням правил проходження тестування.
-            </p>
-
-            <div className="my-4 border-t border-orange-100" />
-
-            <p className="text-base font-semibold leading-7 text-gray-800">
-              Повторне порушення автоматично завершить тест.
-            </p>
+            !
           </div>
 
-          {/* Кнопка */}
-          <button
-            type="button"
-            onClick={onReturn}
+          {/* Білі напівпрозорі кола */}
+
+          <div
             className="
-              mt-7
-              w-full
-              rounded-xl
-              bg-[#7A1F2B]
-              px-6
-              py-3.5
-              text-base
-              font-semibold
-              text-white
-              shadow-sm
-              transition
-              hover:bg-[#651722]
-              hover:shadow-md
-              focus:outline-none
-              focus:ring-2
-              focus:ring-[#7A1F2B]/30
-              active:scale-[0.99]
+              pointer-events-none
+              absolute
+              -left-20
+              -top-24
+              h-64
+              w-64
+              rounded-full
+              border
+              border-white/[0.12]
+              bg-white/[0.04]
+            "
+          />
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -bottom-28
+              left-24
+              h-52
+              w-52
+              rounded-full
+              border
+              border-white/[0.10]
+              bg-white/[0.04]
+            "
+          />
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -right-16
+              bottom-[-90px]
+              h-56
+              w-56
+              rounded-full
+              border
+              border-white/[0.10]
+              bg-white/[0.03]
+            "
+          />
+
+          {/* Маленьке коло-акцент */}
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              left-10
+              top-10
+              h-5
+              w-5
+              rounded-full
+              bg-white/20
+            "
+          />
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              left-20
+              top-20
+              h-2.5
+              w-2.5
+              rounded-full
+              bg-white/30
+            "
+          />
+        </div>
+
+        {/* =====================================================
+            ОСНОВНИЙ ВМІСТ
+        ===================================================== */}
+
+        <div className="relative px-8 pb-8 pt-7 sm:px-10 sm:pb-10">
+          {/* Великий напівпрозорий знак оклику
+              на білій частині картки */}
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -right-3
+              -top-20
+              select-none
+              text-[300px]
+              font-black
+              leading-none
+              text-[#7A1F2B]/[0.035]
             "
           >
-            Повернутися до тестування
-          </button>
+            !
+          </div>
 
-          <p className="mt-4 text-center text-xs text-gray-400">
-            Будь ласка, залишайтеся у повноекранному режимі
-          </p>
+          <div className="relative">
+            {/* Заголовок */}
+
+            <h2
+              className="
+                text-2xl
+                font-bold
+                leading-tight
+                text-[#7A1F2B]
+                sm:text-[28px]
+              "
+            >
+              Порушення правила тестування
+            </h2>
+
+            {/* Основний текст */}
+
+            <p
+              className="
+                mt-4
+                max-w-lg
+                text-base
+                leading-7
+                text-gray-600
+              "
+            >
+              Дотримуйтеся правил проходження
+              тестування. Повторне порушення
+              автоматично завершить тест
+            </p>
+
+            {/* Кнопка */}
+
+            <button
+              type="button"
+              onClick={onReturn}
+              className="
+                mt-7
+                w-full
+                rounded-xl
+                bg-[#7A1F2B]
+                px-6
+                py-3.5
+                text-base
+                font-semibold
+                text-white
+                shadow-sm
+                transition
+                hover:bg-[#651722]
+                hover:shadow-md
+                focus:outline-none
+                focus:ring-2
+                focus:ring-[#7A1F2B]/30
+                active:scale-[0.99]
+              "
+            >
+              Повернутися до тестування
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function OrdinaryFullscreenGuard({
-  onViolationFinish,
-}: OrdinaryGuardProps) {
+function OrdinaryFullscreenGuard() {
   const router = useRouter();
 
   const {
@@ -196,41 +267,19 @@ function OrdinaryFullscreenGuard({
 
       setViolations(nextViolations);
 
-      /*
-       * =====================================================
-       * ПЕРШЕ ПОРУШЕННЯ
-       * =====================================================
-       */
+      // =====================================================
+      // ПЕРШЕ ПОРУШЕННЯ
+      // =====================================================
 
       if (nextViolations === 1) {
         setShowWarning(true);
         return;
       }
 
-      /*
-       * =====================================================
-       * ДРУГЕ ПОРУШЕННЯ
-       * =====================================================
-       */
-
-      if (onViolationFinish) {
-        try {
-          await onViolationFinish();
-        } catch (error) {
-          console.error(
-            "Помилка завершення тесту після порушення:",
-            error
-          );
-        }
-
-        return;
-      }
-
-      /*
-       * =====================================================
-       * ЗВИЧАЙНИЙ ТЕСТ
-       * =====================================================
-       */
+      // =====================================================
+      // ДРУГЕ ПОРУШЕННЯ
+      // Автоматичне завершення тесту
+      // =====================================================
 
       if (!test) {
         return;
@@ -263,7 +312,7 @@ function OrdinaryFullscreenGuard({
         );
       } catch (error) {
         console.error(
-          "Помилка завершення тесту:",
+          "Помилка завершення тесту після порушення:",
           error
         );
       }
@@ -286,7 +335,6 @@ function OrdinaryFullscreenGuard({
     savedAnswers,
     timeLeft,
     router,
-    onViolationFinish,
   ]);
 
   async function returnFullscreen() {
@@ -334,22 +382,10 @@ function CombinedFullscreenGuard({
 
       setViolations(nextViolations);
 
-      /*
-       * =====================================================
-       * ПЕРШЕ ПОРУШЕННЯ
-       * =====================================================
-       */
-
       if (nextViolations === 1) {
         setShowWarning(true);
         return;
       }
-
-      /*
-       * =====================================================
-       * ДРУГЕ ПОРУШЕННЯ
-       * =====================================================
-       */
 
       if (onViolationFinish) {
         try {
@@ -401,16 +437,6 @@ function CombinedFullscreenGuard({
 export default function FullscreenGuard({
   onViolationFinish,
 }: Props) {
-  /*
-   * Якщо callback передано —
-   * це комбінований тест.
-   *
-   * ВАЖЛИВО:
-   * OrdinaryFullscreenGuard у цьому випадку
-   * взагалі не монтується, тому useTestSession()
-   * не викликається.
-   */
-
   if (onViolationFinish) {
     return (
       <CombinedFullscreenGuard
@@ -419,13 +445,7 @@ export default function FullscreenGuard({
     );
   }
 
-  /*
-   * Звичайний тест.
-   */
-
   return (
-    <OrdinaryFullscreenGuard
-      onViolationFinish={async () => {}}
-    />
+    <OrdinaryFullscreenGuard />
   );
 }
