@@ -86,15 +86,15 @@ export async function GET(
         },
 
         sessions: {
-          orderBy: {
-            createdAt: "desc",
-          },
+  orderBy: {
+    createdAt: "desc",
+  },
 
-          include: {
-            participant: true,
-            result: true,
-          },
-        },
+  include: {
+    participant: true,
+    testResult: true,
+  },
+},
 
         results: {
           orderBy: {

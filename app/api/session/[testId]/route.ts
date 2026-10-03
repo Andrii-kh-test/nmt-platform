@@ -185,7 +185,7 @@ export async function GET(
             },
           },
 
-          result: {
+          testResult: {
             select: {
               id:
                 true,
@@ -236,7 +236,7 @@ export async function GET(
     //
     // Це принципово для роботи клієнтського
     // countdown у TestSessionContext.
-    // ===================================================
+    // =====================================================
 
     const normalizedTimeLeft =
       Math.max(
@@ -331,7 +331,7 @@ export async function GET(
         // -------------------------------------------------
 
         resultId:
-          session.result?.id ??
+          session.testResult?.id ??
           null,
       },
       {
@@ -482,7 +482,7 @@ export async function POST(
             "Некоректний id сесії.",
         },
         {
-          status: 400,
+          status: 400
         }
       );
     }
@@ -541,7 +541,7 @@ export async function POST(
           updatedAt:
             true,
 
-          result: {
+          testResult: {
             select: {
               id:
                 true,
@@ -672,7 +672,7 @@ export async function POST(
             updatedAt:
               true,
 
-            result: {
+            testResult: {
               select: {
                 id:
                   true,
@@ -747,7 +747,7 @@ export async function POST(
             updated.lastActivityAt,
 
           resultId:
-            updated.result?.id ??
+            updated.testResult?.id ??
             null,
         },
         {
@@ -908,7 +908,7 @@ export async function POST(
           updatedAt:
             true,
 
-          result: {
+          testResult: {
             select: {
               id:
                 true,
@@ -991,7 +991,7 @@ export async function POST(
           updated.lastActivityAt,
 
         resultId:
-          updated.result?.id ??
+          updated.testResult?.id ??
           null,
       },
       {

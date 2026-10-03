@@ -7,194 +7,760 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =====================================================
+// ENUMS
+// =====================================================
+
+enum UserRole {
+  PARTICIPANT
+  TEACHER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum TeacherStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TeacherApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AvatarStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PlanType {
+  FREE
+  WALLET
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum WalletTransactionType {
+  DEPOSIT
+  TEST_PURCHASE
+  REFUND
+  ADMIN_GRANT
+  ADMIN_ADJUSTMENT
+}
+
+enum TestAccessType {
+  PURCHASE
+  ADMIN_GRANT
+}
+
+enum GroupMemberStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum GroupTestStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================================================
+// USER / AUTH
+// =====================================================
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String
+
+  firstName    String
+  lastName     String
+  middleName   String?
+
+  role          UserRole   @default(PARTICIPANT)
+  status        UserStatus @default(ACTIVE)
+  teacherStatus TeacherStatus @default(NONE)
+
+  institution String?
+  position    String?
+  subject     String?
+  locality    String?
+
+  emailVerifiedAt DateTime?
+
+  avatarUrl            String?
+  avatarStatus         AvatarStatus @default(NONE)
+  avatarRejectedReason String?
+  avatarReviewedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authSessions        AuthSession[]
+  passwordResetTokens PasswordResetToken[]
+
+  participant Participant?
+
+  teacherApplications TeacherApplication[]
+
+  createdTests        Test[]        @relation("TestCreator")
+  createdComplexTests ComplexTest[] @relation("ComplexTestCreator")
+
+  groups TeacherGroup[]
+
+  wallet        Wallet?
+  subscriptions UserSubscription[]
+
+  testPurchases TestPurchase[]
+  testGrants    TestAccessGrant[]
+
+  groupMemberships GroupMember[]
+
+  @@index([role])
+  @@index([status])
+  @@index([teacherStatus])
+}
+
+// =====================================================
+// AUTH SESSION
+// =====================================================
+
+model AuthSession {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// PASSWORD RESET
+// =====================================================
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// TEACHER APPLICATION
+// =====================================================
+
+model TeacherApplication {
+  id     Int @id @default(autoincrement())
+  userId Int
+
+  firstName  String
+  lastName   String
+  middleName String?
+
+  institution String?
+  position    String?
+  subject     String?
+  locality    String?
+
+  status TeacherApplicationStatus @default(PENDING)
+
+  adminComment String?
+
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+// =====================================================
+// TEST
+// =====================================================
+
 model Test {
-  id           Int               @id @default(autoincrement())
-  title        String
-  subject      String
-  subjectId    Int?
-  subjectRef   Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  description  String?
-  schoolYear   String
-  duration     Int
-  maxPoints    Int
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id        Int    @id @default(autoincrement())
+  title     String
+  subject   String
+  subjectId Int?
+
+  subjectRef Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  description String?
+  schoolYear  String
+  duration    Int
+  maxPoints   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   accessCode   String?
-  codeRequired Boolean           @default(true)
-  isPublished  Boolean           @default(false)
-  examType     String            @default("НМТ")
-  displayOrder Int               @unique
-  isArchived   Boolean           @default(false)
+  codeRequired Boolean @default(true)
+
+  isPublished Boolean @default(false)
+  isArchived  Boolean @default(false)
+
+  examType String @default("НМТ")
+
+  displayOrder Int @unique
+
+  createdById Int?
+
+  createdBy User? @relation("TestCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   questions    TestQuestion[]
   results      TestResult[]
   sessions     TestSession[]
   complexTests ComplexTestItem[]
+
+  purchases  TestPurchase[]
+  grants     TestAccessGrant[]
+  planAccess TestPlanAccess[]
+
+  groupAssignments GroupTest[]
+
+  walletTransactions WalletTransaction[]
+
+  @@index([createdById])
+  @@index([subjectId])
+  @@index([isPublished])
+  @@index([isArchived])
+  @@index([examType])
 }
+
+// =====================================================
+// SUBJECT
+// =====================================================
 
 model Subject {
   id          Int      @id @default(autoincrement())
   name        String   @unique
   description String?
-  isActive    Boolean  @default(true)
-  isArchived  Boolean  @default(false)
 
-  tests       Test[]
+  isActive   Boolean @default(true)
+  isArchived Boolean @default(false)
+
+  tests Test[]
 }
+
+// =====================================================
+// COMPLEX TEST
+// =====================================================
 
 model ComplexTest {
-  id           Int               @id @default(autoincrement())
-  title        String
-  description  String?
-  duration     Int
-  accessCode   String?
-  codeRequired Boolean           @default(true)
-  isPublished  Boolean           @default(false)
-  isArchived   Boolean           @default(false)
-  examType     String            @default("НМТ")
-  section      String?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id          Int     @id @default(autoincrement())
+  title       String
+  description String?
+  duration    Int
 
-  tests        ComplexTestItem[]
-  sessions     ComplexTestSession[]
+  accessCode   String?
+  codeRequired Boolean @default(true)
+
+  isPublished Boolean @default(false)
+  isArchived  Boolean @default(false)
+
+  examType String @default("НМТ")
+  section  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdById Int?
+
+  createdBy User? @relation("ComplexTestCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  tests    ComplexTestItem[]
+  sessions ComplexTestSession[]
+
+  @@index([createdById])
+  @@index([isPublished])
+  @@index([isArchived])
 }
 
+// =====================================================
+// COMPLEX TEST ITEMS
+// =====================================================
+
 model ComplexTestItem {
-  id            Int         @id @default(autoincrement())
+  id            Int @id @default(autoincrement())
   complexTestId Int
   testId        Int
   order         Int
 
-  complexTest   ComplexTest @relation(fields: [complexTestId], references: [id], onDelete: Cascade)
-  test          Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
+  complexTest ComplexTest @relation(fields: [complexTestId], references: [id], onDelete: Cascade)
+  test        Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   @@unique([complexTestId, testId])
   @@index([complexTestId, order])
   @@index([testId])
 }
 
+// =====================================================
+// QUESTION
+// =====================================================
+
 model Question {
-  id              Int            @id @default(autoincrement())
+  id              Int     @id @default(autoincrement())
   type            String
   text            String
   points          Int
-  shuffleQuestion Boolean        @default(true)
+  shuffleQuestion Boolean @default(true)
 
-  answerOptions   AnswerOption[]
-  tests           TestQuestion[]
+  answerOptions AnswerOption[]
+  tests         TestQuestion[]
 }
 
+// =====================================================
+// TEST QUESTION
+// =====================================================
+
 model TestQuestion {
-  id         Int      @id @default(autoincrement())
+  id         Int @id @default(autoincrement())
   testId     Int
   questionId Int
   order      Int
 
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  test       Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  test     Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
 
   @@unique([testId, questionId])
   @@index([testId, order])
   @@index([questionId])
 }
 
+// =====================================================
+// ANSWER OPTION
+// =====================================================
+
 model AnswerOption {
-  id         Int      @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   order      Int
   text       String
   isCorrect  Boolean
   questionId Int
 
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, order])
 }
 
+// =====================================================
+// PARTICIPANT
+// =====================================================
+
 model Participant {
-  id         Int           @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   lastName   String
   firstName  String
   middleName String?
-  createdAt  DateTime      @default(now())
+
+  createdAt DateTime @default(now())
+
   accessCode String?
+
+  userId Int? @unique
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   sessions        TestSession[]
   complexSessions ComplexTestSession[]
+
+  @@index([lastName, firstName])
 }
+
+// =====================================================
+// TEST SESSION
+// =====================================================
 
 model TestSession {
-  id              Int          @id @default(autoincrement())
+  id              Int  @id @default(autoincrement())
   testId          Int
-  currentQuestion Int          @default(0)
-  savedAnswers    Json
-  timeLeft        Int
-  finished        Boolean      @default(false)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  participantId   Int?
-  blockReason     String?
-  blocked         Boolean      @default(false)
-  extraTime       Int          @default(0)
-  finishedAt      DateTime?
-  startedAt       DateTime?    @default(now())
-  blockedAt       DateTime?
-  lastActivityAt  DateTime     @default(now())
+  currentQuestion Int  @default(0)
 
-  result          TestResult?
-  participant     Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  test            Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  savedAnswers Json
+  timeLeft     Int
+
+  finished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participantId Int?
+
+  blockReason String?
+  blocked     Boolean @default(false)
+
+  extraTime Int @default(0)
+
+  finishedAt DateTime?
+  startedAt  DateTime? @default(now())
+  blockedAt  DateTime?
+
+  lastActivityAt DateTime @default(now())
+
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  test        Test        @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  testResult TestResult?
+
+  @@index([testId])
+  @@index([participantId])
+  @@index([finished])
 }
 
+// =====================================================
+// COMPLEX TEST SESSION
+// =====================================================
+
 model ComplexTestSession {
-  id              Int         @id @default(autoincrement())
-  complexTestId   Int
-  participantId   Int?
+  id            Int @id @default(autoincrement())
+  complexTestId Int
+  participantId Int?
 
   currentTestId   Int?
-  currentQuestion Int        @default(0)
+  currentQuestion Int @default(0)
 
-  savedAnswers    Json
-  timeLeft        Int
+  savedAnswers Json
+  timeLeft     Int
 
-  finished        Boolean     @default(false)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  finishedAt      DateTime?
-  startedAt       DateTime?   @default(now())
+  finished Boolean @default(false)
 
-  blockReason     String?
-  blocked         Boolean     @default(false)
-  extraTime       Int         @default(0)
-  blockedAt       DateTime?
-  lastActivityAt  DateTime    @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  finishedAt DateTime?
+  startedAt  DateTime? @default(now())
 
-  participant     Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  complexTest     ComplexTest  @relation(fields: [complexTestId], references: [id], onDelete: Cascade)
+  blockReason String?
+  blocked     Boolean @default(false)
+
+  extraTime Int @default(0)
+
+  blockedAt DateTime?
+
+  lastActivityAt DateTime @default(now())
+
+  participant Participant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  complexTest ComplexTest @relation(fields: [complexTestId], references: [id], onDelete: Cascade)
 
   @@index([complexTestId])
   @@index([participantId])
+  @@index([finished])
 }
 
+// =====================================================
+// TEST RESULT
+// =====================================================
+
 model TestResult {
-  id           Int          @id @default(autoincrement())
-  testId       Int
+  id     Int @id @default(autoincrement())
+  testId Int
+
   earnedPoints Int
   maxPoints    Int
   percent      Int
-  correct      Int
-  incorrect    Int
-  skipped      Int
-  timeSpent    Int
-  answers      Json
-  finishReason String       @default("manual")
-  createdAt    DateTime     @default(now())
-  firstName    String?
-  lastName     String?
-  middleName   String?
-  accessCode   String?
-  finishedAt   DateTime?
-  startedAt    DateTime?
-  sessionId    Int?         @unique
 
-  session      TestSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  test         Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+  correct   Int
+  incorrect Int
+  skipped   Int
+
+  timeSpent Int
+  answers   Json
+
+  finishReason String @default("manual")
+
+  // Чи дозволено учаснику переглядати умови,
+  // варіанти відповідей та правильні відповіді.
+  allowParticipantDetails Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  firstName  String?
+  lastName   String?
+  middleName String?
+
+  accessCode String?
+
+  finishedAt DateTime?
+  startedAt  DateTime?
+
+  sessionId Int? @unique
+
+  session TestSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  test    Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+  @@index([createdAt])
+}
+
+// =====================================================
+// PLAN
+// =====================================================
+
+model Plan {
+  id   Int      @id @default(autoincrement())
+  type PlanType @unique
+
+  name        String
+  description String?
+
+  // Price in UAH kopecks.
+  // Example: 9900 = 99.00 UAH
+  price Int @default(0)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions UserSubscription[]
+  testAccess    TestPlanAccess[]
+}
+
+// =====================================================
+// USER SUBSCRIPTION
+// =====================================================
+
+model UserSubscription {
+  id     Int @id @default(autoincrement())
+  userId Int
+  planId Int
+
+  status SubscriptionStatus @default(ACTIVE)
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([planId])
+  @@index([endsAt])
+}
+
+// =====================================================
+// TEST PLAN ACCESS
+// =====================================================
+
+model TestPlanAccess {
+  id     Int @id @default(autoincrement())
+  testId Int
+  planId Int
+
+  createdAt DateTime @default(now())
+
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([testId, planId])
+  @@index([planId])
+}
+
+// =====================================================
+// WALLET
+// =====================================================
+
+model Wallet {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  // Amount in UAH kopecks.
+  // 500   = 5.00 UAH
+  // 1500  = 15.00 UAH
+  // 10000 = 100.00 UAH
+
+  balance Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions WalletTransaction[]
+}
+
+// =====================================================
+// WALLET TRANSACTION
+// =====================================================
+
+model WalletTransaction {
+  id       Int @id @default(autoincrement())
+  walletId Int
+
+  // Positive:
+  // DEPOSIT
+  // REFUND
+  // ADMIN_GRANT
+  // ADMIN_ADJUSTMENT
+  //
+  // Negative:
+  // TEST_PURCHASE
+
+  amount Int
+
+  type WalletTransactionType
+
+  description String?
+
+  // Optional reference to the purchased test.
+  testId Int?
+
+  createdAt DateTime @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  test   Test?  @relation(fields: [testId], references: [id], onDelete: SetNull)
+
+  @@index([walletId, createdAt])
+  @@index([testId])
+}
+
+// =====================================================
+// TEST PURCHASE
+// =====================================================
+
+model TestPurchase {
+  id     Int @id @default(autoincrement())
+  userId Int
+  testId Int
+
+  // Price actually paid, in UAH kopecks.
+  price Int
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, testId])
+  @@index([userId])
+  @@index([testId])
+}
+
+// =====================================================
+// TEST ACCESS GRANT
+// =====================================================
+
+model TestAccessGrant {
+  id     Int @id @default(autoincrement())
+  userId Int
+  testId Int
+
+  accessType TestAccessType @default(ADMIN_GRANT)
+
+  expiresAt DateTime?
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test Test @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, testId])
+  @@index([userId])
+  @@index([testId])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// TEACHER GROUP
+// =====================================================
+
+model TeacherGroup {
+  id        Int @id @default(autoincrement())
+  teacherId Int
+
+  name        String
+  description String?
+
+  // Code through which participants can join.
+  joinCode String @unique
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  members GroupMember[]
+  tests   GroupTest[]
+
+  @@index([teacherId])
+  @@index([isActive])
+}
+
+// =====================================================
+// GROUP MEMBER
+// =====================================================
+
+model GroupMember {
+  id      Int @id @default(autoincrement())
+  groupId Int
+  userId  Int
+
+  status GroupMemberStatus @default(ACTIVE)
+
+  joinedAt DateTime @default(now())
+
+  group TeacherGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+// =====================================================
+// GROUP TEST
+// =====================================================
+
+model GroupTest {
+  id      Int @id @default(autoincrement())
+  groupId Int
+  testId  Int
+
+  status GroupTestStatus @default(ACTIVE)
+
+  assignedAt DateTime @default(now())
+  deadline   DateTime?
+
+  group TeacherGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  test  Test         @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, testId])
+  @@index([groupId])
+  @@index([testId])
+  @@index([deadline])
 }

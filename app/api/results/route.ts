@@ -66,10 +66,116 @@ export async function POST(
   try {
     const body = await request.json();
 
+    // =================================================
+    // ПЕРЕВІРКА SESSION ID
+    // =================================================
+
+    const sessionId = Number(
+      body.sessionId
+    );
+
+    if (
+      !Number.isInteger(sessionId) ||
+      sessionId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Некоректний sessionId.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // =================================================
+    // ПЕРЕВІРЯЄМО, ЩО СЕСІЯ ІСНУЄ
+    // =================================================
+
+    const session =
+      await prisma.testSession.findUnique({
+        where: {
+          id: sessionId,
+        },
+        select: {
+          id: true,
+          testId: true,
+          participantId: true,
+        },
+      });
+
+    if (!session) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Сесію тестування не знайдено.",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    // =================================================
+    // ПЕРЕВІРЯЄМО, ЩО РЕЗУЛЬТАТ НАЛЕЖИТЬ
+    // САМЕ ЦІЙ СЕСІЇ
+    // =================================================
+
+    const testId = Number(
+      body.testId
+    );
+
+    if (
+      !Number.isInteger(testId) ||
+      testId <= 0
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Некоректний testId.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (
+      session.testId !== testId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Сесія не відповідає тесту.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // =================================================
+    // СТВОРЮЄМО РЕЗУЛЬТАТ
+    // =================================================
+
     const result =
       await prisma.testResult.create({
         data: {
-          testId: body.testId,
+          // ---------------------------------------------
+          // КЛЮЧОВА ЗМІНА:
+          //
+          // Тепер TestResult пов'язаний
+          // із конкретною TestSession.
+          // ---------------------------------------------
+
+          sessionId: session.id,
+
+          testId: testId,
 
           earnedPoints:
             body.earnedPoints,
@@ -100,30 +206,44 @@ export async function POST(
             "manual",
 
           lastName:
-            body.lastName ?? null,
+            body.lastName ??
+            null,
 
           firstName:
-            body.firstName ?? null,
+            body.firstName ??
+            null,
 
           middleName:
-            body.middleName ?? null,
+            body.middleName ??
+            null,
 
           accessCode:
-            body.accessCode ?? null,
+            body.accessCode ??
+            null,
 
           startedAt:
             body.startedAt
-              ? new Date(body.startedAt)
+              ? new Date(
+                  body.startedAt
+                )
               : new Date(),
 
           finishedAt:
             body.finishedAt
-              ? new Date(body.finishedAt)
+              ? new Date(
+                  body.finishedAt
+                )
               : new Date(),
         },
       });
 
-    return NextResponse.json(result);
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return NextResponse.json(
+      result
+    );
   } catch (error) {
     console.error(
       "POST RESULTS ERROR:",

@@ -113,7 +113,8 @@ const sessionInclude = {
     },
   },
 
-  result: true,
+  // У Prisma-схемі зв'язок називається testResult
+  testResult: true,
 } as const;
 
 // =====================================================
@@ -244,7 +245,7 @@ export async function GET(
           session.finishedAt,
 
         resultId:
-          session.result?.id ??
+          session.testResult?.id ??
           null,
       },
       {
@@ -407,7 +408,7 @@ export async function POST(
             existingSession.finished,
 
           resultId:
-            existingSession.result?.id ??
+            existingSession.testResult?.id ??
             null,
         });
       }
@@ -484,7 +485,7 @@ export async function POST(
           session.finished,
 
         resultId:
-          session.result?.id ??
+          session.testResult?.id ??
           null,
       });
     }
@@ -541,7 +542,7 @@ export async function POST(
             existingSession.finished,
 
           resultId:
-            existingSession.result?.id ??
+            existingSession.testResult?.id ??
             null,
         });
       }
@@ -606,7 +607,7 @@ export async function POST(
           session.finished,
 
         resultId:
-          session.result?.id ??
+          session.testResult?.id ??
           null,
       });
     }
@@ -780,7 +781,7 @@ export async function POST(
         session,
 
         resultId:
-          session.result?.id ??
+          session.testResult?.id ??
           null,
       });
     }
@@ -791,7 +792,7 @@ export async function POST(
 
     if (action === "annul") {
       if (
-        existingSession.result
+        existingSession.testResult
       ) {
         return NextResponse.json({
           success: true,
@@ -802,7 +803,7 @@ export async function POST(
             "Результат цієї сесії вже анульовано.",
 
           finishReason:
-            existingSession.result
+            existingSession.testResult
               .finishReason,
 
           finishMessage:
@@ -811,35 +812,39 @@ export async function POST(
           sessionId,
 
           resultId:
-            existingSession.result.id,
+            existingSession.testResult.id,
 
+          // ВАЖЛИВО:
+          // Це поле залишається result,
+          // оскільки це JSON-відповідь API,
+          // а не Prisma relation.
           result: {
             earnedPoints:
-              existingSession.result
+              existingSession.testResult
                 .earnedPoints,
 
             maxPoints:
-              existingSession.result
+              existingSession.testResult
                 .maxPoints,
 
             percent:
-              existingSession.result
+              existingSession.testResult
                 .percent,
 
             correct:
-              existingSession.result
+              existingSession.testResult
                 .correct,
 
             incorrect:
-              existingSession.result
+              existingSession.testResult
                 .incorrect,
 
             skipped:
-              existingSession.result
+              existingSession.testResult
                 .skipped,
 
             timeSpent:
-              existingSession.result
+              existingSession.testResult
                 .timeSpent,
           },
 
@@ -1061,8 +1066,6 @@ export async function POST(
         finished: true,
 
         timeLeft: 0,
-
-        
       });
     }
 

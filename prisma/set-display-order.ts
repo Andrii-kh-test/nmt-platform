@@ -1,5 +1,4 @@
-import { prisma } from "./lib/prisma";
-
+import { prisma } from "../app/lib/prisma";
 async function main() {
   const tests = await prisma.test.findMany({
     orderBy: {

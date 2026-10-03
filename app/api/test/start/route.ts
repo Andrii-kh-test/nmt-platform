@@ -4,6 +4,7 @@ import {
 } from "next/server";
 
 import { prisma } from "@/app/lib/prisma";
+import { getCurrentUser } from "@/app/lib/auth/session";
 
 // =====================================================
 // POST /api/test/start
@@ -18,15 +19,21 @@ import { prisma } from "@/app/lib/prisma";
 //
 // Фактичний старт:
 // POST /api/test/begin
+//
+// Для авторизованого користувача:
+// використовується його існуючий Participant.
+//
+// Для неавторизованого користувача:
+// створюється окремий Participant, як і раніше.
 // =====================================================
 
 export async function POST(
   request: NextRequest
 ) {
   try {
-    // ===================================================
+    // =================================================
     // BODY
-    // ===================================================
+    // =================================================
 
     let body: unknown;
 
@@ -36,8 +43,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Некоректне тіло запиту.",
+          message: "Некоректне тіло запиту.",
         },
         {
           status: 400,
@@ -52,8 +58,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Некоректне тіло запиту.",
+          message: "Некоректне тіло запиту.",
         },
         {
           status: 400,
@@ -75,24 +80,20 @@ export async function POST(
       accessCode?: unknown;
     };
 
-    // ===================================================
+    // =================================================
     // TEST ID
-    // ===================================================
+    // =================================================
 
-    const numericTestId =
-      Number(testId);
+    const numericTestId = Number(testId);
 
     if (
-      !Number.isInteger(
-        numericTestId
-      ) ||
+      !Number.isInteger(numericTestId) ||
       numericTestId <= 0
     ) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Некоректний id тесту.",
+          message: "Некоректний id тесту.",
         },
         {
           status: 400,
@@ -100,9 +101,9 @@ export async function POST(
       );
     }
 
-    // ===================================================
+    // =================================================
     // TEST
-    // ===================================================
+    // =================================================
 
     const test =
       await prisma.test.findUnique({
@@ -115,18 +116,13 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Тест не знайдено.",
+          message: "Тест не знайдено.",
         },
         {
           status: 404,
         }
       );
     }
-
-    // ===================================================
-    // PUBLICATION
-    // ===================================================
 
     if (!test.isPublished) {
       return NextResponse.json(
@@ -141,9 +137,9 @@ export async function POST(
       );
     }
 
-    // ===================================================
+    // =================================================
     // ACCESS CODE
-    // ===================================================
+    // =================================================
 
     if (
       test.codeRequired &&
@@ -161,9 +157,12 @@ export async function POST(
       );
     }
 
-    // ===================================================
-    // LAST NAME
-    // ===================================================
+    // =================================================
+    // NAME VALIDATION
+    //
+    // Залишаємо перевірку для сумісності
+    // з поточним запуском тестування.
+    // =================================================
 
     if (
       typeof lastName !== "string" ||
@@ -181,10 +180,6 @@ export async function POST(
       );
     }
 
-    // ===================================================
-    // FIRST NAME
-    // ===================================================
-
     if (
       typeof firstName !== "string" ||
       !firstName.trim()
@@ -192,8 +187,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Не вказано ім'я.",
+          message: "Не вказано ім'я.",
         },
         {
           status: 400,
@@ -201,44 +195,94 @@ export async function POST(
       );
     }
 
-    // ===================================================
-    // PARTICIPANT
-    // ===================================================
+    // =================================================
+    // CURRENT USER
+    //
+    // Якщо користувач авторизований,
+    // намагаємося знайти його Participant.
+    // =================================================
 
-    const participant =
-      await prisma.participant.create({
-        data: {
-          lastName:
-            lastName.trim(),
+    const currentUser =
+      await getCurrentUser();
 
-          firstName:
-            firstName.trim(),
+    let participant;
 
-          middleName:
-            typeof middleName ===
-              "string" &&
-            middleName.trim()
-              ? middleName.trim()
-              : null,
+    if (currentUser) {
+      // -----------------------------------------------
+      // АВТОРИЗОВАНИЙ КОРИСТУВАЧ
+      //
+      // Використовуємо вже існуючого Participant.
+      // -----------------------------------------------
 
-          accessCode:
-            typeof accessCode ===
-              "string" &&
-            accessCode.trim()
-              ? accessCode.trim()
-              : null,
-        },
-      });
+      participant =
+        await prisma.participant.findUnique({
+          where: {
+            userId: currentUser.id,
+          },
+        });
 
-    // ===================================================
+      // -----------------------------------------------
+      // Якщо Participant з якоїсь причини ще немає,
+      // створюємо його та одразу прив'язуємо до User.
+      // -----------------------------------------------
+
+      if (!participant) {
+        participant =
+          await prisma.participant.create({
+            data: {
+              userId: currentUser.id,
+
+              lastName:
+                currentUser.lastName.trim(),
+
+              firstName:
+                currentUser.firstName.trim(),
+
+              middleName:
+                currentUser.middleName?.trim() ||
+                null,
+
+              accessCode:
+                typeof accessCode === "string" &&
+                accessCode.trim()
+                  ? accessCode.trim()
+                  : null,
+            },
+          });
+      }
+    } else {
+      // -----------------------------------------------
+      // НЕАВТОРИЗОВАНИЙ КОРИСТУВАЧ
+      //
+      // Повністю зберігаємо стару поведінку.
+      // -----------------------------------------------
+
+      participant =
+        await prisma.participant.create({
+          data: {
+            lastName: lastName.trim(),
+
+            firstName:
+              firstName.trim(),
+
+            middleName:
+              typeof middleName === "string" &&
+              middleName.trim()
+                ? middleName.trim()
+                : null,
+
+            accessCode:
+              typeof accessCode === "string" &&
+              accessCode.trim()
+                ? accessCode.trim()
+                : null,
+          },
+        });
+    }
+
+    // =================================================
     // INITIAL TIME
-    //
-    // duration = хвилини
-    // timeLeft = секунди
-    //
-    // Це лише початковий запас часу.
-    // Він НЕ починає відлік.
-    // ===================================================
+    // =================================================
 
     const initialTimeLeft =
       Math.max(
@@ -248,9 +292,9 @@ export async function POST(
         )
       );
 
-    // ===================================================
-    // SESSION
-    // ===================================================
+    // =================================================
+    // CREATE SESSION
+    // =================================================
 
     const session =
       await prisma.testSession.create({
@@ -258,8 +302,7 @@ export async function POST(
           participantId:
             participant.id,
 
-          testId:
-            test.id,
+          testId: test.id,
 
           currentQuestion: 0,
 
@@ -280,25 +323,18 @@ export async function POST(
 
           finishedAt: null,
 
-          // =================================================
-          // КРИТИЧНО:
-          //
-          // startedAt НЕ ЗАДАЄМО.
-          //
-          // Prisma створить:
-          //
-          // startedAt = NULL
-          //
-          // =================================================
-
           lastActivityAt:
             new Date(),
+
+          // startedAt навмисно НЕ передаємо.
+          // Фактичний старт відбувається
+          // через POST /api/test/begin.
         },
       });
 
-    // ===================================================
+    // =================================================
     // RESPONSE
-    // ===================================================
+    // =================================================
 
     return NextResponse.json(
       {

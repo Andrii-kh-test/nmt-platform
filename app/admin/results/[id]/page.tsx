@@ -6,6 +6,7 @@ import { prisma } from "@/app/lib/prisma";
 
 import HtmlContent from "@/app/components/common/HtmlContent";
 import ExportResultPdfButton from "@/app/components/admin/ExportResultPdfButton";
+import ParticipantDetailsToggle from "@/app/components/admin/ParticipantDetailsToggle";
 type Props = {
   params: Promise<{
     id: string;
@@ -660,7 +661,12 @@ export default async function ResultDetailsPage({
                 Причина завершення тестової сесії
               </p>
             </div>
-
+<ParticipantDetailsToggle
+  resultId={result.id}
+  initialAllowed={
+    result.allowParticipantDetails
+  }
+/>
             <span
               className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${finishReason.className}`}
             >
@@ -685,7 +691,6 @@ export default async function ResultDetailsPage({
                 <h2 className="text-xl font-bold text-gray-900">
                   Журнал відповідей
                 </h2>
-
                 <p className="mt-1 text-sm text-gray-500">
                   Детальний перегляд усіх завдань та відповідей учасника
                 </p>
