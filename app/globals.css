@@ -155,3 +155,68 @@ html {
 .screenshot-protection-active body {
   visibility: hidden !important;
 }
+@keyframes sponsorCircleOne {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(-35px, 25px) scale(1.05);
+  }
+
+  50% {
+    transform: translate(-15px, 55px) scale(0.95);
+  }
+
+  75% {
+    transform: translate(30px, 25px) scale(1.03);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes sponsorCircleTwo {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(45px, -25px) scale(0.95);
+  }
+
+  50% {
+    transform: translate(20px, -55px) scale(1.05);
+  }
+
+  75% {
+    transform: translate(-35px, -20px) scale(0.98);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes sponsorCircleThree {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  25% {
+    transform: translate(-20px, 15px) scale(1.1);
+  }
+
+  50% {
+    transform: translate(-5px, 35px) scale(0.9);
+  }
+
+  75% {
+    transform: translate(20px, 10px) scale(1.05);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}

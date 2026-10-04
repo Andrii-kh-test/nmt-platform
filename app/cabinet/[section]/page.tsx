@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { getCurrentUser } from "@/app/lib/auth/session";
 
+import ProfileClient from "../profile/ProfileClient";
+
 const sections: Record<
   string,
   {
@@ -65,6 +67,18 @@ export default async function CabinetSectionPage({
 
   if (!currentSection) {
     notFound();
+  }
+
+  if (section === "profile") {
+    return (
+      <ProfileClient
+  firstName={user.firstName}
+  lastName={user.lastName}
+  middleName={user.middleName}
+  email={user.email}
+  avatarUrl={user.avatarUrl}
+/>
+    );
   }
 
   return (
