@@ -67,6 +67,31 @@ export default function ProfileClient({
   const [uploadSuccess, setUploadSuccess] =
     useState<string | null>(null);
 
+  // =====================================================
+  // ЗМІНА ПАРОЛЯ
+  // =====================================================
+
+  const [isPasswordFormOpen, setIsPasswordFormOpen] =
+    useState(false);
+
+  const [currentPassword, setCurrentPassword] =
+    useState("");
+
+  const [newPassword, setNewPassword] =
+    useState("");
+
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
+
+  const [isChangingPassword, setIsChangingPassword] =
+    useState(false);
+
+  const [passwordError, setPasswordError] =
+    useState<string | null>(null);
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState<string | null>(null);
+
   const openFilePicker = () => {
     if (isUploading) {
       return;
@@ -187,6 +212,99 @@ export default function ProfileClient({
       );
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // =====================================================
+  // ЗМІНА ПАРОЛЯ
+  // =====================================================
+
+  const handlePasswordChange = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (
+      !currentPassword ||
+      !newPassword ||
+      !confirmPassword
+    ) {
+      setPasswordError(
+        "Заповніть усі поля."
+      );
+
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        "Нові паролі не збігаються."
+      );
+
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordError(
+        "Новий пароль має містити щонайменше 8 символів."
+      );
+
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const response =
+        await fetch(
+          "/api/profile/password",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              currentPassword,
+              newPassword,
+              confirmPassword,
+            }),
+          }
+        );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        throw new Error(
+          result.message ||
+            "Не вдалося змінити пароль."
+        );
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      setPasswordSuccess(
+        "Пароль успішно змінено."
+      );
+
+      setIsPasswordFormOpen(false);
+    } catch (error) {
+      console.error(
+        "PROFILE PASSWORD ERROR:",
+        error
+      );
+
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "Не вдалося змінити пароль."
+      );
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -714,6 +832,15 @@ export default function ProfileClient({
 
             <button
               type="button"
+              onClick={() => {
+                setIsPasswordFormOpen(
+                  (current) => !current
+                );
+
+                setPasswordError(null);
+                setPasswordSuccess(null);
+              }}
+              disabled={isChangingPassword}
               className="
                 inline-flex
                 items-center
@@ -728,12 +855,248 @@ export default function ProfileClient({
                 transition
                 hover:bg-[#641923]
                 hover:shadow-md
+                disabled:cursor-not-allowed
+                disabled:opacity-60
               "
             >
-              Змінити пароль
+              {isPasswordFormOpen
+                ? "Скасувати"
+                : "Змінити пароль"}
             </button>
 
           </div>
+
+          {passwordSuccess && (
+            <div
+              className="
+                mt-6
+                rounded-xl
+                border
+                border-green-200
+                bg-green-50
+                px-4
+                py-3
+                text-sm
+                text-green-700
+              "
+            >
+              {passwordSuccess}
+            </div>
+          )}
+
+          {isPasswordFormOpen && (
+            <div
+              className="
+                mt-8
+                rounded-2xl
+                border
+                border-[#E8D9DC]
+                bg-[#FCFAFA]
+                p-6
+              "
+            >
+
+              <div className="mb-6">
+
+                <h3 className="text-lg font-bold text-gray-900">
+                  Зміна пароля
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-500">
+                  Введіть поточний пароль і встановіть новий.
+                </p>
+
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-3">
+
+                {/* Поточний пароль */}
+
+                <div>
+
+                  <label
+                    htmlFor="current-password"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Поточний пароль
+                  </label>
+
+                  <input
+                    id="current-password"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) =>
+                      setCurrentPassword(
+                        event.target.value
+                      )
+                    }
+                    disabled={isChangingPassword}
+                    autoComplete="current-password"
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-gray-200
+                      bg-white
+                      px-4
+                      py-3
+                      text-gray-900
+                      outline-none
+                      transition
+                      focus:border-[#7A1F2B]
+                      focus:ring-2
+                      focus:ring-[#7A1F2B]/10
+                      disabled:bg-gray-100
+                    "
+                    placeholder="Поточний пароль"
+                  />
+
+                </div>
+
+                {/* Новий пароль */}
+
+                <div>
+
+                  <label
+                    htmlFor="new-password"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Новий пароль
+                  </label>
+
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) =>
+                      setNewPassword(
+                        event.target.value
+                      )
+                    }
+                    disabled={isChangingPassword}
+                    autoComplete="new-password"
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-gray-200
+                      bg-white
+                      px-4
+                      py-3
+                      text-gray-900
+                      outline-none
+                      transition
+                      focus:border-[#7A1F2B]
+                      focus:ring-2
+                      focus:ring-[#7A1F2B]/10
+                      disabled:bg-gray-100
+                    "
+                    placeholder="Новий пароль"
+                  />
+
+                </div>
+
+                {/* Підтвердження */}
+
+                <div>
+
+                  <label
+                    htmlFor="confirm-password"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Повторіть новий пароль
+                  </label>
+
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(event) =>
+                      setConfirmPassword(
+                        event.target.value
+                      )
+                    }
+                    disabled={isChangingPassword}
+                    autoComplete="new-password"
+                    className="
+                      w-full
+                      rounded-xl
+                      border
+                      border-gray-200
+                      bg-white
+                      px-4
+                      py-3
+                      text-gray-900
+                      outline-none
+                      transition
+                      focus:border-[#7A1F2B]
+                      focus:ring-2
+                      focus:ring-[#7A1F2B]/10
+                      disabled:bg-gray-100
+                    "
+                    placeholder="Повторіть пароль"
+                  />
+
+                </div>
+
+              </div>
+
+              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                <p className="text-xs leading-5 text-gray-500">
+                  Новий пароль має містити щонайменше 8 символів.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handlePasswordChange}
+                  disabled={isChangingPassword}
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-[#7A1F2B]
+                    px-6
+                    py-3
+                    font-semibold
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-[#641923]
+                    hover:shadow-md
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                >
+                  {isChangingPassword
+                    ? "Змінюємо пароль..."
+                    : "Зберегти новий пароль"}
+                </button>
+
+              </div>
+
+              {passwordError && (
+                <div
+                  className="
+                    mt-5
+                    rounded-xl
+                    border
+                    border-red-200
+                    bg-red-50
+                    px-4
+                    py-3
+                    text-sm
+                    leading-5
+                    text-red-700
+                  "
+                >
+                  {passwordError}
+                </div>
+              )}
+
+            </div>
+          )}
 
         </div>
 
